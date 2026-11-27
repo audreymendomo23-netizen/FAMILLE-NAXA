@@ -6,7 +6,7 @@ import {
 export type QueueState = "queued" | "sending" | "awaiting_receipt" | "acknowledged" | "retry_wait" | "conflict" | "rejected";
 export interface QueueItem {
   appId?: string; eventId: string; payload: string; state: QueueState; createdAt: number;
-  deviceId?: string; deviceSequence?: number; organizationId?: string;
+  deviceId?: string; deviceSequence?: number; organizationId?: string; memberId?: string;
   attemptCount?: number; nextAttemptAt?: number | null; leaseUntil?: number | null;
   lastErrorCode?: string | null; serverReceipt?: unknown;
 }
@@ -24,10 +24,7 @@ export interface WebSyncChange {
 /** Keep local queue reads and leases inside the authenticated organization scope. */
 function queueItemBelongsToOrganization(item: QueueItem, organizationId?: string): boolean {
   if (organizationId == null) return true;
-  if (typeof item.organizationId === "string" && item.organizationId) {
-    return item.organizationId === organizationId;
-  }
-  // The payload is authoritative too; never trust a mismatched local metadata label.
+  // The stored metadata and payload must agree.
   try {
     const command = JSON.parse(item.payload) as Record<string, unknown>;
     return command.org_id === organizationId &&
@@ -37,6 +34,16 @@ function queueItemBelongsToOrganization(item: QueueItem, organizationId?: string
   }
 }
 
+function belongsToMember(item:QueueItem,memberId?:string):boolean {
+  return memberId===undefined || (memberId.trim().length>0 && item.memberId===memberId);
+}
+export type QueueLease = {memberId:string;deviceId:string;organizationId:string;attemptCount:number;leaseUntil:number};
+function assertLease(item:QueueItem,lease?:QueueLease):void {
+  if(!lease)return;
+  if(item.state!=="sending"||!belongsToMember(item,lease.memberId)||item.deviceId!==lease.deviceId||
+      !queueItemBelongsToOrganization(item,lease.organizationId)||item.attemptCount!==lease.attemptCount||item.leaseUntil!==lease.leaseUntil)
+    throw new Error("STALE_QUEUE_LEASE");
+}
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB, 3);
@@ -60,6 +67,7 @@ export async function enqueue(item: QueueItem): Promise<void> {
   if (!item?.eventId || typeof item.payload !== "string" || !item.payload) throw new TypeError("INVALID_QUEUE_EVENT");
   if (item.deviceId !== undefined && (typeof item.deviceId !== "string" || !item.deviceId.trim())) throw new TypeError("INVALID_QUEUE_DEVICE_ID");
   if (item.organizationId !== undefined && (typeof item.organizationId !== "string" || !item.organizationId.trim())) throw new TypeError("INVALID_QUEUE_ORGANIZATION_ID");
+  if (item.memberId !== undefined && (typeof item.memberId!=="string" || !item.memberId.trim())) throw new TypeError("INVALID_QUEUE_MEMBER_ID");
   if (item.organizationId !== undefined) {
     let command: Record<string, unknown>;
     try { command = JSON.parse(item.payload) as Record<string, unknown>; }
@@ -89,45 +97,47 @@ export async function enqueue(item: QueueItem): Promise<void> {
     });
   } finally { db.close(); }
 }
-function cursorKey(appId:string,deviceId:string,organizationId?:string):string {
+function cursorKey(appId:string,deviceId:string,organizationId?:string,memberId?:string):string {
   if (!appId.trim() || !deviceId.trim() || (organizationId !== undefined && !organizationId.trim())) throw new TypeError("INVALID_SYNC_IDENTITY");
+  if(memberId!==undefined){if(!memberId.trim()||!organizationId)throw new TypeError("INVALID_SYNC_MEMBER");return JSON.stringify([appId,deviceId,organizationId,memberId,"cursor"]);}
   return organizationId === undefined ? appId+":"+deviceId+":cursor" : appId+":"+deviceId+":"+organizationId+":cursor";
 }
-function changeKey(appId:string,deviceId:string,organizationId:string|undefined,cursor:number):string {
+function changeKey(appId:string,deviceId:string,organizationId:string|undefined,cursor:number,memberId?:string):string {
+  if(memberId!==undefined)return JSON.stringify([appId,deviceId,organizationId,memberId,cursor]);
   return organizationId === undefined
     ? appId+":"+deviceId+":"+cursor
     : appId+":"+deviceId+":"+organizationId+":"+cursor;
 }
-export async function applySyncPage(appId:string,deviceId:string,page:{changes:WebSyncChange[];next_cursor:number;has_more:boolean},organizationId?:string):Promise<void> {
+export async function applySyncPage(appId:string,deviceId:string,page:{changes:WebSyncChange[];next_cursor:number;has_more:boolean},organizationId?:string,memberId?:string):Promise<void> {
   if (!Array.isArray(page?.changes) || !Number.isSafeInteger(page.next_cursor) || page.next_cursor<0 || typeof page.has_more!=="boolean") throw new TypeError("INVALID_SYNC_PAGE");
   if (organizationId !== undefined && !organizationId.trim()) throw new TypeError("INVALID_SYNC_IDENTITY");
   for (const c of page.changes) if (!Number.isSafeInteger(c.cursor)||c.cursor<1||c.cursor>page.next_cursor||typeof c.event_id!=="string"||typeof c.action_code!=="string"||typeof c.aggregate_type!=="string"||!c.payload||typeof c.payload!=="object"||Array.isArray(c.payload)) throw new TypeError("INVALID_SYNC_CHANGE");
   const db=await openDb();
   try { await new Promise<void>((resolve,reject)=>{
-    const tx=db.transaction([META,CHANGES],"readwrite"),meta=tx.objectStore(META),store=tx.objectStore(CHANGES),key=cursorKey(appId,deviceId,organizationId),read=meta.get(key);
+    const tx=db.transaction([META,CHANGES],"readwrite"),meta=tx.objectStore(META),store=tx.objectStore(CHANGES),key=cursorKey(appId,deviceId,organizationId,memberId),read=meta.get(key);
     read.onsuccess=()=>{if(page.next_cursor<Number(read.result?.value??0)){tx.abort();reject(new Error("SYNC_CURSOR_REGRESSION"));return;}
-      for(const c of page.changes)store.put({...c,appId,deviceId,organizationId,key:changeKey(appId,deviceId,organizationId,c.cursor)});
+      for(const c of page.changes)store.put({...c,appId,deviceId,organizationId,memberId,key:changeKey(appId,deviceId,organizationId,c.cursor,memberId)});
       meta.put({key,value:page.next_cursor});};
     read.onerror=()=>{tx.abort();reject(read.error??new Error("SYNC_CURSOR_READ_FAILED"));};
     tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error??new Error("SYNC_PAGE_APPLY_ABORTED"));
   });} finally {db.close();}
 }
-export async function listAppEvents(appId:string,deviceId:string,organizationId?:string):Promise<QueueItem[]>{
+export async function listAppEvents(appId:string,deviceId:string,organizationId?:string,memberId?:string):Promise<QueueItem[]>{
   const db=await openDb();
   try{return await new Promise<QueueItem[]>((resolve,reject)=>{
     const r=db.transaction(STORE).objectStore(STORE).getAll();
-    r.onsuccess=()=>resolve((r.result as QueueItem[]).filter(item=>item.appId===appId&&item.deviceId===deviceId&&queueItemBelongsToOrganization(item,organizationId)).sort((x,y)=>x.createdAt-y.createdAt));
+    r.onsuccess=()=>resolve((r.result as QueueItem[]).filter(item=>item.appId===appId&&item.deviceId===deviceId&&queueItemBelongsToOrganization(item,organizationId)&&belongsToMember(item,memberId)).sort((x,y)=>x.createdAt-y.createdAt));
     r.onerror=()=>reject(r.error);
   });}finally{db.close();}
 }
-export async function getSyncCursor(appId:string,deviceId:string,organizationId?:string):Promise<number>{
-  const db=await openDb();try{return await new Promise<number>((resolve,reject)=>{const r=db.transaction(META).objectStore(META).get(cursorKey(appId,deviceId,organizationId));r.onsuccess=()=>resolve(Number(r.result?.value??0));r.onerror=()=>reject(r.error);});}finally{db.close();}
+export async function getSyncCursor(appId:string,deviceId:string,organizationId?:string,memberId?:string):Promise<number>{
+  const db=await openDb();try{return await new Promise<number>((resolve,reject)=>{const r=db.transaction(META).objectStore(META).get(cursorKey(appId,deviceId,organizationId,memberId));r.onsuccess=()=>resolve(Number(r.result?.value??0));r.onerror=()=>reject(r.error);});}finally{db.close();}
 }
-export async function listSyncChanges(appId:string,deviceId:string,organizationId?:string):Promise<WebSyncChange[]>{
-  const db=await openDb();try{return await new Promise<WebSyncChange[]>((resolve,reject)=>{const r=db.transaction(CHANGES).objectStore(CHANGES).getAll();r.onsuccess=()=>resolve((r.result as (WebSyncChange&{appId:string;deviceId:string;organizationId?:string})[]).filter(c=>c.appId===appId&&c.deviceId===deviceId&&(organizationId===undefined||c.organizationId===organizationId)).sort((a,b)=>a.cursor-b.cursor));r.onerror=()=>reject(r.error);});}finally{db.close();}
+export async function listSyncChanges(appId:string,deviceId:string,organizationId?:string,memberId?:string):Promise<WebSyncChange[]>{
+  const db=await openDb();try{return await new Promise<WebSyncChange[]>((resolve,reject)=>{const r=db.transaction(CHANGES).objectStore(CHANGES).getAll();r.onsuccess=()=>resolve((r.result as (WebSyncChange&{appId:string;deviceId:string;organizationId?:string;memberId?:string})[]).filter(c=>c.appId===appId&&c.deviceId===deviceId&&(organizationId===undefined||c.organizationId===organizationId)&&(memberId===undefined||c.memberId===memberId)).sort((a,b)=>a.cursor-b.cursor));r.onerror=()=>reject(r.error);});}finally{db.close();}
 }
 
-export async function listQueued(appId?: string, deviceId?: string, organizationId?: string): Promise<QueueItem[]> {
+export async function listQueued(appId?: string, deviceId?: string, organizationId?: string,memberId?:string): Promise<QueueItem[]> {
   const db = await openDb();
   try {
     return await new Promise<QueueItem[]>((resolve, reject) => {
@@ -135,7 +145,7 @@ export async function listQueued(appId?: string, deviceId?: string, organization
       request.onsuccess = () => resolve((request.result as QueueItem[])
         .filter((item) => (appId == null || item.appId === appId) &&
           (deviceId == null || item.deviceId === deviceId) &&
-          queueItemBelongsToOrganization(item, organizationId) &&
+          queueItemBelongsToOrganization(item, organizationId) && belongsToMember(item,memberId) &&
           (item.state === "queued" || item.state === "retry_wait"))
         .sort((a, b) => a.createdAt - b.createdAt));
       request.onerror = () => reject(request.error);
@@ -144,7 +154,7 @@ export async function listQueued(appId?: string, deviceId?: string, organization
 }
 
 /** Atomically leases a batch so two open tabs do not upload the same queue rows. */
-export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60_000, appId?: string, deviceId?: string, organizationId?: string): Promise<QueueItem[]> {
+export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60_000, appId?: string, deviceId?: string, organizationId?: string,memberId?:string): Promise<QueueItem[]> {
   const take = normalizeQueueBatchLimit(limit);
   if (!Number.isFinite(now) || !Number.isSafeInteger(leaseMs) || leaseMs < 5_000) throw new RangeError("INVALID_QUEUE_LEASE");
   const db = await openDb();
@@ -158,7 +168,7 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
         const due = (request.result as QueueItem[])
           .filter((item) => (appId == null || item.appId === appId) &&
             (deviceId == null || item.deviceId === deviceId) &&
-            queueItemBelongsToOrganization(item, organizationId) &&
+            queueItemBelongsToOrganization(item, organizationId) && belongsToMember(item,memberId) &&
             (item.state === "queued" || item.state === "retry_wait" ||
             (item.state === "sending" && (item.leaseUntil ?? 0) <= now)) &&
             (item.nextAttemptAt == null || item.nextAttemptAt <= now) &&
@@ -167,7 +177,7 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
           .slice(0, take);
         const exhausted = (request.result as QueueItem[]).filter((item) =>
           (appId == null || item.appId === appId) && (deviceId == null || item.deviceId === deviceId) &&
-          queueItemBelongsToOrganization(item, organizationId) &&
+          queueItemBelongsToOrganization(item, organizationId) && belongsToMember(item,memberId) &&
           item.state === "sending" && (item.leaseUntil ?? 0) <= now &&
           (item.attemptCount ?? 0) >= MAX_QUEUE_ATTEMPTS
         );
@@ -189,7 +199,7 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
 }
 
 /** Only an explicit server receipt may complete a queue item. HTTP 200/202 is not enough. */
-export async function applyServerReceipt(eventId: string, receipt: unknown, appId?: string): Promise<QueueState> {
+export async function applyServerReceipt(eventId: string, receipt: unknown, appId?: string,lease?:QueueLease): Promise<QueueState> {
   if (!eventId) throw new TypeError("INVALID_QUEUE_EVENT_ID");
   assertReceiptMatchesEvent(eventId, receipt);
   const state = classifySyncReceipt(receipt);
@@ -202,6 +212,8 @@ export async function applyServerReceipt(eventId: string, receipt: unknown, appI
       get.onsuccess = () => {
         if (!get.result) { tx.abort(); reject(new Error("QUEUE_EVENT_NOT_FOUND")); return; }
         if (appId != null && (get.result as QueueItem).appId !== appId) { tx.abort(); reject(new Error("QUEUE_APP_SCOPE_MISMATCH")); return; }
+        try{assertLease(get.result as QueueItem,lease);}catch(e){tx.abort();reject(e);return;}
+        if((get.result as QueueItem).state==="acknowledged"&&state!=="acknowledged"){tx.abort();reject(new Error("TERMINAL_QUEUE_RECEIPT"));return;}
         store.put({ ...(get.result as QueueItem), state, serverReceipt: receipt, leaseUntil: null, nextAttemptAt: null });
       };
       tx.oncomplete = () => resolve();
@@ -212,7 +224,7 @@ export async function applyServerReceipt(eventId: string, receipt: unknown, appI
   return state;
 }
 
-export async function scheduleRetry(eventId: string, failure: { status?: number | null; errorCode?: string }, now = Date.now(), appId?: string): Promise<boolean> {
+export async function scheduleRetry(eventId: string, failure: { status?: number | null; errorCode?: string }, now = Date.now(), appId?: string,lease?:QueueLease): Promise<boolean> {
   if (!eventId) throw new TypeError("INVALID_QUEUE_EVENT_ID");
   const db = await openDb();
   try {
@@ -225,6 +237,8 @@ export async function scheduleRetry(eventId: string, failure: { status?: number 
         const item = get.result as QueueItem | undefined;
         if (!item) { tx.abort(); reject(new Error("QUEUE_EVENT_NOT_FOUND")); return; }
         if (appId != null && item.appId !== appId) { tx.abort(); reject(new Error("QUEUE_APP_SCOPE_MISMATCH")); return; }
+        try{assertLease(item,lease);}catch(e){tx.abort();reject(e);return;}
+        if(item.state==="acknowledged"||item.state==="conflict"||item.state==="rejected"){tx.abort();reject(new Error("TERMINAL_QUEUE_RECEIPT"));return;}
         const billingHold = item.appId === "naxa-services-web" && failure.status === 402 && failure.errorCode === "NS_SUBSCRIPTION_ACCESS_REQUIRED";
         retry = billingHold || canRetrySyncFailure({ status: failure.status, attemptCount: item.attemptCount ?? 0, errorCode: failure.errorCode });
         store.put({

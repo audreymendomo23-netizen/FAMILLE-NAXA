@@ -254,7 +254,7 @@ function App() {
   }
   async function hydrateWebRecords(activeSession: WebAuthSession) {
     const isCurrent=captureSession(activeSession);
-    const [allEvents,pending]=await Promise.all([listAppEvents(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id),listQueued(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id)]);
+    const [allEvents,pending]=await Promise.all([listAppEvents(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id,activeSession.account.member_id),listQueued(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id,activeSession.account.member_id)]);
     if(!isCurrent())return;
     setPendingSyncCount(pending.length);
     setEntries(previous=>{
@@ -263,6 +263,7 @@ function App() {
       for(const item of allEvents){
         let command:Record<string,unknown>={};
         try{command=JSON.parse(item.payload) as Record<string,unknown>;}catch{continue;}
+        if(typeof command.site_id==="string"&&!activeSession.account.active_site_ids.includes(command.site_id))continue;
         const moduleId=typeof command.module_id==="string"?command.module_id as ModuleId:"stock";
         if(!modules.some(module=>module.id===moduleId))continue;
         const id=typeof command.aggregate_id==="string"?command.aggregate_id:item.eventId;
@@ -324,7 +325,7 @@ function App() {
       if(stopped||checking||!isCurrent()||!navigator.onLine||authSession.requirePasswordChange)return;
       checking=true;
       try {
-        const rows=await listAppEvents(OFFLINE_APP_ID,authSession.deviceId,authSession.account.organization_id);
+        const rows=await listAppEvents(OFFLINE_APP_ID,authSession.deviceId,authSession.account.organization_id,authSession.account.member_id);
         if(stopped||!isCurrent())return;
         const now=Date.now();
         const due=rows.some(row=>((row.state==="queued"||row.state==="retry_wait")&&(row.nextAttemptAt??0)<=now)||(row.state==="sending"&&(row.leaseUntil??0)<=now));
@@ -634,10 +635,11 @@ function App() {
     if (!accountingEndpoint || !anonKey) throw new Error("Actualisation indisponible.");
     const freshSession = await ensureFreshSession(activeSession);
     if(!isCurrent())throw Error("WEB_SESSION_CHANGED");
-    const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID, freshSession.deviceId, freshSession.account.organization_id);
+    const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID, freshSession.deviceId, freshSession.account.organization_id,freshSession.account.member_id);
     let acknowledged=0,retrying=0,rejected=0,billingHolds=0;
     for (const queued of batch) {
       if(!isCurrent())break;
+      const lease={memberId:freshSession.account.member_id,deviceId:freshSession.deviceId,organizationId:freshSession.account.organization_id,attemptCount:queued.attemptCount!,leaseUntil:queued.leaseUntil!};
       let status:number|null=null,errorCode="NETWORK_UNAVAILABLE",command:Record<string,unknown>={};
       try {
         command=JSON.parse(queued.payload) as Record<string,unknown>;
@@ -655,7 +657,7 @@ function App() {
         if(!receipt||typeof receipt!=="object"||Array.isArray(receipt)||receipt.event_id!==queued.eventId||!["applied","rejected","conflict"].includes(String(receipt.status))){
           status=null;errorCode="SERVER_RECEIPT_UNCONFIRMED";throw Error(errorCode);
         }
-        const queueState=await applyServerReceipt(queued.eventId,receipt,OFFLINE_APP_ID);
+        const queueState=await applyServerReceipt(queued.eventId,receipt,OFFLINE_APP_ID,lease);
         if(queueState==="acknowledged"){
           acknowledged++;
           const moduleId=typeof command.module_id==="string"?command.module_id as ModuleId:"stock";
@@ -674,11 +676,12 @@ function App() {
         }
         else if(queueState==="rejected"||queueState==="conflict")rejected++;
       }catch{
-        const willRetry=await scheduleRetry(queued.eventId,{status,errorCode},Date.now(),OFFLINE_APP_ID).catch(()=>false);
+        const willRetry=await scheduleRetry(queued.eventId,{status,errorCode},Date.now(),OFFLINE_APP_ID,lease).catch(()=>null);
+        if(willRetry===null)continue;
         if(willRetry){retrying++;if(errorCode==="NS_SUBSCRIPTION_ACCESS_REQUIRED")billingHolds++;}else rejected++;
       }
     }
-    const remaining=await listQueued(OFFLINE_APP_ID,freshSession.deviceId,freshSession.account.organization_id);
+    const remaining=await listQueued(OFFLINE_APP_ID,freshSession.deviceId,freshSession.account.organization_id,freshSession.account.member_id);
     if(!isCurrent())return{acknowledged,retrying,rejected,remaining:remaining.length};
     setPendingSyncCount(remaining.length);
     await syncWebPullChanges(freshSession).catch(()=>undefined);
@@ -696,23 +699,25 @@ function App() {
     const isCurrent=captureSession(activeSession);
     if(!accountingEndpoint||!anonKey)throw new Error("Actualisation indisponible.");
     const fresh=await ensureFreshSession(activeSession);
-    let cursor=await getSyncCursor(OFFLINE_APP_ID,fresh.deviceId,fresh.account.organization_id),pages=0,received=0,more=true;
+    let cursor=await getSyncCursor(OFFLINE_APP_ID,fresh.deviceId,fresh.account.organization_id,fresh.account.member_id),pages=0,received=0,more=true;
     while(more&&pages<20&&isCurrent()){
       const response=await fetch(accountingEndpoint,{method:"POST",credentials:"omit",headers:{"Content-Type":"application/json",apikey:anonKey,Authorization:"Bearer "+fresh.accessToken},body:JSON.stringify({action:"pull_sync_changes",org_id:fresh.account.organization_id,device_id:fresh.deviceId,after_cursor:cursor,limit:200})});
       const data=await response.json().catch(()=>({})) as Record<string,unknown>;
       if(!response.ok||data.ok!==true||!data.result||typeof data.result!=="object")throw new Error(typeof data.error==="string"?data.error:"WEB_SYNC_PULL_FAILED");
       const page=data.result as {changes?:WebSyncChange[];next_cursor?:number;has_more?:boolean};
       if(!Array.isArray(page.changes)||typeof page.next_cursor!=="number"||!Number.isSafeInteger(page.next_cursor)||typeof page.has_more!=="boolean"||page.next_cursor<cursor)throw new Error("WEB_SYNC_PULL_INVALID_PAGE");
-      await applySyncPage(OFFLINE_APP_ID,fresh.deviceId,{changes:page.changes,next_cursor:page.next_cursor,has_more:page.has_more},fresh.account.organization_id);
+      if(!isCurrent())break;
+      await applySyncPage(OFFLINE_APP_ID,fresh.deviceId,{changes:page.changes,next_cursor:page.next_cursor,has_more:page.has_more},fresh.account.organization_id,fresh.account.member_id);
       received+=page.changes.length;cursor=page.next_cursor;more=page.has_more;pages++;
     }
-    const stored=await listSyncChanges(OFFLINE_APP_ID,fresh.deviceId,fresh.account.organization_id);
+    const stored=await listSyncChanges(OFFLINE_APP_ID,fresh.deviceId,fresh.account.organization_id,fresh.account.member_id);
     if(!isCurrent())return{received,cursor,morePending:more};
-    setRemoteChanges(stored);
+    const visible=stored.filter(change=>change.site_id===null||fresh.account.active_site_ids.includes(change.site_id)||change.visible_site_ids?.some(site=>fresh.account.active_site_ids.includes(site)));
+    setRemoteChanges(visible);
     setEntries(previous=>{
       if(!isCurrent())return previous;
       const next={...previous};
-      for(const change of stored){
+      for(const change of visible){
         const moduleId=moduleForSyncAction(change.action_code);
         if(!moduleId)continue;
         const payload=change.payload;
@@ -767,7 +772,7 @@ function App() {
       const inventoryItemId = crypto.randomUUID();
       const eventId = crypto.randomUUID();
       const payload={module_id:"stock",display_title:item.name,display_detail:item.sku||item.unit,action_code:"inventory_item.created",aggregate_type:"inventory_item",aggregate_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,payload:{inventory_item_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,sku:item.sku,name:item.name,unit:item.unit,reorder_level:item.reorderLevel,supplier_whatsapp:item.supplierWhatsApp}};
-      await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:activeSession.deviceId,organizationId:activeSession.account.organization_id,payload:JSON.stringify(payload),state:"queued",createdAt:Date.now()});
+      await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:activeSession.deviceId,organizationId:activeSession.account.organization_id,memberId:activeSession.account.member_id,payload:JSON.stringify(payload),state:"queued",createdAt:Date.now()});
       if(!isCurrent())return;
       setEntries((previous) => !isCurrent()?previous:({
         ...previous,
@@ -803,7 +808,7 @@ function App() {
       ...(moduleId==="team"&&actionCode.startsWith("staff_")&&typeof payload.workstation_id==="string"?{workstation_id:payload.workstation_id}:{}),
       payload: { ...payload, org_id: session.account.organization_id, site_id: siteId },
     };
-    await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:session.deviceId,organizationId:session.account.organization_id,payload:JSON.stringify(command),state:"queued",createdAt:Date.now()});
+    await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:session.deviceId,organizationId:session.account.organization_id,memberId:session.account.member_id,payload:JSON.stringify(command),state:"queued",createdAt:Date.now()});
     if(!isCurrent())return;
     setEntries(previous => {
       if(!isCurrent())return previous;

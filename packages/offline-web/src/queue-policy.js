@@ -6,6 +6,8 @@ export function assertSameEventPayload(existing, incoming) {
   if (!existing || existing.eventId !== incoming?.eventId) throw new TypeError("INVALID_QUEUE_EVENT");
   if (existing.appId && incoming.appId && existing.appId !== incoming.appId) throw new Error("QUEUE_APP_SCOPE_MISMATCH");
   if ((existing.deviceId || incoming.deviceId) && existing.deviceId !== incoming.deviceId) throw new Error("QUEUE_DEVICE_SCOPE_MISMATCH");
+  if ((existing.memberId || incoming.memberId) && existing.memberId !== incoming.memberId) throw new Error("QUEUE_MEMBER_SCOPE_MISMATCH");
+  if ((existing.organizationId || incoming.organizationId) && existing.organizationId !== incoming.organizationId) throw new Error("QUEUE_ORGANIZATION_MISMATCH");
   if (existing.payload !== incoming.payload) throw new Error("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD");
   return true;
 }

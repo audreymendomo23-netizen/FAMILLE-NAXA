@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  enqueue, listAppEvents, listQueued, acquireDueBatch, applySyncPage, getSyncCursor, listSyncChanges, scheduleRetry,
+  enqueue, listAppEvents, listQueued, acquireDueBatch, applySyncPage, getSyncCursor, listSyncChanges, scheduleRetry, applyServerReceipt,
 } from "@famille/offline-web";
 
 const APP = "naxa-services-web";
@@ -194,3 +194,36 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
     expect(pending[0].payload).toBe(payload);
     expect((await acquireDueBatch(1,now,60000,APP,DEVICE_A,ORG))[0].eventId).toBe(eventId);
  });
+
+describe("Bulk C: member-bound offline recovery and stale lease fencing",()=>{
+  it("never leases another member's or unbound legacy queue on a shared device",async()=>{
+    const base={appId:APP,deviceId:DEVICE_A,organizationId:ORG,payload:JSON.stringify({org_id:ORG}),state:"queued" as const,createdAt:1};
+    await enqueue({...base,eventId:"member-a-event",memberId:"member-a"});
+    await enqueue({...base,eventId:"member-b-event",memberId:"member-b"});
+    await enqueue({...base,eventId:"legacy-unbound"});
+    await expect(enqueue({...base,eventId:"member-a-event",memberId:"member-b"})).rejects.toThrow("QUEUE_MEMBER_SCOPE_MISMATCH");
+    expect((await listAppEvents(APP,DEVICE_A,ORG,"member-a")).map(x=>x.eventId)).toEqual(["member-a-event"]);
+    expect((await listQueued(APP,DEVICE_A,ORG,"member-b")).map(x=>x.eventId)).toEqual(["member-b-event"]);
+    expect((await acquireDueBatch(10,10000,5000,APP,DEVICE_A,ORG,"member-a")).map(x=>x.eventId)).toEqual(["member-a-event"]);
+    expect((await listAppEvents(APP,DEVICE_A,ORG)).length).toBe(3);
+  });
+  it("expired tab lease cannot overwrite a newer receipt or restart a confirmed operation",async()=>{
+    await enqueue({appId:APP,eventId:"retry-event",deviceId:DEVICE_A,organizationId:ORG,memberId:"member-a",payload:JSON.stringify({org_id:ORG}),state:"queued",createdAt:1});
+    const [old]=await acquireDueBatch(1,10000,5000,APP,DEVICE_A,ORG,"member-a");
+    const [fresh]=await acquireDueBatch(1,15001,5000,APP,DEVICE_A,ORG,"member-a");
+    const lease=(row:typeof old)=>({memberId:"member-a",deviceId:DEVICE_A,organizationId:ORG,attemptCount:row.attemptCount!,leaseUntil:row.leaseUntil!});
+    await expect(applyServerReceipt(old.eventId,{event_id:old.eventId,status:"rejected"},APP,lease(old))).rejects.toThrow("STALE_QUEUE_LEASE");
+    await applyServerReceipt(fresh.eventId,{event_id:fresh.eventId,status:"applied"},APP,lease(fresh));
+    await expect(scheduleRetry(old.eventId,{status:503},16000,APP,lease(old))).rejects.toThrow("STALE_QUEUE_LEASE");
+    expect((await listAppEvents(APP,DEVICE_A,ORG,"member-a"))[0].state).toBe("acknowledged");
+  });
+  it("separates inbound cursors for two members using one device and organization",async()=>{
+    const change={cursor:1,event_id:"private-a",source_device_id:DEVICE_B,origin_site_id:SITE,site_id:SITE,visible_site_ids:[SITE],workstation_id:null,aggregate_type:"customer",aggregate_id:"private-a",action_code:"customer.created",aggregate_version:1,payload:{org_id:ORG},recorded_at:"2026-11-22T10:00:00.000Z"};
+    await applySyncPage(APP,DEVICE_A,{changes:[change],next_cursor:1,has_more:false},ORG,"member-a");
+    expect(await getSyncCursor(APP,DEVICE_A,ORG,"member-b")).toBe(0);
+    expect(await listSyncChanges(APP,DEVICE_A,ORG,"member-b")).toEqual([]);
+    await applySyncPage(APP,DEVICE_A,{changes:[{...change,event_id:"private-b",aggregate_id:"private-b"}],next_cursor:1,has_more:false},ORG,"member-b");
+    expect((await listSyncChanges(APP,DEVICE_A,ORG,"member-a")).map(x=>x.event_id)).toEqual(["private-a"]);
+    expect((await listSyncChanges(APP,DEVICE_A,ORG,"member-b")).map(x=>x.event_id)).toEqual(["private-b"]);
+  });
+});
