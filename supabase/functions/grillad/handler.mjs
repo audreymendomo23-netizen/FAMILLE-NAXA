@@ -49,6 +49,15 @@ export async function handle(request,env,fetcher=fetch){
    if(!w.ok||!Array.isArray(w.result)||!w.result.length)return reply(403,{error:'NO_WORKSPACE'});
    return reply(200,{result:{access:s.access_token,refresh:s.refresh_token,sites:w.result}});
   }
+  if(['connect_catalog','connect_submit','connect_status'].includes(body.action)){
+   if(!env.service||typeof body.qr!=='string'||!/^[A-Za-z0-9_-]{32,128}$/.test(body.qr))return reply(403,{error:'PARTNER_UNAVAILABLE'});
+   const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(body.qr));const hash=Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,'0')).join('');
+   let rpc='grillad_connect_catalog',params={p_hash:hash};
+   if(body.action==='connect_submit'){if(!uuid.test(body.order)||!Array.isArray(body.lines))return reply(400,{error:'ORDER'});rpc='grillad_connect_submit';params={...params,p_order:body.order,p_lines:body.lines}}
+   if(body.action==='connect_status'){if(!uuid.test(body.order))return reply(400,{error:'ORDER'});rpc='grillad_connect_status';params={...params,p_order:body.order}}
+   const r=await fetcher(base+'/rest/v1/rpc/'+rpc,{method:'POST',headers:{apikey:env.service,Authorization:'Bearer '+env.service,'Content-Type':'application/json'},body:JSON.stringify(params),redirect:'error',signal:AbortSignal.timeout(15000)});
+   return upstream({ok:r.ok,status:r.status,result:await r.json().catch(()=>null)});
+  }
   if(!/^Bearer \S+$/.test(bearer))return reply(401,{error:'SESSION'});
   const token=bearer.slice(7);
   if(body.action==='logout'){const r=await fetcher(base+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:env.key,Authorization:bearer},redirect:'error',signal:AbortSignal.timeout(15000)});return r.ok?reply(200,{result:true}):reply(401,{error:'SESSION'});}
@@ -56,6 +65,8 @@ export async function handle(request,env,fetcher=fetch){
   if(body.action==='workspace')return upstream(await post('/rest/v1/rpc/grillad_workspace',{},token));
   if(!uuid.test(body.org)||!uuid.test(body.site))return reply(400,{error:'SCOPE'});
   const scope={p_org:body.org,p_site:body.site};
+  if(body.action==='connect_list')return upstream(await post('/rest/v1/rpc/grillad_connect_list',scope,token));
+  if(body.action==='connect_transition'&&uuid.test(body.order)&&uuid.test(body.event)&&['accepted','preparing','ready','handed','refused','cancelled'].includes(body.next))return upstream(await post('/rest/v1/rpc/grillad_connect_transition',{...scope,p_order:body.order,p_event:body.event,p_next:body.next,p_received:body.received??null,p_reason:body.reason??null},token));
   if(body.action==='daily_list')return upstream(await post('/rest/v1/rpc/grillad_daily_list',scope,token));
   if(body.action==='notice_feed')return upstream(await post('/rest/v1/rpc/grillad_notice_feed',scope,token));
   if(body.action==='notice_ack'&&typeof body.id==='string'&&body.id.length<=100)return upstream(await post('/rest/v1/rpc/grillad_notice_ack',{...scope,p_id:body.id},token));

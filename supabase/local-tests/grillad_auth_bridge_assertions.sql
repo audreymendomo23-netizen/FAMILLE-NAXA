@@ -27,6 +27,50 @@ begin
 end $$;
 reset role;
 do $$begin if (select count(*) from famille_private.account_devices where app_code='grillad' and status='active')<>4 then raise exception 'cross seller eviction';end if;end $$;
+-- Explicit bilateral fake fixture only.
+update famille_core.applications set status='active' where code='zipple';
+insert into famille_core.organizations(id,legal_name,organization_type,status) values('b2000000-0000-0000-0000-000000000002','Test ZIPPLE','retail','active');
+insert into famille_core.organization_apps(organization_id,app_id,status) select 'b2000000-0000-0000-0000-000000000002',id,'active' from famille_core.applications where code='zipple';
+insert into famille_core.locations(id,organization_id,name) values('b3000000-0000-0000-0000-000000000002','b2000000-0000-0000-0000-000000000002','Snack test');
+insert into famille_core.plans(app_id,code,name,amount_fcfa,billing_period) select id,'zipple-fixture','Test only',1,'monthly' from famille_core.applications where code='zipple';
+insert into famille_core.subscriptions(organization_id,app_id,plan_id,status,starts_at,ends_at) select 'b2000000-0000-0000-0000-000000000002',app_id,id,'active',now()-interval '1 day',now()+interval '1 day' from famille_core.plans where code='zipple-fixture';
+update famille_core.subscriptions set plan_id=(select id from famille_core.plans where code='grillad_premium_month') where organization_id='b2000000-0000-0000-0000-000000000001';
+insert into grillad_private.connect_links(id,org,site,zipple_org,zipple_site,token_hash,enabled,grillad_approved,zipple_approved,expires_at) values('b5000000-0000-0000-0000-000000000001','b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','b2000000-0000-0000-0000-000000000002','b3000000-0000-0000-0000-000000000002',repeat('f',64),true,true,true,now()+interval '1 day');
+set role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+do $$
+declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';i uuid:='b6000000-0000-0000-0000-000000000001';
+begin
+ perform public.grillad_action(o,s,i,'add_item','{"name":"Poulet","family":"Poulet","price":1000,"cost":400}');
+ perform public.grillad_action(o,s,gen_random_uuid(),'prepare',jsonb_build_object('item',i,'qty',5));
+ perform public.grillad_action(o,s,gen_random_uuid(),'open_cash','{"opening":0}');
+end $$;
+reset role;
+insert into grillad_private.connect_catalog values('b5000000-0000-0000-0000-000000000001','b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','b6000000-0000-0000-0000-000000000001');
+set role service_role;
+do $$
+declare v jsonb;p uuid:='b7000000-0000-0000-0000-000000000001';line jsonb:='[{"item":"b6000000-0000-0000-0000-000000000001","qty":2}]';
+begin
+ v:=public.grillad_connect_catalog(repeat('f',64));if (v->'items'->0)?'cost' or (v->'items'->0)?'remaining' then raise exception 'catalog leak';end if;
+ perform public.grillad_connect_submit(repeat('f',64),p,line);perform public.grillad_connect_submit(repeat('f',64),p,line);
+ if (public.grillad_connect_status(repeat('f',64),p)->>'status')<>'submitted' then raise exception 'order';end if;
+end $$;
+reset role;
+set role authenticated;
+do $$
+declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';i uuid:='b6000000-0000-0000-0000-000000000001';p uuid:='b7000000-0000-0000-0000-000000000001';e uuid:=gen_random_uuid();d date:=(now() at time zone 'Africa/Douala')::date;v jsonb;
+begin
+ perform public.grillad_connect_transition(o,s,p,gen_random_uuid(),'accepted',null,null);
+ begin perform public.grillad_action(o,s,gen_random_uuid(),'sell',jsonb_build_object('item',i,'qty',4));raise exception 'reserved stock leak';exception when invalid_parameter_value then null;end;
+ perform public.grillad_connect_transition(o,s,p,gen_random_uuid(),'preparing',null,null);
+ perform public.grillad_connect_transition(o,s,p,gen_random_uuid(),'ready',null,null);
+ perform public.grillad_connect_transition(o,s,p,e,'handed',2000,null);
+ perform public.grillad_connect_transition(o,s,p,e,'handed',2000,null);
+ v:=public.grillad_snapshot(o,s,d,d);
+ if (v#>>'{finance,connect_ca}')::int<>2000 or (v#>>'{finance,ca}')::int<>2000 or (v->'items'->0->>'remaining')::int<>3 then raise exception 'connect accounting';end if;
+end $$;
+reset role;
 -- Service across midnight, using an explicit fixture policy only.
 insert into grillad_private.service_policy values('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',1080,current_date-2,true);
 set role service_role;
@@ -42,12 +86,12 @@ do $$
 declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';v jsonb;notice text;
 begin
  v:=public.grillad_daily_list(o,s);if jsonb_array_length(v)<1 then raise exception 'missing daily';end if;
- v:=public.grillad_notice_feed(o,s);notice:=v->'items'->0->>'id';
+ v:=public.grillad_notice_feed(o,s);select x->>'id' into notice from jsonb_array_elements(v->'items') x where x->>'category'='daily' limit 1;
  if notice is null then raise exception 'missing notice';end if;
  perform public.grillad_notice_ack(o,s,notice);perform public.grillad_notice_ack(o,s,notice);
- v:=public.grillad_notice_feed(o,s);if not (v->'items'->0->>'read')::boolean then raise exception 'notice read';end if;
+ v:=public.grillad_notice_feed(o,s);if not exists(select 1 from jsonb_array_elements(v->'items') x where x->>'id'=notice and (x->>'read')::boolean) then raise exception 'notice read';end if;
  perform public.grillad_notice_set(o,s,'daily',false);
- if jsonb_array_length(public.grillad_notice_feed(o,s)->'items')<>0 then raise exception 'notice preference';end if;
+ if exists(select 1 from jsonb_array_elements(public.grillad_notice_feed(o,s)->'items') x where x->>'category'='daily') then raise exception 'notice preference';end if;
 end $$;
 reset role;
 set role authenticated;
