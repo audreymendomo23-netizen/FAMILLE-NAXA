@@ -73,7 +73,7 @@ jobs:
         run: |
           node scripts/widemeet/xlsx-replay.mjs "$RUNNER_TEMP/wm-report.xlsx"
           python -m pip install --quiet openpyxl==3.1.5
-          python -c 'import os,openpyxl; w=openpyxl.load_workbook(os.environ["RUNNER_TEMP"]+"/wm-report.xlsx"); assert len(w.sheetnames)==4; assert w["Synthèse"]["B2"].value=="=1+1 & réunion"; assert w["Synthèse"]["B2"].data_type=="s"; assert w["Présences"]["D2"].value==1000; print("WIDEMEET_XLSX_PASS")'
+          python -c 'import os,openpyxl; w=openpyxl.load_workbook(os.environ["RUNNER_TEMP"]+"/wm-report.xlsx"); assert len(w.sheetnames)==4; assert w["Synthèse"]["B2"].value=="=1+1 & réunion"; assert w["Synthèse"]["B2"].data_type=="s"; assert w["Présences"]["D2"].value==1000; p=w["Votes"]; assert p["D2"].value==3 and p["E2"].value==2 and p["F2"].value==1 and p["G2"].value==66.67 and p["I2"].value=="Oui" and p["K2"].value==100 and p["L2"].value=="Oui"; assert p["D3"].value in (None,"") and p["E3"].value==0 and p["K3"].value in (None,""); print("WIDEMEET_B4_XLSX_PASS")'
       - run: |
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
           # Hosted Ubuntu runner already supplies Chromium libraries; verify by launching.
