@@ -1,4 +1,81 @@
 begin;
+
+-- B4.7: private opt-in snapshots. The same identity lock order protects authorization.
+create table public.wm_periodic_preferences(
+ account_id uuid not null references public.wm_accounts(id), workspace_id uuid not null references public.wm_workspaces(id),
+ member_role text not null check(member_role in ('promoteur','manager')),
+ cadence text not null check(cadence in ('daily','weekly','monthly','quarterly','yearly')),
+ enabled boolean not null, next_start date not null,
+ primary key(account_id,workspace_id,member_role,cadence)
+);
+create table public.wm_periodic_reports(
+ account_id uuid not null,workspace_id uuid not null,member_role text not null,cadence text not null,
+ period_start date not null,period_end date not null check(period_end>period_start),
+ generated_at timestamptz not null default clock_timestamp(),metrics jsonb not null check(jsonb_typeof(metrics)='object'),
+ primary key(account_id,workspace_id,member_role,cadence,period_start),
+ foreign key(account_id,workspace_id,member_role,cadence) references public.wm_periodic_preferences(account_id,workspace_id,member_role,cadence)
+);
+create index wm_periodic_due on public.wm_periodic_preferences(next_start) where enabled;
+alter table public.wm_periodic_preferences enable row level security;
+alter table public.wm_periodic_reports enable row level security;
+revoke all on public.wm_periodic_preferences,public.wm_periodic_reports from public,anon,authenticated;
+grant select,insert,update on public.wm_periodic_preferences to service_role;
+grant select,insert on public.wm_periodic_reports to service_role;
+create function public.wm_periodic_next(p_start date,p_cadence text) returns date
+language sql immutable security invoker set search_path=pg_catalog,public as $wm$
+ select (p_start+case p_cadence when 'daily' then interval '1 day' when 'weekly' then interval '1 week' when 'monthly' then interval '1 month' when 'quarterly' then interval '3 months' when 'yearly' then interval '1 year' end)::date
+$wm$;
+revoke all on function public.wm_periodic_next(date,text) from public,anon,authenticated;
+grant execute on function public.wm_periodic_next(date,text) to service_role;
+create function public.wm_periodic_action(p_hash text,p_action text,p_data jsonb) returns jsonb
+language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a record;c text;d date;v jsonb;reports jsonb;
+begin
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into a from public.wm_lock_room_actor_for(p_hash,null);
+ if not found or a.plan<>'premium' or a.role not in ('promoteur','manager') or not exists(select 1 from public.wm_workspaces w where w.id=a.workspace_id and w.enabled and w.kind='enterprise') then return null;end if;
+ if p_action='center-periodic-save' then
+  c:=p_data->>'cadence';
+  if c is null or c not in ('daily','weekly','monthly','quarterly','yearly') or jsonb_typeof(p_data->'enabled') is distinct from 'boolean' then return null;end if;
+  d:=date_trunc(case c when 'daily' then 'day' when 'weekly' then 'week' when 'monthly' then 'month' when 'quarterly' then 'quarter' else 'year' end,clock_timestamp() at time zone 'Africa/Douala')::date;
+  insert into public.wm_periodic_preferences(account_id,workspace_id,member_role,cadence,enabled,next_start)
+  values(a.account_id,a.workspace_id,a.role,c,(p_data->>'enabled')::boolean,d)
+  on conflict(account_id,workspace_id,member_role,cadence) do update set next_start=case when not wm_periodic_preferences.enabled and excluded.enabled then excluded.next_start else wm_periodic_preferences.next_start end,enabled=excluded.enabled;
+ elsif p_action<>'center-periodic-list' then return null;
+ end if;
+ select coalesce(jsonb_agg(jsonb_build_object('cadence',p.cadence,'enabled',p.enabled,'next_start',p.next_start) order by p.cadence),'[]'::jsonb) into v from public.wm_periodic_preferences p where p.account_id=a.account_id and p.workspace_id=a.workspace_id and p.member_role=a.role;
+ select coalesce(jsonb_agg(to_jsonb(z) order by z.period_end desc,z.cadence),'[]'::jsonb) into reports from (select p.cadence,p.period_start,p.period_end,p.generated_at,p.metrics from public.wm_periodic_reports p where p.account_id=a.account_id and p.workspace_id=a.workspace_id and p.member_role=a.role order by p.period_end desc,p.cadence limit 50) z;
+ return jsonb_build_object('preferences',v,'items',reports,'timezone','Africa/Douala','scope',case when a.role='promoteur' then 'enterprise' else 'organizer' end);
+end $wm$;
+revoke all on function public.wm_periodic_action(text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_periodic_action(text,text,jsonb) to service_role;
+create function public.wm_periodic_run(p_limit integer) returns integer
+language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare p record;d date;lo bigint;hi bigint;v jsonb;n integer:=0;today date:=(clock_timestamp() at time zone 'Africa/Douala')::date;
+begin
+ if p_limit is null or p_limit<1 or p_limit>50 then raise exception 'invalid batch';end if;
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ for p in select pref.* from public.wm_periodic_preferences pref
+ join public.wm_accounts ac on ac.id=pref.account_id and ac.enabled and not ac.password_change_required
+ join public.wm_workspaces w on w.id=pref.workspace_id and w.enabled and w.kind='enterprise'
+ join public.wm_memberships m on m.account_id=pref.account_id and m.workspace_id=pref.workspace_id and m.enabled and m.role=pref.member_role
+ join public.wm_room_entitlements e on e.workspace_id=pref.workspace_id and e.enabled and e.plan='premium' and e.valid_until>clock_timestamp()
+ where pref.enabled and public.wm_periodic_next(pref.next_start,pref.cadence)<=today order by pref.next_start,pref.account_id,pref.workspace_id,pref.cadence limit p_limit for update of pref
+ loop
+  d:=public.wm_periodic_next(p.next_start,p.cadence);
+  lo:=floor(extract(epoch from (p.next_start::timestamp at time zone 'Africa/Douala'))*1000)::bigint;
+  hi:=floor(extract(epoch from (d::timestamp at time zone 'Africa/Douala'))*1000)::bigint;
+  select jsonb_build_object('total',count(*),'ended',count(*) filter(where r.state->>'status'='ended' and coalesce(r.state->>'cancelled','false')='false'),'cancelled',count(*) filter(where r.state->>'cancelled'='true'),'duration_minutes',coalesce(sum((r.state->>'durationMinutes')::bigint) filter(where coalesce(r.state->>'cancelled','false')='false'),0),'polls_closed',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(r.state->'polls','[]'::jsonb)) q where q->>'open'='false')),0),'tasks_done',coalesce(sum((select count(*) from public.wm_tasks t join public.wm_minutes_versions mv on mv.id=t.version_id and mv.revoked_at is null and mv.published_at is not null where t.room_id=r.id and t.state='done' and exists(select 1 from public.wm_minutes_recipients mr where mr.version_id=t.version_id and mr.account_id=t.assignee_id and mr.revoked_at is null))),0))
+  into v from public.wm_rooms r where r.workspace_id=p.workspace_id and (p.member_role='promoteur' or r.host_id=p.account_id) and (r.state->>'scheduledMs')::bigint>=lo and (r.state->>'scheduledMs')::bigint<hi;
+  insert into public.wm_periodic_reports(account_id,workspace_id,member_role,cadence,period_start,period_end,metrics) values(p.account_id,p.workspace_id,p.member_role,p.cadence,p.next_start,d,v) on conflict do nothing;
+  update public.wm_periodic_preferences set next_start=d where account_id=p.account_id and workspace_id=p.workspace_id and member_role=p.member_role and cadence=p.cadence;
+  n:=n+1;
+ end loop;
+ return n;
+end $wm$;
+revoke all on function public.wm_periodic_run(integer) from public,anon,authenticated;
+grant execute on function public.wm_periodic_run(integer) to service_role;
+
 -- Workspace private conversations. No implicit access for a manager or promoter.
 create table public.wm_direct_messages(
  id uuid primary key,
@@ -23,6 +100,7 @@ begin
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
  select * into a from public.wm_lock_room_actor_for(p_hash,null);
  if not found or not exists(select 1 from public.wm_workspaces w where w.id=a.workspace_id and w.enabled and w.kind='enterprise') then return null;end if;
+ if p_action in ('center-periodic-list','center-periodic-save') then return public.wm_periodic_action(p_hash,p_action,p_data);end if;
  if p_action='center-statistics' then
   if a.plan<>'premium' or a.role not in ('promoteur','manager') then return null;end if;
   if coalesce(p_data->>'days','') not in ('7','30','90','365') then return null;end if;

@@ -764,6 +764,14 @@ try{
  await hp.getByRole("button",{name:"Actualiser le bilan",exact:true}).click();
  await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();
  assert.equal(await period.inputValue(),"7");
+ const periodicRegion=hp.getByRole("region",{name:"Bilans automatiques",exact:true});
+ const periodicToggle=periodicRegion.getByLabel("Hebdomadaire",{exact:true});await periodicToggle.waitFor();
+ await periodicToggle.check();await periodicRegion.getByRole("button",{name:"Actualiser l’historique",exact:true}).waitFor();
+ await hp.waitForFunction(()=>[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].some(x=>x.checked));
+ const periodic=await identity(hs.access_token,"center-periodic-list");assert.equal(periodic.timezone,"Africa/Douala");assert.ok(periodic.preferences.some(p=>p.cadence==="weekly"&&p.enabled===true));
+ await periodicToggle.uncheck();await hp.waitForFunction(()=>[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].every(x=>!x.checked));
+ assert.ok((await identity(hs.access_token,"center-periodic-list")).preferences.some(p=>p.cadence==="weekly"&&p.enabled===false));
+ pass("B4 periodic report real browser opt-in, disable and timezone");
  pass("WAVE06 real authorized summary refresh retains selected period");
  pass("real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period");
  // B2 group UI is exercised in separate contexts and workspace to preserve existing fixtures.

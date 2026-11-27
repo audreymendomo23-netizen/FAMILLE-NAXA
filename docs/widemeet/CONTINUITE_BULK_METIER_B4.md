@@ -1,0 +1,2 @@
+# B4.7 — Bilans périodiques candidats
+Préférences privées cinq cadences, périodes calendaires Africa/Douala, génération bornée idempotente, historique limité à 50 résultats et droits Premium actuels, UI Web/Compose, tests SQL et Chromium. Worker serveur opt-in non activé en production. Agrégats reflètent état au moment de génération; pas de présence humaine ni distribution externe, purge et politique de réadhésion à arbitrer. Correction Kotlin vague 06 : séparateur après boucle. Aucune migration hébergée, aucun main. Qualification à vérifier.
