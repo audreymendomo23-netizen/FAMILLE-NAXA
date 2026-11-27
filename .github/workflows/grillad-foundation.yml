@@ -39,6 +39,13 @@ jobs:
       - run: test -s apps/web/grillad/dist/index.html && test -s apps/web/grillad/dist/_headers && test -s apps/web/grillad/dist/manifest.webmanifest && ! grep -q '__GRILLAD_ASSETS__' apps/web/grillad/dist/sw.js
       - run: npx --workspace @famille/grillad-web playwright install --with-deps chromium
       - run: npm run test:e2e --workspace @famille/grillad-web
+      - name: Connected candidate browser contract (mock HTTP only)
+        env:
+          VITE_GRILLAD_API_URL: https://grillad-fixture.supabase.co/functions/v1/grillad
+          VITE_GRILLAD_PUBLIC_KEY: sb_publishable_fixture
+        run: |
+          node scripts/grillad/cloudflare-pages-build.mjs
+          npm exec --workspace @famille/grillad-web -- playwright test --config playwright.connected.config.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

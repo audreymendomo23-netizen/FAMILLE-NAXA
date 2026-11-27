@@ -34,7 +34,7 @@ internal fun bounds(period:String):Pair<String,String>{val d=LocalDate.parse(day
  val group=groups.entries.firstOrNull{page in it.value}?.key?:"Accueil"
  Scaffold(bottomBar={NavigationBar{groups.forEach{(g,p)->NavigationBarItem(selected=group==g,onClick={page=p.first()},enabled=!busy,icon={Text(g.take(1))},label={Text(g)})}}}){insets->
  Column(Modifier.fillMaxSize().padding(insets).padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("GrillaD",style=MaterialTheme.typography.headlineMedium);TextButton({run{try{api.call(obj("action" to "logout"),session?.optString("access"))}finally{reset()}}},enabled=!busy){Text("Déconnexion")}}
+  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("GrillaD",style=MaterialTheme.typography.headlineMedium);TextButton({run{try{api.call(obj("action" to "logout"),session?.optString("access"))}finally{reset()}}},enabled=!busy&&pending==null){Text("Déconnexion")}}
   Row(Modifier.horizontalScroll(rememberScrollState())){rows(session?.optJSONArray("sites")).forEach{s->OutlinedButton({if(pending==null)run{site=s;page="Accueil";load(s)}},enabled=!busy&&pending==null){Text((if(s.optString("site")==site?.optString("site"))"✓ " else "")+s.optString("name"))}}}
   if(group!="Accueil")Row(Modifier.horizontalScroll(rememberScrollState())){groups.getValue(group).forEach{p->TextButton({page=p},enabled=!busy){Text(p)}}}
   Text(page,style=MaterialTheme.typography.headlineSmall);if(msg.isNotBlank())Text(msg)
