@@ -29,7 +29,30 @@ begin
  select coalesce(jsonb_agg(jsonb_build_object('title',x.title,'assignee',a.display_name,'due_at',x.due_at,'state',x.state) order by x.due_at,x.id),'[]'::jsonb) into tasks
  from public.wm_tasks x join public.wm_accounts a on a.id=x.assignee_id join public.wm_minutes_versions v on v.id=x.version_id and v.revoked_at is null and v.published_at is not null
  where x.room_id=p_room and exists(select 1 from public.wm_minutes_recipients z where z.version_id=x.version_id and z.account_id=x.assignee_id and z.revoked_at is null);
- select coalesce(jsonb_agg(jsonb_build_object('question',q->>'question','kind',coalesce(q->>'kind','simple'),'options',(select coalesce(jsonb_agg(jsonb_build_object('label',opt,'count',(select count(*) from jsonb_each(coalesce(q->'votes','{}')) b where case when jsonb_typeof(b.value)='array' then b.value @> jsonb_build_array(ord-1) else b.value=to_jsonb(ord-1) end)) order by ord),'[]'::jsonb) from jsonb_array_elements_text(q->'options') with ordinality o(opt,ord)))),'[]'::jsonb) into polls from jsonb_array_elements(coalesce(r.state->'polls','[]')) q;
+ -- Reuse pollSummary's frozen electorate and response denominator, never raw identities.
+ with source as (
+  select q,ord,case when jsonb_typeof(q->'eligible')='array' then jsonb_array_length(q->'eligible') end as eligible,
+   (select count(*) from jsonb_object_keys(coalesce(q->'votes','{}'::jsonb))) as responses
+  from jsonb_array_elements(coalesce(r.state->'polls','[]'::jsonb)) with ordinality p(q,ord)
+ ), metrics as (
+  select *,case when eligible is null then null when eligible=0 then 0::numeric else 100.0*responses/eligible end as response_rate
+  from source
+ ), decisions as (
+  select *,case when eligible is null or q->>'quorum' is null then null else response_rate>=(q->>'quorum')::numeric end as quorum_met
+  from metrics
+ )
+ select coalesce(jsonb_agg(jsonb_build_object(
+  'question',q->>'question','kind',coalesce(q->>'kind','simple'),
+  'eligible',eligible,'responses',responses,'nonresponses',case when eligible is null then null else greatest(eligible-responses,0) end,
+  'response_rate',round(response_rate,2),'quorum',(q->>'quorum')::integer,'quorum_met',quorum_met,'threshold',(q->>'threshold')::integer,
+  'options',(select coalesce(jsonb_agg(jsonb_build_object('label',opt,'count',votes_for,
+    'share_pct',case when responses=0 then null else round(100.0*votes_for/responses,2) end,
+    'accepted',case when quorum_met is true and responses>0 and q->>'threshold' is not null then 100.0*votes_for/responses>=(q->>'threshold')::numeric else null end)
+    order by opt_ord),'[]'::jsonb)
+   from jsonb_array_elements_text(q->'options') with ordinality o(opt,opt_ord)
+   cross join lateral (select count(*) as votes_for from jsonb_each(coalesce(q->'votes','{}'::jsonb)) b
+     where case when jsonb_typeof(b.value)='array' then b.value @> jsonb_build_array(opt_ord-1) else b.value=to_jsonb(opt_ord-1) end) c)
+  ) order by ord),'[]'::jsonb) into polls from decisions;
  return jsonb_build_object('room_id',r.id,'title',e.snapshot->>'title','closed_at',e.closed_at,'recipient',(select display_name from public.wm_accounts where id=s.account_id),'presence',presence,'tasks',tasks,'polls',polls);
 end $wm$;
 revoke all on function public.wm_report_export(text,uuid,uuid) from public,anon,authenticated;
