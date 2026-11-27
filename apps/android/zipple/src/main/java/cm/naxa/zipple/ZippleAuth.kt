@@ -54,7 +54,10 @@ class ZippleAuth(private val endpoint:String) {
             conn.setRequestProperty("Content-Type","application/json")
             bearer?.let{conn.setRequestProperty("Authorization","Bearer "+it)}
             body.put("app_id","ZIPPLE")
-            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            // Do not let the HTTPS implementation silently replay a buffered POST after a lost acknowledgement.
+            val encoded=body.toString().toByteArray(Charsets.UTF_8)
+            conn.setFixedLengthStreamingMode(encoded.size)
+            conn.outputStream.use { it.write(encoded) }
             if(conn.responseCode !in 200..299)throw ZippleHttpException(conn.responseCode)
             if(conn.responseCode==204) JSONObject() else JSONObject(conn.inputStream.bufferedReader().use { it.readText() }.ifBlank{"{}"})
         } finally {conn.disconnect()}

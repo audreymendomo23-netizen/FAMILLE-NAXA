@@ -20,7 +20,7 @@ private data class NativeTender(val method:String="cash",val amount:String="",va
  var pending by remember{mutableStateOf<Pair<String,String>?>(restored.getOrNull())};var tenders by remember{mutableStateOf(listOf(NativeTender(),NativeTender()))}
  suspend fun load(){d=api.call(session,site,"split_snapshot") as? JSONObject}
  fun clearPending(){vault.clearPendingSplit(pendingScope);pending=null}
- suspend fun send(p:Pair<String,String>){try{val body=JSONObject(p.first);val action=body.optString("local_action","split_collect");require(action in setOf("split_collect","cash_record_mixed"));body.remove("local_action");val response=api.call(session,site,action,body.put("request_id",p.second));result=if(action=="cash_record_mixed")JSONObject().put("receipt_id",response).put("balance_xaf",0)else response as? JSONObject;clearPending();payer="";amount="";reference="";qty=emptyMap();tenders=listOf(NativeTender(),NativeTender());load()}catch(e:ZippleHttpException){if(e.status==400||e.status==409)clearPending();throw e}}
+ suspend fun send(p:Pair<String,String>){try{val body=JSONObject(p.first);val action=body.optString("local_action","split_collect");require(action in setOf("split_collect","cash_record_mixed"));body.remove("local_action");val response=api.call(session,site,action,body.put("request_id",p.second));val confirmed=if(action=="cash_record_mixed"){require(response is String&&response.isNotBlank());JSONObject().put("receipt_id",response).put("balance_xaf",0)}else{require(response is JSONObject&&response.optString("payment_id").isNotBlank()&&response.has("balance_xaf"));response};clearPending();result=confirmed;payer="";amount="";reference="";qty=emptyMap();tenders=listOf(NativeTender(),NativeTender());load()}catch(e:ZippleHttpException){if(e.status==400||e.status==409)clearPending();throw e}}
  fun run(block:suspend ()->Unit){if(busy||!session.permits(site))return;busy=true;error="";scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){error=tr("Opération non confirmée. Réessayez avec les mêmes données.","Operation unconfirmed. Retry with the same details.")}finally{busy=false}}}
  LaunchedEffect(session.token,site){run{load()}}
  val active=d?.rows("orders")?.find{it.optString("id")==order};val effective=active?.optString("split_mode")?.takeIf{it in setOf("items","amount")}?:mode
@@ -63,6 +63,6 @@ private data class NativeTender(val method:String="cash",val amount:String="",va
   }
   active.rows("parts").forEach{p->Text(p.optString("payer")+" · "+p.optLong("amount_xaf")+" FCFA")}
  }
- pending?.let{p->OutlinedButton(enabled=!busy,onClick={run{send(p)}}){Text(tr("Réessayer le même règlement","Retry same payment"))}}
+ pending?.let{p->Text(tr("Un règlement attend confirmation. Ne saisissez pas un nouveau paiement.","A payment awaits confirmation. Do not enter a new payment."));OutlinedButton(enabled=!busy,onClick={run{send(p)}}){Text(tr("Réessayer le même règlement","Retry same payment"))}}
  result?.let{Text(tr("Règlement confirmé — solde","Payment confirmed — balance")+" : "+it.optLong("balance_xaf")+" FCFA")}
 }

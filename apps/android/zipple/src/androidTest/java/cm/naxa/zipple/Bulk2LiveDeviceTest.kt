@@ -18,9 +18,10 @@ class Bulk2LiveDeviceTest {
   assertEquals("https://127.0.0.1:4443/zipple-business",BuildConfig.ZIPPLE_BUSINESS_API_URL)
   val password=requireNotNull(args.getString("zippleFixturePassword"));val login=requireNotNull(args.getString("zippleFixtureLogin"))
   val itemNo=requireNotNull(args.getString("zippleSplitNumber"));val amountNo=requireNotNull(args.getString("zippleAmountNumber"));val mixedNo=requireNotNull(args.getString("zippleMixedNumber"))
-  fun awaitText(text:String){compose.waitUntil(30000){compose.onAllNodesWithText(text,substring=false).fetchSemanticsNodes().isNotEmpty()}}
-  fun click(text:String){val matcher=hasText(text,substring=false) and hasClickAction() and isEnabled();compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1};compose.onNode(matcher).performScrollTo().performClick()}
-  fun input(text:String,value:String){awaitText(text);compose.onNodeWithText(text,substring=false).performScrollTo().performTextInput(value)}
+  fun step(label:String,block:()->Unit){try{block();android.util.Log.i("ZIPPLE_BULK2_TEST","PASS "+label)}catch(e:Throwable){throw AssertionError("ZIPPLE_BULK2_STEP_FAILED: "+label,e)}}
+  fun awaitText(text:String)=step("await "+text){compose.waitUntil(30000){compose.onAllNodesWithText(text,substring=false).fetchSemanticsNodes().isNotEmpty()}}
+  fun click(text:String)=step("click "+text){val matcher=hasText(text,substring=false) and hasClickAction() and isEnabled();compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1};compose.onNode(matcher).performScrollTo().performClick()}
+  fun input(text:String,value:String)=step("input "+text){val matcher=hasText(text,substring=false) and hasSetTextAction();compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1};compose.onNode(matcher).performScrollTo().performTextInput(value)}
   input("Identifiant",login);input("Mot de passe",password);click("Se connecter")
   awaitText("Configurer votre code local");input("PIN","1234");click("Continuer")
   awaitText("Addition fractionnée");click("Addition fractionnée")

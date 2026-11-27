@@ -134,6 +134,16 @@ jobs:
           target: google_apis
           disable-animations: true
           script: bash docs/apps/zipple/n2-n5/local-business-device.sh
+      - name: Preserve native test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zipple-native-bulk2-reports
+          path: |
+            apps/android/zipple/build/outputs/androidTest-results/connected/
+            apps/android/zipple/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Stop disposable stack
         if: always()
         run: |
