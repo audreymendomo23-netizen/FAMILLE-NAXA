@@ -90,6 +90,7 @@ internal class RequestKeys{
    OutlinedButton(onClick={tab="receipts"}){Text(tr("Lots","Lots"))}
   }
   OutlinedButton(onClick={tab="production"}){Text(tr("Production et file hors connexion","Production and offline queue"))}
+  OutlinedButton(onClick={tab="counts"}){Text(tr("Comptages","Counts"))}
   OutlinedButton(onClick={tab="expenses"}){Text(tr("Dépenses","Expenses"))}
   val ingredients=data?.rows("ingredients").orEmpty()
   when(tab){
@@ -117,6 +118,14 @@ internal class RequestKeys{
      queue("lot_receive",JSONObject().put("ingredient_id",selected).put("label",lot.trim()).put("supplier",supplier.trim()).put("qty_milli",ZippleErpNumbers.milli(quantity)).put("cost_xaf",ZippleErpNumbers.integer(cost)).put("expires_on",if(expiry.isBlank())JSONObject.NULL else expiry));lot="";quantity="";cost=""
     }}){Text(tr("Mettre la réception en attente","Queue receipt"))}
     data?.rows("lots")?.forEach{Text(it.optString("lot_label")+" · "+BigDecimal.valueOf(it.optLong("remaining_milli"),3).stripTrailingZeros().toPlainString())}
+   }
+   "counts"->{
+    val lots=data?.rows("lots").orEmpty();var counted by remember{mutableStateOf("")};var why by remember{mutableStateOf("")};var selectedLot by remember{mutableStateOf("")}
+    Choice(tr("Lot à compter","Batch to count"),lots.map{it.optString("id") to it.optString("lot_label")},selectedLot,{selectedLot=it;counted=""},canWrite)
+    val current=lots.find{it.optString("id")==selectedLot};val q=ZippleErpNumbers.milli(counted)
+    current?.let{Text(tr("Stock de référence","Reference stock")+" : "+BigDecimal.valueOf(it.optLong("remaining_milli"),3).stripTrailingZeros().toPlainString())}
+    Field(tr("Quantité comptée","Counted quantity"),counted,{counted=it},true);Field(tr("Motif du comptage","Count reason"),why,{why=it.take(500)})
+    OutlinedButton(enabled=canWrite&&current!=null&&q!=null&&q>=0&&q<=current.optLong("remaining_milli")&&why.trim().length>=5,onClick={run{queue("count_lot",JSONObject().put("lot_id",selectedLot).put("expected_milli",requireNotNull(current).optLong("remaining_milli")).put("counted_milli",q).put("reason",why.trim()));counted="";why=""}}){Text(tr("Mettre le comptage en attente","Queue count"))}
    }
    "production"->{ZippleNativeProduction(api,session,site,en)}
    else->{

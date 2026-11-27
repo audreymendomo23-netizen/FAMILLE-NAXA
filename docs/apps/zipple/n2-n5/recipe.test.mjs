@@ -605,7 +605,17 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const offlineNewLotId=offlineNewLot.outcome.id;
  const offlineCountKey=uid(),offlineCountPayload={lot_id:offlineNewLotId,expected_milli:500,counted_milli:400,reason:"Comptage terrain"};
  const offlineCountReceipt=await syncMore(offlineCountKey,"count_lot",offlineCountPayload);assert.equal(offlineCountReceipt.state,"acknowledged");assert.deepEqual(await syncMore(offlineCountKey,"count_lot",offlineCountPayload),offlineCountReceipt);
- assert.equal((await syncMore(uid(),"count_lot",offlineCountPayload)).state,"conflict");
+ const staleEvent=uid();const staleReceipt=await syncMore(staleEvent,"count_lot",offlineCountPayload);assert.equal(staleReceipt.state,"conflict");
+ const reviews=await scalar("select zp_erp_review_snapshot($1,$2)",[a.access,a.site]);assert.ok(reviews.events.some(e=>e.event_id===staleEvent&&e.reviewed_at===null));
+ await assert.rejects(scalar("select zp_erp_review_discard($1,$2,$3,'Revue autre site')",[b.access,b.site,staleEvent]),/DENIED/);
+ await assert.rejects(scalar("select zp_erp_review_discard($1,$2,$3,'Revue déjà exécutée')",[a.access,a.site,offlineCountKey]),/DENIED/);
+ const reviewed=await scalar("select zp_erp_review_discard($1,$2,$3,'Comptage obsolète, reprendre sur stock réel')",[a.access,a.site,staleEvent]);assert.equal(reviewed.state,"reviewed");assert.deepEqual(await scalar("select zp_erp_review_discard($1,$2,$3,'Comptage obsolète, reprendre sur stock réel')",[a.access,a.site,staleEvent]),reviewed);
+ await assert.rejects(scalar("select zp_erp_review_discard($1,$2,$3,'Autre décision')",[a.access,a.site,staleEvent]),/IDEMPOTENCY_CONFLICT/);
+ assert.deepEqual(await syncMore(staleEvent,"count_lot",offlineCountPayload),staleReceipt);
+ assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where id=$1",[offlineNewLotId])),400);
+ assert.equal(Number(await scalar("select count(*) from zp_erp_sync_reviews where event_id=$1",[staleEvent])),1);
+ assert.ok((await scalar("select zp_erp_review_snapshot($1,$2)",[a.access,a.site])).events.some(e=>e.event_id===staleEvent&&e.reviewed_at!==null));
+ console.log("ZIPPLE_BULK3_OFFLINE_APPEND_ONLY_REVIEW_PASS");
  const offlineExpenseKey=uid(),offlineExpensePayload={category:"rent",label:"Dépense hors ligne",method:"bank",amount_xaf:500,reference:"OFFLINE-REF",expense_date:statementDay};
  const offlineExpenseReceipt=await syncMore(offlineExpenseKey,"expense_record",offlineExpensePayload);assert.equal(offlineExpenseReceipt.state,"acknowledged");assert.deepEqual(await syncMore(offlineExpenseKey,"expense_record",offlineExpensePayload),offlineExpenseReceipt);
  assert.equal(Number(await scalar("select count(*) from zp_expenses where request_id=$1",[offlineExpenseKey])),1);

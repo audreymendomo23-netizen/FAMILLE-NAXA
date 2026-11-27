@@ -45,4 +45,32 @@ declare m public.zp_members;old public.zp_erp_sync_receipts;st text:='acknowledg
 end $$;
 revoke all on function public.zp_offline_erp_apply(text,uuid,uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
 grant execute on function public.zp_offline_erp_apply(text,uuid,uuid,uuid,uuid,text,jsonb) to service_role;
+
+-- NAXA family APPEND_ONLY_REVIEW: preserve the original conflict, never acknowledge a failed mutation.
+create table public.zp_erp_sync_reviews(
+ event_id uuid primary key references public.zp_erp_sync_receipts(event_id),
+ org_id uuid not null,site_id uuid not null,member_id uuid not null,
+ reason text not null check(length(reason) between 5 and 500),
+ created_at timestamptz not null default now(),
+ foreign key(site_id,org_id) references public.zp_sites(id,org_id),
+ foreign key(member_id,org_id) references public.zp_members(id,org_id));
+alter table public.zp_erp_sync_reviews enable row level security;
+revoke all on public.zp_erp_sync_reviews from public,anon,authenticated;
+grant select,insert on public.zp_erp_sync_reviews to service_role;
+create function public.zp_erp_review_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $review$
+declare m public.zp_members;begin m:=public.zp_erp_actor(p_access,p_site);
+ return jsonb_build_object('events',coalesce((select jsonb_agg(to_jsonb(e) order by e.created_at,e.event_id) from (select r.event_id,r.action,r.payload,r.state,r.outcome,r.created_at,v.reason review_reason,v.created_at reviewed_at from public.zp_erp_sync_receipts r left join public.zp_erp_sync_reviews v on v.event_id=r.event_id where r.org_id=m.org_id and r.site_id=p_site and r.member_id=m.id and r.state in ('conflict','rejected') order by (v.event_id is not null),r.created_at desc limit 300)e),'[]'::jsonb));end $review$;
+create function public.zp_erp_review_discard(p_access text,p_site uuid,p_event uuid,p_reason text) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $review$
+declare m public.zp_members;r public.zp_erp_sync_receipts;v public.zp_erp_sync_reviews;why text:=trim(coalesce(p_reason,''));begin
+ m:=public.zp_erp_actor(p_access,p_site);
+ if length(why) not between 5 and 500 then raise exception 'INVALID_REVIEW_REASON';end if;
+ select * into r from public.zp_erp_sync_receipts where event_id=p_event and org_id=m.org_id and site_id=p_site and member_id=m.id;
+ if r.event_id is null or r.state not in ('conflict','rejected') then raise exception 'DENIED';end if;
+ insert into public.zp_erp_sync_reviews(event_id,org_id,site_id,member_id,reason) values(p_event,m.org_id,p_site,m.id,why) on conflict(event_id) do nothing;
+ select * into v from public.zp_erp_sync_reviews where event_id=p_event;
+ if v.reason<>why then raise exception 'IDEMPOTENCY_CONFLICT';end if;
+ return jsonb_build_object('app_id','ZIPPLE','event_id',p_event,'organization_id',m.org_id,'site_id',p_site,'member_id',m.id,'state','reviewed','original_state',r.state,'reason',v.reason);end $review$;
+revoke all on function public.zp_erp_review_snapshot(text,uuid),public.zp_erp_review_discard(text,uuid,uuid,text) from public,anon,authenticated;
+grant execute on function public.zp_erp_review_snapshot(text,uuid),public.zp_erp_review_discard(text,uuid,uuid,text) to service_role;
+
 commit;
