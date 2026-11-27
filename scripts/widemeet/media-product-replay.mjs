@@ -229,7 +229,14 @@ try{
    assert.equal(await rpcWorker("fail",speechRecordingId,staleLease),null);
    console.log("PASS exclusive worker claim, stale lease fencing and crash recovery fixture");
    const shutdown=new AbortController(),workerStates=[];
-   await runAsrLoop({worker:engine,signal:shutdown.signal,report:state=>{workerStates.push(state);shutdown.abort()},wait:async()=>{throw Error("unexpected worker wait")}});
+   // Retain the real worker outcome without logging private text, IDs or exception strings.
+   let leasedOutcome=null;
+   await runAsrLoop({worker:{runOne:async()=>{leasedOutcome=await engine.runOne();return leasedOutcome}},signal:shutdown.signal,report:state=>{workerStates.push(state);shutdown.abort()},wait:async()=>{throw Error("unexpected worker wait")}});
+   if(leasedOutcome?.completed!==true){
+    const stage=String(leasedOutcome?.stage??"unknown"),reason=String(leasedOutcome?.reason??"unknown");
+    console.log("ASR_LEASE_DIAGNOSTIC "+(/^[a-z-]{1,40}$/.test(stage)?stage:"unknown")+" "+(/^[A-Za-z:-]{1,70}$/.test(reason)?reason:"unknown"));
+   }
+   assert.deepEqual(leasedOutcome,{claimed:true,completed:true},"actual reclaimed ASR job must finish");
    assert.deepEqual(workerStates,["completed"]);
    console.log("PASS resilient consumer loop drains a real leased transcription job");
    const live=await tk(hs.access_token,"read",captured);
