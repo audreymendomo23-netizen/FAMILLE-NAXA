@@ -141,12 +141,11 @@ begin
   if jsonb_array_length(selection) not between 1 and 10 then return null;end if;
   if exists(select 1 from jsonb_array_elements(selection) x where jsonb_typeof(x)<>'number' or x::text !~ '^(0|[1-9][0-9]{0,6})$') then return null;end if;
   if (select count(distinct x) from jsonb_array_elements(selection) x)<>jsonb_array_length(selection) then return null;end if;
-  review:=public.wm_transcription_review(j.result,recid);
-  select coalesce(jsonb_agg(x order by (x->>'segment_index')::integer),'[]'::jsonb) into selected_items from (
-   select value as x from jsonb_array_elements(review->'excerpts')
-   union
-   select value as x from jsonb_array_elements(review->'decision_candidates')
-  ) q where selection @> jsonb_build_array((x->>'segment_index')::integer);
+  -- Source selection is not restricted to automatically suggested excerpts.
+  select coalesce(jsonb_agg(seg||jsonb_build_object('segment_index',ord-1) order by ord),'[]'::jsonb)
+   into selected_items
+   from jsonb_array_elements(j.result->'segments') with ordinality as t(seg,ord)
+   where selection @> jsonb_build_array(ord-1);
   if jsonb_array_length(selected_items)<>jsonb_array_length(selection) then return null;end if;
   return jsonb_build_object('method','selected-source-review-v1','recording_id',recid,'items',selected_items,'approved',false,'speaker_annotations',coalesce((select jsonb_agg(z.x order by (z.x->>'segment_index')::integer) from (select distinct on ((x->>'segment_index')::integer) x from jsonb_array_elements(j.speaker_annotations) x where selection @> jsonb_build_array((x->>'segment_index')::integer) order by (x->>'segment_index')::integer,(x->>'revision')::integer desc) z),'[]'::jsonb));
  elsif p_action='search' then

@@ -256,7 +256,8 @@ try{
    for(const item of [...review.excerpts,...review.decision_candidates]){const {segment_index,...source}=item;assert.deepEqual(source,live.result.segments[segment_index]);}
    const selection={...captured,indices:[review.excerpts[0].segment_index]};
    const selected=await tk(hs.access_token,"draft-review",selection);assert.equal(selected.recording_id,speechRecordingId);assert.equal(selected.approved,false);assert.deepEqual(selected.items,[review.excerpts[0]]);
-   for(const indices of [[],[9999999],[0,0],["0"]])assert.equal((await tr(hs.access_token,"draft-review",{...captured,indices})).status,403);
+   const arbitraryIndices=[...new Set([0,live.result.segments.length-1])].sort((a,b)=>a-b);const arbitrary=await tk(hs.access_token,"draft-review",{...captured,indices:[...arbitraryIndices].reverse()});assert.deepEqual(arbitrary.items,arbitraryIndices.map(i=>({...live.result.segments[i],segment_index:i})));assert.equal(arbitrary.approved,false);
+   for(const indices of [[],[9999999],[0,0],["0"],Array.from({length:11},(_,i)=>i)])assert.equal((await tr(hs.access_token,"draft-review",{...captured,indices})).status,403);
    assert.equal((await tr(gs.access_token,"draft-review",selection)).status,403);
    console.log("PASS actual source-bound selective draft, no approval, invalid indices and guest denied");
    const speakerEvent={...captured,segment_index:selection.indices[0],speaker_number:1,expected_revision:0,event_id:randomUUID()};
