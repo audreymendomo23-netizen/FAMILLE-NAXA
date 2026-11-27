@@ -223,6 +223,20 @@ begin
   if n<>v_expected and (reason is null or length(reason) not between 1 and 300) then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
   update grillad_private.cash set counted=n,expected=v_expected,closed_at=now(),close_reason=reason where id=c.id;
   result:=jsonb_build_object('id',c.id,'expected',v_expected,'counted',n,'difference',n-v_expected);
+ when 'set_network_mode' then
+  if r<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+  reason:=btrim(p_payload->>'reason');
+  if jsonb_typeof(p_payload->'centralized') is distinct from 'boolean' or reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_NETWORK_INPUT' using errcode='22023';end if;
+  perform pg_advisory_xact_lock(hashtextextended('grillad-network:'||p_org::text,0));
+  insert into grillad_private.pilotage_policy(org,centralized) values(p_org,(p_payload->>'centralized')::boolean) on conflict(org) do update set centralized=excluded.centralized;
+  result:=jsonb_build_object('centralized',(p_payload->>'centralized')::boolean);
+ when 'set_service_hours' then
+  if r<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+  n:=(p_payload->>'start_minute')::bigint;d:=(p_payload->>'effective_from')::date;reason:=btrim(p_payload->>'reason');
+  if n is null or n not between 0 and 1439 or d is null or d<(now() at time zone 'Africa/Douala')::date or reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_SERVICE_INPUT' using errcode='22023';end if;
+  if exists(select 1 from grillad_private.service_policy where org=p_org and site=p_site) then raise exception 'GRILLAD_SERVICE_ALREADY_CONFIGURED' using errcode='22023';end if;
+  insert into grillad_private.service_policy(org,site,start_minute,effective_from,enabled) values(p_org,p_site,n::integer,d,true);
+  result:=jsonb_build_object('start_minute',n,'effective_from',d,'enabled',true);
  when 'target' then
   d:=(p_payload->>'day')::date;n:=(p_payload->>'amount')::bigint;
   if d is null or n is null or n not between 0 and 1000000000 then raise exception 'GRILLAD_TARGET' using errcode='22023';end if;

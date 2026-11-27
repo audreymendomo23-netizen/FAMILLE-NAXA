@@ -84,14 +84,24 @@ begin
  if (public.grillad_security_list(o,s)->>'available')::boolean then raise exception 'unlinked camera available';end if;
 end $$;
 reset role;
-insert into grillad_private.pilotage_policy values('b2000000-0000-0000-0000-000000000001',true);
+set role authenticated;
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';e uuid:=gen_random_uuid();p jsonb:='{"centralized":true,"reason":"Test configuration"}';v jsonb;today date:=(now() at time zone 'Africa/Douala')::date;
+begin
+ v:=public.grillad_action(o,s,e,'set_network_mode',p);
+ if not(v->>'centralized')::boolean or public.grillad_action(o,s,e,'set_network_mode',p)<>v then raise exception 'network mode replay';end if;
+ perform public.grillad_action(o,s,gen_random_uuid(),'set_service_hours',jsonb_build_object('start_minute',1080,'effective_from',today,'reason','Test configuration'));
+ if (public.grillad_pilotage_status(o,s)#>>'{service,start_minute}')::int<>1080 then raise exception 'service configuration';end if;
+ begin perform public.grillad_action(o,s,gen_random_uuid(),'set_service_hours',jsonb_build_object('start_minute',0,'effective_from',today,'reason','Rewrite'));raise exception 'retroactive service rewrite';exception when invalid_parameter_value then null;end;
+end $$;
+reset role;
 set role authenticated;
 do $$
 declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;
 begin if (public.grillad_report(o,s,d,d,true,null,null,null)->>'ca')::int<>2000 then raise exception 'network total';end if;end $$;
 reset role;
 -- Service across midnight, using an explicit fixture policy only.
-insert into grillad_private.service_policy values('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',1080,current_date-2,true);
+-- Fixture backdating only to exercise historical summaries; not available via API.
+update grillad_private.service_policy set effective_from=current_date-2 where org='b2000000-0000-0000-0000-000000000001' and site='b3000000-0000-0000-0000-000000000001';
 set role service_role;
 do $$begin
  if (public.grillad_daily_tick(100)->>'changed')::int<1 then raise exception 'daily first run';end if;
@@ -123,6 +133,7 @@ do $$begin
  begin perform count(*) from grillad_private.push_devices;raise exception 'token table leak';exception when insufficient_privilege then null;end;
  if (public.grillad_push_register('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',null,null,false)->>'registered')::boolean then raise exception 'push disable';end if;
  begin perform public.grillad_security_list('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001');raise exception 'seller camera leak';exception when insufficient_privilege then null;end;
+ begin perform public.grillad_action('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',gen_random_uuid(),'set_network_mode','{"centralized":false,"reason":"Test"}');raise exception 'seller network change';exception when insufficient_privilege then null;end;
  begin perform public.grillad_report('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',current_date,current_date,false,null,null,null);raise exception 'seller report leak';exception when insufficient_privilege then null;end;
  begin perform public.grillad_daily_list('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001');raise exception 'seller daily leak';exception when insufficient_privilege then null;end;
  begin perform public.grillad_auth_begin(repeat('b',64),false);raise exception 'service-only auth bridge leaked';exception when insufficient_privilege then null;end;
