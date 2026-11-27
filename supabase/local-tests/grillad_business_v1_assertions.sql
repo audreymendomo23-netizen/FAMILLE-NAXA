@@ -18,7 +18,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000001',true);
 select set_config('request.jwt.claims',jsonb_build_object('session_id','91000000-0000-0000-0000-000000000011','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.app')))::text,true);
 do $$
-declare o uuid:='92000000-0000-0000-0000-000000000001';a uuid:='93000000-0000-0000-0000-000000000001';b uuid:='93000000-0000-0000-0000-000000000002';i uuid:='94000000-0000-0000-0000-000000000001';e uuid:='94000000-0000-0000-0000-000000000002';s uuid:='94000000-0000-0000-0000-000000000003';v jsonb;basket uuid:=gen_random_uuid();j uuid:=gen_random_uuid();payload jsonb;day date:=(now() at time zone 'Africa/Douala')::date;
+declare o uuid:='92000000-0000-0000-0000-000000000001';a uuid:='93000000-0000-0000-0000-000000000001';b uuid:='93000000-0000-0000-0000-000000000002';i uuid:='94000000-0000-0000-0000-000000000001';e uuid:='94000000-0000-0000-0000-000000000002';s uuid:='94000000-0000-0000-0000-000000000003';v jsonb;basket uuid:=gen_random_uuid();j uuid:=gen_random_uuid();payload jsonb;adj uuid:=gen_random_uuid();ex uuid:=gen_random_uuid();ce uuid:=gen_random_uuid();day date:=(now() at time zone 'Africa/Douala')::date;
 begin
  if jsonb_array_length(public.grillad_workspace())<>2 then raise exception 'workspace owner';end if;
  begin perform public.grillad_snapshot(o,'93000000-0000-0000-0000-000000000003',day,day);raise exception 'expected non GRILLAD site denial';exception when insufficient_privilege then null;end;
@@ -32,7 +32,16 @@ begin
  begin perform public.grillad_action(o,b,gen_random_uuid(),'prepare',jsonb_build_object('item',i,'qty',1));raise exception 'expected cross site rejection';exception when insufficient_privilege then null;end;
  v:=public.grillad_action(o,a,gen_random_uuid(),'change_price',jsonb_build_object('item',i,'price',1200,'reason','Test'));if (v->>'old_price')::int<>1000 or (v->>'new_price')::int<>1200 then raise exception 'price history';end if;
  perform public.grillad_action(o,a,gen_random_uuid(),'expense','{"label":"Bois","value":200}');
- v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,ca}')::int<>2000 or (v#>>'{finance,charges}')::int<>200 or jsonb_array_length(v->'expenses')<>1 or (v->'items'->0->>'price')::int<>1200 then raise exception 'finance';end if;
+ perform public.grillad_action(o,a,ex,'expense','{"label":"Erreur","value":100}');
+ v:=public.grillad_action(o,a,ce,'cancel_expense',jsonb_build_object('expense',ex,'reason','Saisie erronée'));
+ if public.grillad_action(o,a,ce,'cancel_expense',jsonb_build_object('expense',ex,'reason','Saisie erronée'))<>v then raise exception 'expense replay';end if;
+ begin perform public.grillad_action(o,a,gen_random_uuid(),'cancel_expense',jsonb_build_object('expense',ex,'reason','Duplicata'));raise exception 'expense duplicate reversal';exception when invalid_parameter_value then null;end;
+ v:=public.grillad_action(o,a,adj,'adjust_stock',jsonb_build_object('item',i,'delta',-1,'reason','Perte'));
+ if (v->>'remaining')::int<>2 or public.grillad_action(o,a,adj,'adjust_stock',jsonb_build_object('item',i,'delta',-1,'reason','Perte'))<>v then raise exception 'adjustment replay';end if;
+ begin perform public.grillad_action(o,a,gen_random_uuid(),'adjust_stock',jsonb_build_object('item',i,'delta',-3,'reason','Perte'));raise exception 'negative stock adjustment';exception when invalid_parameter_value then null;end;
+ perform public.grillad_action(o,a,gen_random_uuid(),'adjust_stock',jsonb_build_object('item',i,'delta',1,'reason','Correction'));
+
+ v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,ca}')::int<>2000 or (v#>>'{finance,charges}')::int<>200 or jsonb_array_length(v->'expenses')<>2 or jsonb_array_length(v->'stock_adjustments')<>2 or (v->'items'->0->>'price')::int<>1200 then raise exception 'finance';end if;
  perform public.grillad_action(o,a,j,'add_item','{"name":"Porc","family":"Porc","price":800,"cost":300}');
  perform public.grillad_action(o,a,gen_random_uuid(),'prepare',jsonb_build_object('item',j,'qty',4));
  payload:=jsonb_build_object('lines',jsonb_build_array(jsonb_build_object('item',i,'qty',1,'price',1200),jsonb_build_object('item',j,'qty',2,'price',800)));
@@ -68,6 +77,7 @@ begin
  begin perform public.grillad_snapshot(o,b,day,day);raise exception 'expected site denial';exception when insufficient_privilege then null;end;
  begin perform public.grillad_receipt(o,a,'94000000-0000-0000-0000-000000000003');raise exception 'receipt other seller';exception when insufficient_privilege then null;end;
  begin perform public.grillad_action(o,a,gen_random_uuid(),'open_cash','{"opening":0}');raise exception 'expected role denial';exception when insufficient_privilege then null;end;
+ begin perform public.grillad_action(o,a,gen_random_uuid(),'adjust_stock',jsonb_build_object('item','94000000-0000-0000-0000-000000000001','delta',1,'reason','Test'));raise exception 'seller adjustment allowed';exception when insufficient_privilege then null;end;
  begin perform count(*) from grillad_private.items;raise exception 'expected table denial';exception when insufficient_privilege then null;end;
 end $$;
 select set_config('request.jwt.claims',jsonb_build_object('session_id','91000000-0000-0000-0000-000000000012','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.other')))::text,true);

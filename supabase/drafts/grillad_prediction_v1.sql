@@ -9,10 +9,11 @@ begin
  where org=p_org and site=p_site and service_day<today and service_day>=today-14 order by service_day desc,version desc
  ), observations as (
  select i.id,i.name,i.family,i.price,i.prepared-i.sold-i.connect_reserved remaining,d.service_day,
- coalesce(s.qty,0) sold,coalesce(p.qty,0) prepared
+ coalesce(s.qty,0) sold,greatest(0,coalesce(p.qty,0)+coalesce(adj.qty,0)) prepared
  from grillad_private.items i cross join services d
  left join lateral(select sum(qty) qty from grillad_private.sales where org=p_org and site=p_site and item=i.id and cancelled_at is null and created_at>=d.starts_at and created_at<d.ends_at)s on true
  left join lateral(select sum(qty) qty from grillad_private.preparations where org=p_org and site=p_site and item=i.id and created_at>=d.starts_at and created_at<d.ends_at)p on true
+ left join lateral(select sum(delta) qty from grillad_private.stock_adjustments where org=p_org and site=p_site and item=i.id and created_at>=d.starts_at and created_at<d.ends_at)adj on true
  where i.org=p_org and i.site=p_site and i.active
  ), estimates as (
  select id,count(*) filter(where prepared>0 or sold>0) observed,

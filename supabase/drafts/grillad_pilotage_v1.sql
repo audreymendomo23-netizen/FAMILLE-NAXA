@@ -23,12 +23,12 @@ begin
  select jsonb_build_object('ca',coalesce(sum(total),0),'sales_count',count(distinct (site,coalesce(direct_order,id))) filter(where source='direct')+count(distinct connect_order) filter(where source='connect'),'quantity',coalesce(sum(qty),0),
  'direct_ca',coalesce(sum(total) filter(where source='direct'),0),'connect_ca',coalesce(sum(total) filter(where source='connect'),0),
  'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,
- 'expenses',case when p_family is not null or p_actor is not null or p_item is not null then null else (select coalesce(sum(e.value),0) from grillad_private.expenses e where e.org=p_org and e.site=any(site_ids) and e.created_at>=lo and e.created_at<hi) end,
+ 'expenses',case when p_family is not null or p_actor is not null or p_item is not null then null else (select coalesce(sum(e.value),0) from grillad_private.expenses e where e.cancelled_at is null and e.org=p_org and e.site=any(site_ids) and e.created_at>=lo and e.created_at<hi) end,
  'by_family',coalesce((select jsonb_agg(to_jsonb(q) order by q.family) from (select family,coalesce(sum(total),0) ca,sum(qty) quantity from selected group by family)q),'[]'::jsonb),
  'by_seller',coalesce((select jsonb_agg(to_jsonb(q) order by q.actor) from (select actor,coalesce(sum(total),0) ca,sum(qty) quantity from selected group by actor)q),'[]'::jsonb)) into v from selected;
  select coalesce(jsonb_agg(jsonb_build_object('site',l.id,'name',l.name,'ca',coalesce(s.ca,0),'expenses',case when p_family is not null or p_actor is not null or p_item is not null then null else coalesce(e.charges,0) end) order by l.name,l.id),'[]'::jsonb) into detail
  from famille_core.locations l left join lateral(select sum(a.total) ca from grillad_private.sales a join grillad_private.items i on i.id=a.item where a.org=p_org and a.site=l.id and a.cancelled_at is null and a.created_at>=lo and a.created_at<hi and (p_family is null or i.family=p_family) and (p_actor is null or a.actor=p_actor) and (p_item is null or a.item=p_item))s on true
- left join lateral(select sum(value) charges from grillad_private.expenses where org=p_org and site=l.id and created_at>=lo and created_at<hi)e on true where l.organization_id=p_org and l.id=any(site_ids);
+ left join lateral(select sum(value) charges from grillad_private.expenses where cancelled_at is null and org=p_org and site=l.id and created_at>=lo and created_at<hi)e on true where l.organization_id=p_org and l.id=any(site_ids);
  return v||jsonb_build_object('sites',detail,'network',p_network,'from',p_from,'to',p_to,'generated_at',now(),'basis','confirmed_server_only','cash_assumption','cash_candidate_only');
 end $$;
 create function grillad_private.pilotage_status(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
