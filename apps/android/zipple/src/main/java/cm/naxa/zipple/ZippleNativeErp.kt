@@ -55,18 +55,27 @@ internal class RequestKeys{
  var name by remember{mutableStateOf("")};var sku by remember{mutableStateOf("")};var unit by remember{mutableStateOf("kg")};var threshold by remember{mutableStateOf("0")};var phone by remember{mutableStateOf("")}
  var selected by remember{mutableStateOf("")};var lot by remember{mutableStateOf("")};var supplier by remember{mutableStateOf("")};var quantity by remember{mutableStateOf("")};var cost by remember{mutableStateOf("")};var expiry by remember{mutableStateOf("")}
  var category by remember{mutableStateOf("rent")};var method by remember{mutableStateOf("cash")};var reference by remember{mutableStateOf("")};var date by remember{mutableStateOf(LocalDate.now(ZoneId.of("Africa/Douala")).toString())}
+ var customerSearch by remember{mutableStateOf("")};var followFilter by remember{mutableStateOf("pending")};var attachOrder by remember(selected){mutableStateOf("")};var crmOrders by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var consent by remember{mutableStateOf(false)};var contactConsent by remember(selected){mutableStateOf(false)};var title by remember{mutableStateOf("")};var channel by remember{mutableStateOf("telephone")};var due by remember{mutableStateOf("")}
  val canWrite=session.role in setOf("promoteur","manager")&&!busy&&session.permits(site)
  suspend fun call(action:String,body:JSONObject=JSONObject())=api.call(session,site,action,body)
  suspend fun write(action:String,body:JSONObject){call(action,keys.apply(action,body));keys.confirmed(action)}
  suspend fun queue(action:String,body:JSONObject){require(session.permits(site)&&ZippleSyncSession.current===session&&session.role in setOf("promoteur","manager"));val dao=OfflineQueueDb.get(context).events();require(dao.blocked(session.organization,session.member,site)==0);val now=System.currentTimeMillis();dao.enqueue(OfflineEvent(eventId=UUID.randomUUID().toString(),organizationId=session.organization,memberId=session.member,siteId=site,aggregateType="erp_"+action,payloadJson=body.toString(),deviceSequence=now,createdAtEpochMs=now));ZippleSyncSession.schedule(context);message=tr("Opération en attente de validation serveur","Operation awaiting server confirmation")}
- suspend fun load(){data=call(if(screen=="crm")"crm_snapshot" else "erp_snapshot") as? JSONObject}
+ suspend fun load(){data=call(if(screen=="crm")"crm_snapshot" else "erp_snapshot") as? JSONObject?:error("DATA");if(screen=="crm"){crmOrders=emptyList();crmOrders=(call("snapshot") as? JSONObject?:error("DATA")).rows("orders")}}
  fun run(block:suspend ()->Unit){if(busy||!session.permits(site))return;busy=true;message="";scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){message=tr("Opération non confirmée","Operation unconfirmed")}finally{busy=false}}}
  LaunchedEffect(screen){try{load()}catch(c:CancellationException){throw c}catch(_:Exception){message=tr("Données indisponibles","Data unavailable")}}
  OutlinedButton(enabled=!busy,onClick={run{load()}}){Text(tr("Actualiser les données","Refresh data"))}
  if(screen=="crm"){
   Text(tr("Relation client","Customer relationship"),style=MaterialTheme.typography.titleLarge)
   Text(tr("Fiche facultative, aucun compte client.","Optional record, no customer account."))
+  val today=LocalDate.now(ZoneId.of("Africa/Douala")).toString();val allFollowups=data?.rows("followups").orEmpty();val allCustomers=data?.rows("customers").orEmpty();val pending=allFollowups.filter{it.isNull("completed_at")}
+  Text(tr("Agenda des suivis du site","Site follow-up agenda"),style=MaterialTheme.typography.titleMedium)
+  Text(pending.size.toString()+" "+tr("suivis ouverts","open follow-ups")+" · "+pending.count{it.optString("due_on")<today}+" "+tr("en retard","overdue")+" · "+pending.count{it.optString("due_on")==today}+" "+tr("aujourd’hui","today"))
+  Text(tr("Sur les données reçues (200 suivis au maximum).","Based on received data (up to 200 follow-ups)."))
+  Choice(tr("Filtrer les suivis","Filter follow-ups"),listOf("pending" to tr("À faire","Pending"),"late" to tr("En retard","Overdue"),"done" to tr("Terminés","Completed"),"all" to tr("Tous","All")),followFilter,{followFilter=it},!busy)
+  val agenda=allFollowups.filter{f->when(followFilter){"all"->true;"done"->!f.isNull("completed_at");"late"->f.isNull("completed_at")&&f.optString("due_on")<today;else->f.isNull("completed_at")}}.sortedBy{it.optString("due_on")}
+  if(agenda.isEmpty())Text(tr("Aucun suivi correspondant.","No matching follow-up."))
+  agenda.forEach{f->val c=allCustomers.find{it.optString("id")==f.optString("customer_id")};Text(f.optString("title")+" · "+(c?.optString("display_name")?:tr("Client hors liste reçue","Customer outside received list"))+" · "+f.optString("due_on")+" · "+f.optString("channel"));if(c!=null)OutlinedButton(enabled=canWrite,onClick={customerSearch="";selected=c.optString("id");title="";due=""}){Text(tr("Ouvrir la fiche","Open customer"))};if(f.isNull("completed_at"))OutlinedButton(enabled=canWrite,onClick={run{call("followup_complete",JSONObject().put("followup_id",f.optString("id")));load()}}){Text(tr("Marquer le suivi terminé","Mark follow-up complete"))}}
   Field(tr("Nom d'usage","Display name"),name,{name=it.take(160)})
   Field(tr("Téléphone volontaire","Voluntary phone"),phone,{phone=it.take(32)})
   Row{Checkbox(consent,{consent=it},enabled=canWrite);Text(tr("Informations communiquées volontairement","Information voluntarily provided"),modifier=Modifier.padding(top=12.dp))}
@@ -75,8 +84,16 @@ internal class RequestKeys{
    selected=result;name="";phone="";consent=false;load()
   }}){Text(tr("Créer la fiche","Create record"))}
   val customers=data?.rows("customers").orEmpty()
-  Choice(tr("Client","Customer"),customers.map{it.optString("id") to it.optString("display_name")},selected,{selected=it},canWrite)
-  if(selected.isNotBlank()){
+  Field(tr("Rechercher un client","Search customer"),customerSearch,{customerSearch=it.take(160);selected="";title="";due=""})
+  val matches=customers.filter{c->listOf("display_name","phone").any{c.optString(it).contains(customerSearch.trim(),ignoreCase=true)}};val chosen=customers.find{it.optString("id")==selected};val visible=if(chosen!=null&&matches.none{it.optString("id")==selected})listOf(chosen)+matches else matches
+  Text(matches.size.toString()+" / "+customers.size+" "+tr("clients reçus","received customers"))
+  Choice(tr("Client","Customer"),visible.map{it.optString("id") to it.optString("display_name")},selected,{selected=it;title="";due=""},canWrite)
+  if(selected.isNotBlank()&&customers.any{it.optString("id")==selected}){
+   val linked=data?.rows("history").orEmpty().map{it.optString("order_id")}.toSet();val eligible=crmOrders.filter{it.optString("status")!="cancelled"&&!it.optBoolean("paid")&&!it.optBoolean("settled")&&it.optString("id") !in linked}
+   Text(tr("Rattacher une commande non réglée","Link an unsettled order"),style=MaterialTheme.typography.titleMedium)
+   Choice(tr("Commande à rattacher","Order to link"),eligible.map{it.optString("id") to (it.optString("id").take(8)+" · "+it.optLong("total_xaf")+" FCFA · "+it.optString("status"))},attachOrder,{attachOrder=it},canWrite)
+   Button(enabled=canWrite&&eligible.any{it.optString("id")==attachOrder},onClick={run{require(call("customer_attach",JSONObject().put("customer_id",selected).put("order_id",attachOrder))==true);attachOrder="";load();message=tr("Commande rattachée","Order linked")}}){Text(tr("Rattacher la commande","Link order"))}
+   Text(tr("Historique du site","Site history"))
    data?.rows("history")?.filter{it.optString("customer_id")==selected}?.forEach{Text(it.optLong("total_xaf").toString()+" FCFA · "+if(it.optString("payment_status")=="credit_due")tr("À crédit","On credit")else if(it.optBoolean("paid"))tr("Réglée","Paid")else tr("Non réglée","Unpaid"))}
    Field(tr("Objet du suivi","Follow-up subject"),title,{title=it.take(160)})
    Choice(tr("Canal","Channel"),listOf("telephone" to tr("Téléphone","Phone"),"whatsapp" to "WhatsApp","in_person" to tr("Sur place","In person")),channel,{channel=it},canWrite)

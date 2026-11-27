@@ -232,5 +232,18 @@ internal fun bulk3Body(form:NA,data:ND,values:Map<String,String>,repeated:List<M
  }
  if(message.isNotBlank())Text(message)
  if(group.id=="purchases"&&loaded)NativePurchaseDocuments(data,allowed&&!busy,en)
+ if(group.id=="credit"&&loaded){
+  val accounts=data.rows("credit_snapshot","accounts");val sales=data.rows("credit_snapshot","sales");val today=LocalDate.now(java.time.ZoneId.of("Africa/Douala")).toString();val outstanding=sales.filter{it.optLong("balance_xaf")>0};val overdue=outstanding.filter{it.optString("due_on")<today}
+  var search by remember{mutableStateOf("")};var status by remember{mutableStateOf("open")}
+  Text(tr("Tableau de recouvrement","Collections dashboard"),style=MaterialTheme.typography.titleMedium)
+  Text(tr("Créances ouvertes","Open receivables")+" : "+outstanding.sumOf{it.optLong("balance_xaf")}+" FCFA · "+outstanding.size)
+  Text(tr("Créances en retard","Overdue receivables")+" : "+overdue.sumOf{it.optLong("balance_xaf")}+" FCFA · "+overdue.size)
+  Text(tr("Totaux sur les créances reçues, non exhaustifs.","Totals from received receivables, not exhaustive."))
+  OutlinedTextField(search,{search=it.take(160)},label={Text(tr("Rechercher une créance","Search receivables"))},modifier=Modifier.fillMaxWidth(),enabled=!busy)
+  BulkChoice(tr("Statut de créance","Receivable status"),listOf("open" to tr("Ouvertes","Open"),"late" to tr("En retard","Overdue"),"settled" to tr("Soldées","Settled"),"all" to tr("Toutes","All")),status,{status=it},!busy)
+  val matches=sales.filter{x->val n=accounts.find{it.optString("id")==x.optString("account_id")}?.optString("name").orEmpty();(status=="all"||(if(status=="settled")x.optLong("balance_xaf")==0L else x.optLong("balance_xaf")>0&&(status!="late"||x.optString("due_on")<today)))&&(n.contains(search.trim(),ignoreCase=true)||x.optString("due_on").contains(search.trim()))}
+  if(matches.isEmpty())Text(tr("Aucune créance correspondante.","No matching receivable."))
+  matches.forEach{x->Text((accounts.find{it.optString("id")==x.optString("account_id")}?.optString("name")?: "—")+" · "+x.optString("due_on")+" · "+x.optLong("balance_xaf")+" FCFA");if(x.optLong("balance_xaf")>0)OutlinedButton(enabled=allowed&&!busy,onClick={val idx=forms.indexOfFirst{it.action=="credit_collect"};if(idx>=0){formIndex=idx;values=mapOf("sale_id" to x.optString("id"));result=null}}){Text(tr("Sélectionner pour recouvrement","Select for collection"))}}
+ }
  for((ds,arr,label) in group.summaries){val rows=data.rows(ds,arr);if(rows.isNotEmpty()){HorizontalDivider(Modifier.padding(vertical=6.dp));rows.take(40).forEach{x->Text(display(x,label)+" · "+x.optString("state").takeUnless{it=="null"}.orEmpty())}}}
 }
