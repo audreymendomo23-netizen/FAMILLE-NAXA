@@ -8,7 +8,10 @@ type Reaction={id:string;member_id:string;reaction:string};
 type Recording={id:string;status:string;display_name:string};
 type Props={account:WebAuthAccount;meetingId:string;host:boolean;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>;onUnavailable:()=>void};
 const reactions:Record<string,string>={like:"👍",clap:"👏",heart:"❤️",laugh:"😄",agree:"✅",celebrate:"🎉"};
-export function MeetingCollaboration({account,meetingId,host,authEndpoint,anonKey,getToken,onUnavailable}:Props){
+export function MeetingCollaboration(props:Props){
+ return <ScopedMeetingCollaboration key={JSON.stringify([props.account.organization_id,props.account.member_id,props.meetingId,props.host,props.authEndpoint,props.anonKey])} {...props}/>;
+}
+function ScopedMeetingCollaboration({account,meetingId,host,authEndpoint,anonKey,getToken,onUnavailable}:Props){
  const tr=(fr:string,en:string,ff:string)=>account.default_locale==="en"?en:account.default_locale==="ff-CM"?ff:fr;
  const [people,setPeople]=useState<Participant[]>([]),[chat,setChat]=useState<Chat[]>([]),[recent,setRecent]=useState<Reaction[]>([]);
  const [recordings,setRecordings]=useState<Recording[]>([]);
@@ -37,7 +40,7 @@ export function MeetingCollaboration({account,meetingId,host,authEndpoint,anonKe
   active.current=true;controller.current=new AbortController();void refresh();
   const id=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh();},3000);
   const visibility=()=>{
-   if(document.visibilityState==="hidden"){controller.current?.abort();controller.current=null;setReady(false);setPeople([]);setChat([]);setRecent([]);setRecordings([]);setText("");setError(false);}
+   if(document.visibilityState==="hidden"){controller.current?.abort();controller.current=null;setReady(false);setPeople([]);setChat([]);setRecent([]);setRecordings([]);setText("");setError(false);setBusy(false);}
    else {controller.current=new AbortController();void refresh();}
   };
   document.addEventListener("visibilitychange",visibility);
@@ -53,7 +56,8 @@ export function MeetingCollaboration({account,meetingId,host,authEndpoint,anonKe
  }
  async function requestRecording(id:string,action:"start"|"stop"){
   if(writing.current||!ready||!host)return;writing.current=true;setBusy(true);
-  try{await req("rpc/ns_request_meeting_recording",{p_id:meetingId,p_request:id,p_action:action});await refresh();}catch{if(active.current)setError(true);}finally{writing.current=false;if(active.current)setBusy(false);}
+  const scope=controller.current;const current=()=>active.current&&controller.current===scope&&Boolean(scope&&!scope.signal.aborted)&&document.visibilityState!=="hidden";
+  try{await req("rpc/ns_request_meeting_recording",{p_id:meetingId,p_request:id,p_action:action});if(current())await refresh();}catch{if(current())setError(true);}finally{writing.current=false;if(current())setBusy(false);}
  }
  const currentRecording=recordings.find(r=>["requested","recording","stop_requested"].includes(r.status));
  const own=people.find(p=>p.member_id===account.member_id);

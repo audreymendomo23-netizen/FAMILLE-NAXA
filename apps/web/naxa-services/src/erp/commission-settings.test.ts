@@ -10,3 +10,5 @@ describe("commission settings candidate",()=>{
 });
 
 it("rejects a persisted policy with an implicit or invalid rate",()=>{const p={id,code:"QA",version:1,status:"approved",method:"percent_bps",rate_bps:1000,fixed_amount_xaf:null,effective_from:"2026-11-27",effective_until:null,site_id:null,member_id:null,service_id:null,activity_profile:null,reference:"Approved terms"};const c={settings:{enabled:true,revision:1},sites:[],members:[],services:[],policies:[p]};expect(validateCommissionCatalog(c)).toEqual(c);for(const patch of [{rate_bps:null},{rate_bps:10001},{fixed_amount_xaf:500},{effective_from:"2026-02-30"}])expect(()=>validateCommissionCatalog({...c,policies:[{...p,...patch}]})).toThrow();});
+
+it("rejects ambiguous duplicate catalog IDs and malformed choice scopes",()=>{const c={settings:{enabled:false,revision:0},sites:[],members:[],services:[],policies:[]};const choice={id,name:"QA"};expect(()=>validateCommissionCatalog({...c,sites:[choice,{...choice,id:id.toUpperCase()}]})).toThrow();expect(()=>validateCommissionCatalog({...c,services:[{...choice,site_id:"foreign"}]})).toThrow();});

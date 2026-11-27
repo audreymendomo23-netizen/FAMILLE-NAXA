@@ -102,7 +102,7 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
   const selected=cancel?targets.find(t=>t.member_id===cancel.member_id&&t.workstation_id===cancel.workstation_id):targets.find(t=>key(t)===form.target);
   if(!selected)return;
   const reason=cancel?window.prompt(tr("Motif de l'annulation","Reason for cancellation","Sabu haaytugol")):form.reason;
-  if(!reason?.trim())return;
+  if(!reason?.trim()||!current())return;
   setBusy(true);setError("");
   try{
    const command={p_org:account.organization_id,p_site:siteId,p_post:selected.workstation_id,p_member:selected.member_id,p_starts:cancel?.starts_at??toIso(form.start),p_ends:cancel?.ends_at??toIso(form.end),p_break:cancel?.planned_break_minutes??Number(form.pause),p_tolerance:cancel?.tolerance_minutes??Number(form.tolerance),p_status:cancel?"cancelled":"published",p_expected_revision:cancel?.revision??form.revision,p_reason:reason.trim()};
@@ -119,8 +119,7 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
    type Receipt={id:string;revision:number;status:string};
    const receipts=count===1?[await request<Receipt>("rpc/ns_publish_roster_shift",{p_id:ids[0],...commands[0]})]:(await request<{receipts:Receipt[]}>("rpc/ns_publish_roster_batch",{p_commands:commands.map((c,i)=>({p_id:ids[i],...c}))})).receipts;
    if(!Array.isArray(receipts)||receipts.length!==count||!ids.every(id=>receipts.filter(r=>r.id===id&&r.revision===command.p_expected_revision+1&&r.status===command.p_status).length===1))throw new Error("ROSTER_RECEIPT_INVALID");
-   pendingPublish.current=null;
-   if(current()){setForm(blank());setVersion(v=>v+1);}
+   if(current()){pendingPublish.current=null;setForm(blank());setVersion(v=>v+1);}
   }catch{if(current())setError(tr("Modification non confirmée. Actualisez le planning et vérifiez les horaires.","Change not confirmed. Refresh the schedule and check the hours.","Baylugol tabbitinaaka. Hesɗitin feere golle, ƴeewto sahaa."));}
   finally{if(current())setBusy(false);}
  }
@@ -134,7 +133,7 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
   const current=commandScope();if(!current())return;
   if(busy||!loaded)return;
   const reason=window.prompt(decision?tr("Motif de la décision","Decision reason","Sabu ñaawol"):tr("Expliquez l'écart","Explain the variance","Humpit ceertugol"));
-  if(!reason?.trim()||reason.trim().length>1000)return;
+  if(!reason?.trim()||reason.trim().length>1000||!current())return;
   setBusy(true);setError("");
   try{
    const body={p_shift:s.id,p_revision:c.baseline_revision};

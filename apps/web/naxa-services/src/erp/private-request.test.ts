@@ -22,3 +22,5 @@ describe("private request lifecycle across RH, meetings and reports",()=>{
   await expect(privateRequest(c.signal,()=>true,async()=>"token",async()=>new Response("",{status:403}))).rejects.toThrow("PRIVATE_REQUEST_FAILED");
  });
 });
+
+it("does not transmit if a component is replaced without aborting the previous signal",async()=>{const c=new AbortController();let current=true;let finish:(v:string)=>void=()=>{};const token=new Promise<string>(r=>{finish=r;});const send=vi.fn();const pending=privateRequest(c.signal,()=>current,()=>token,send);current=false;finish("stale");await expect(pending).rejects.toThrow("SESSION_CHANGED");expect(send).not.toHaveBeenCalled();});

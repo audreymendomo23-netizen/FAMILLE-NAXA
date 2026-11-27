@@ -158,6 +158,8 @@ jobs:
         run: node scripts/naxa-services/audit-commercial-interactions.mjs
       - name: Verify consolidated residual qualification inventory
         run: node scripts/naxa-services/verify-global-qualification.mjs
+      - name: Inventory exact Edge candidate sources (no hosted deployment)
+        run: node scripts/naxa-services/edge-candidate-inventory.mjs
       - uses: actions/upload-artifact@v6
         with:
           name: naxa-services-commercial-interaction-inventory

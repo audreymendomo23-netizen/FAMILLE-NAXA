@@ -43,11 +43,16 @@ export function briefingDayAllowed(day:string,now=Date.now()){
  return /^\d{4}-\d{2}-\d{2}$/.test(day)&&day>=earliest&&day<=today&&Number.isFinite(Date.parse(day+"T00:00:00Z"))&&new Date(day+"T00:00:00Z").toISOString().slice(0,10)===day;
 }
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
-export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Props){
+export function DailyBriefing(props:Props){
+ return <ScopedDailyBriefing key={JSON.stringify([props.account.organization_id,props.account.member_id,props.account.role_code,props.siteId,props.authEndpoint,props.anonKey])} {...props}/>;
+}
+function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Props){
  const [lang,setLang]=useState<Lang>(account.default_locale);
  const [day,setDay]=useState(()=>briefingDateBounds().today);
  const bounds=briefingDateBounds();
  const dateLabel=({fr:"Date du bilan",en:"Report date","ff-CM":"Ñalnde jaŋtol",es:"Fecha del informe",it:"Data del resoconto","zh-CN":"报告日期"})[lang];
+ const languageLabel=({fr:"Langue",en:"Language","ff-CM":"Ɗemngal",es:"Idioma",it:"Lingua","zh-CN":"语言"})[lang];
+ const speedLabel=({fr:"Vitesse de lecture",en:"Playback speed","ff-CM":"Yaawde janngugol",es:"Velocidad de lectura",it:"Velocità di lettura","zh-CN":"播放速度"})[lang];
  const [report,setReport]=useState<Report|null>(null),[error,setError]=useState(false),[loading,setLoading]=useState(false),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[speed,setSpeed]=useState(1);
  const controller=useRef<AbortController|null>(null),audio=useRef<SpeechSynthesisUtterance|null>(null),mounted=useRef(false);
  const t=copy[lang];
@@ -79,8 +84,8 @@ export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Pro
  if(!siteId)return null;
  return <section className="module-main-card" aria-label={t.title}><h2>{t.title}</h2>
  <label>{dateLabel}<input type="date" aria-label={dateLabel} value={day} min={bounds.earliest} max={bounds.today} required onChange={e=>{stop();controller.current?.abort();controller.current=null;setReport(null);setLoading(false);setError(false);setDay(e.target.value);}}/></label>
- <label><select aria-label="Language / Langue" disabled={loading} value={lang} onChange={e=>{stop();setLang(e.target.value as Lang);setError(false);}}>{Object.entries(languages).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
- <label><select aria-label="Speed / Vitesse" disabled={loading} value={speed} onChange={e=>{stop();setSpeed(Number(e.target.value));}}>{[.8,1,1.2,1.5].map(s=><option key={s} value={s}>{s}×</option>)}</select></label>
+ <label>{languageLabel}<select aria-label={languageLabel} disabled={loading} value={lang} onChange={e=>{stop();setLang(e.target.value as Lang);setError(false);}}>{Object.entries(languages).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+ <label>{speedLabel}<select aria-label={speedLabel} disabled={loading} value={speed} onChange={e=>{stop();setSpeed(Number(e.target.value));}}>{[.8,1,1.2,1.5].map(s=><option key={s} value={s}>{s}×</option>)}</select></label>
  <button className="btn primary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>{if(playing){stop();return;}void load().then(r=>{if(r&&mounted.current&&!r.abort.signal.aborted&&controller.current===r.abort)speak(r.data);});}}>{playing?t.stop:t.play}</button>
  {playing&&<button className="btn secondary" onClick={()=>{if(!audio.current)return;if(paused)window.speechSynthesis.resume();else window.speechSynthesis.pause();setPaused(!paused);}}>{({fr:paused?"Reprendre":"Pause",en:paused?"Resume":"Pause","ff-CM":paused?"Jokku":"Fowtu",es:paused?"Continuar":"Pausa",it:paused?"Riprendi":"Pausa","zh-CN":paused?"继续":"暂停"})[lang]}</button>}
  <button className="btn secondary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>void load()}>{t.load}</button>

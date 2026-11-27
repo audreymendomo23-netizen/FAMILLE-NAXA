@@ -26,8 +26,9 @@ export function validateCommissionCatalog(x:unknown):Catalog{
  if(!x||typeof x!=="object")throw Error("INVALID_COMMISSION_CATALOG");
  const c=x as Catalog;
  if(typeof c.settings?.enabled!=="boolean"||!Number.isSafeInteger(c.settings?.revision)||c.settings.revision<0)throw Error("INVALID_COMMISSION_SETTINGS");
- for(const list of [c.sites,c.members,c.services])if(!Array.isArray(list)||list.some(v=>!v||!uuid.test(v.id)||typeof v.name!=="string"))throw Error("INVALID_COMMISSION_CATALOG");
+ for(const list of [c.sites,c.members,c.services])if(!Array.isArray(list)||list.some(v=>!v||typeof v.id!=="string"||!uuid.test(v.id)||typeof v.name!=="string"||(v.site_id!=null&&(typeof v.site_id!=="string"||!uuid.test(v.site_id))))||new Set(list.map(v=>v.id.toLowerCase())).size!==list.length)throw Error("INVALID_COMMISSION_CATALOG");
  if(!Array.isArray(c.policies)||c.policies.some(v=>!v||!uuid.test(v.id)||typeof v.code!=="string"||!Number.isSafeInteger(v.version)||!["approved","retired"].includes(v.status)||!["percent_bps","fixed_xaf"].includes(v.method)))throw Error("INVALID_COMMISSION_CATALOG");
+ if(new Set(c.policies.map(p=>p.id.toLowerCase())).size!==c.policies.length)throw Error("INVALID_COMMISSION_CATALOG");
  for(const p of c.policies){
   if(!date(p.effective_from)||(p.effective_until!==null&&(!date(p.effective_until)||p.effective_until<p.effective_from))||p.version<1||typeof p.reference!=="string"||[p.site_id,p.member_id,p.service_id].some(x=>x!==null&&(typeof x!=="string"||!uuid.test(x))))throw Error("INVALID_COMMISSION_CATALOG");
   if(p.method==="percent_bps"&&(!Number.isInteger(p.rate_bps)||p.rate_bps===null||p.rate_bps<0||p.rate_bps>10000||p.fixed_amount_xaf!==null))throw Error("INVALID_COMMISSION_CATALOG");
