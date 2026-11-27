@@ -56,7 +56,8 @@ declare m public.zp_members;p public.zp_purchases;d public.zp_purchase_decisions
  if d.purchase_id is not null then if (d.member_id,d.decision,d.reason) is distinct from (m.id,p_decision,why) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return d.decision;end if;
  select * into c from public.zp_erp_control_policies where site_id=p_site and org_id=m.org_id order by version desc limit 1;
  if c.separate_approver and p.member_id=m.id then raise exception 'DENIED';end if;
- if p.received_milli<>0 then raise exception 'INVALID_TRANSITION';end if;
+ -- An existing partial receipt remains historical; a new policy can govern the outstanding quantity.
+ if p.received_milli>=p.qty_milli then raise exception 'INVALID_TRANSITION';end if;
  insert into public.zp_purchase_decisions values(p.id,m.org_id,p_site,m.id,p_decision,why,now());return p_decision;
 end $f$;
 create function public.zp_purchase_receipt_guard() returns trigger language plpgsql security invoker set search_path=pg_catalog,public as $f$

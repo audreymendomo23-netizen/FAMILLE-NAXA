@@ -788,6 +788,7 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const splitClose=await scalar("select zp_close_cash($1,$2,$3,1600)",[splitTenant.access,splitTenant.site,splitDrawer]);assert.equal(splitClose.expected_xaf,1600);assert.equal(splitClose.variance_xaf,0);
  console.log("ZIPPLE_BULK2_ITEM_QUANTITY_PARTIAL_SETTLEMENT_AND_CASH_PASS");
 
+ {
  // Approval and quality policy: isolated fresh tenant, direct RPC bypasses rejected.
  const ctl=await tenant("ERP controls");await pay(await intent(ctl,"PREMIUM","monthly"));await scalar("select zp_site_mode($1,$2,'restaurant',false,false)",[ctl.access,ctl.site]);
  const cm=uid(),cauth=uid(),ctoken=hash();await db.query("insert into auth.users(id) values($1)",[cauth]);await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,'manager')",[cm,ctl.org,cauth,uid(),uid()+"@example.test"]);await db.query("insert into zp_site_scopes values($1,$2,$3)",[cm,ctl.org,ctl.site]);await db.query("insert into zp_sessions(member_id,access_hash,access_until) values($1,$2,now()+interval '1 hour')",[cm,ctoken]);
@@ -815,6 +816,7 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const recorded=await scalar("select zp_expense_apply($1,$2,$3)",[ctoken,ctl.site,er]);assert.equal(await scalar("select zp_expense_apply($1,$2,$3)",[ctoken,ctl.site,er]),recorded);
  await assert.rejects(scalar("select zp_erp_control_snapshot($1,$2)",[a.access,ctl.site]),/DENIED/);
  console.log("ZIPPLE_BULK3_ERP_APPROVAL_AND_QUALITY_CONTROL_PASS");
+ }
  assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and not rowsecurity"),0);
  assert.equal(await scalar("select has_function_privilege('authenticated','public.zp_confirm_subscription(uuid,text,text,integer,text)','execute')"),false);
  assert.equal(await scalar("select has_table_privilege('anon','public.zp_orders','select')"),false);
