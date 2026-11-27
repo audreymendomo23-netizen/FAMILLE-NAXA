@@ -207,6 +207,12 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   for(const order of [orderId,formulaOrder]){const no=await scalar("select service_number from zp_orders where id=$1",[order]);await page.getByRole("checkbox",{name:new RegExp("#"+no+" ·")}).check()}
   await page.getByRole("button",{name:"Confirmer le règlement groupé reçu"}).click();await page.getByText(/Reste à régler : 0 FCFA/).waitFor();
   assert.equal(Number(await scalar("select count(*) from zp_cash_receipts where order_id in ($1,$2)",[orderId,formulaOrder])),2);
+  await guest.getByRole("heading",{name:"Évaluer la caisse"}).waitFor({timeout:15000});
+  await guest.getByLabel("Note de la caisse",{exact:true}).selectOption("4");
+  await guest.getByRole("button",{name:"Envoyer la note de caisse"}).click();
+  await guest.getByText("Note de caisse enregistrée : 4/5",{exact:true}).waitFor();
+  assert.equal(await scalar("select rating from zp_feedback_posts where order_id=$1 and post='cash'",[orderId]),4);
+  console.log("ZIPPLE_BULK2_REAL_CHECKOUT_FEEDBACK_PASS");
   console.log("ZIPPLE_BULK2_REAL_EDGE_FORMULA_GROUP_PAYMENT_PASS");
   // Confirm new ERP flows on the real gateway, then inspect persisted SQL state.
   const creditCustomer=await scalar("select id from zp_customers where org_id=$1 and display_name='Client recette'",[org]);

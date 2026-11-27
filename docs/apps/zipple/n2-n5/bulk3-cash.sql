@@ -44,7 +44,7 @@ declare m public.zp_members;c public.zp_cash_sessions;o public.zp_orders;old pub
   if method is null or method not in ('cash','mtn_momo','orange_money','bank','card') or amt>2147483647 or (method<>'cash' and (ref is null or length(ref) not between 4 and 160)) then raise exception 'INVALID_TENDERS';end if;
   normalized:=normalized||jsonb_build_array(jsonb_build_object('method',method,'amount_xaf',amt,'reference',ref));total:=total+amt;
  end loop;
- if (select count(distinct value->>'method') from jsonb_array_elements(normalized))<2 then raise exception 'INVALID_TENDERS';end if;
+ -- Multiple payers may use the same method. The total must still match the order; noncash references remain unique and a single receipt posts the sale and COGS.
  perform 1 from public.zp_site_modes where site_id=p_site for update;
  select * into c from public.zp_cash_sessions where id=p_cash and org_id=m.org_id and site_id=p_site for update;if c.id is null or not public.zp_cash_desk_access(m.id,c.id) then raise exception 'DENIED';end if;
  select * into old from public.zp_cash_receipts where member_id=m.id and request_id=p_request;
