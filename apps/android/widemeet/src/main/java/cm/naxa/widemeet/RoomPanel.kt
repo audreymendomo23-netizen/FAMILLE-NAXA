@@ -21,13 +21,14 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  val scope=rememberCoroutineScope()
  var list by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var contacts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+ var passes by remember{mutableStateOf<List<JSONObject>>(emptyList())};var passId by remember{mutableStateOf("")}
  var room by remember{mutableStateOf<JSONObject?>(null)}
  var mode by remember{mutableStateOf(if(initialCreate&&hostRole)"create" else "list")}
  var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
  var title by remember{mutableStateOf("")};var description by remember{mutableStateOf("")};var date by remember{mutableStateOf("")};var duration by remember{mutableStateOf("30")}
  var invited by remember{mutableStateOf<Set<String>>(emptySet())};var chat by remember{mutableStateOf("")};var poll by remember{mutableStateOf("")}
  var extension by remember{mutableStateOf("15")};var surveyQuestion by remember{mutableStateOf("")};var surveyOptions by remember{mutableStateOf("")};var surveyMultiple by remember{mutableStateOf(false)};var surveyQuorum by remember{mutableStateOf("50")};var surveyThreshold by remember{mutableStateOf("50")};var surveySelections by remember{mutableStateOf<Map<String,Set<Int>>>(emptyMap())}
- suspend fun refresh(){busy=true;error=false;try{list=rows(gateway.request("list",JSONObject(),session) as JSONArray);if(hostRole)contacts=rows(gateway.request("contacts",JSONObject(),session) as JSONArray)}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true;list=emptyList();contacts=emptyList()}finally{busy=false}}
+ suspend fun refresh(){busy=true;error=false;try{if(workspace.kind=="individual"){val all=rows(gateway.request("pass-list",JSONObject(),session) as JSONArray);passes=all.filter{it.isNull("room_id")};if(passes.none{it.optString("id")==passId})passId=passes.firstOrNull()?.optString("id")?:"";if(all.isEmpty()){list=emptyList();contacts=emptyList();return}};list=rows(gateway.request("list",JSONObject(),session) as JSONArray);if(hostRole)contacts=rows(gateway.request("contacts",JSONObject(),session) as JSONArray)}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true;list=emptyList();contacts=emptyList()}finally{busy=false}}
  LaunchedEffect(session.deviceId){refresh()}
  // Refresh only the selected authorized room. Cancels during writes, selection or session change.
  LaunchedEffect(session.deviceId,mode,room?.optString("id"),room?.optString("status"),busy){
@@ -64,9 +65,10 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  OutlinedTextField(description,{description=it.take(2000)},label={Text(tr("Description","Description"))},modifier=Modifier.fillMaxWidth())
  OutlinedTextField(date,{date=it.take(16)},label={Text(tr("Date (AAAA-MM-JJTHH:mm, facultatif)","Date (YYYY-MM-DDTHH:mm, optional)"))},modifier=Modifier.fillMaxWidth())
  OutlinedTextField(duration,{duration=it.take(3)},label={Text(tr("Durée en minutes","Duration in minutes"))},modifier=Modifier.fillMaxWidth())
+ if(workspace.kind=="individual"){Text(tr("Pass payé disponible","Available paid pass"));passes.forEach{p->Row{RadioButton(passId==p.getString("id"),{passId=p.getString("id")},enabled=!busy);Text(p.getInt("capacity").toString()+" "+tr("participants","participants"),Modifier.padding(top=12.dp))}};Text(tr("Le pass sera réservé à cette seule réunion pendant 24 heures maximum.","The pass will be bound to this meeting only, for up to 24 hours."))}
  Text(tr("Invités","Invitees"))
  contacts.forEach{c->val id=c.optString("member_id");Row{Checkbox(id in invited,{checked->invited=if(checked)invited+id else invited-id});Text(c.optString("display_name"),modifier=Modifier.padding(top=12.dp))}}
- Button(enabled=!busy&&title.isNotBlank()&&(duration.toIntOrNull()?:0) in 5..480,onClick={val whenMs=runCatching{if(date.isBlank())System.currentTimeMillis() else LocalDateTime.parse(date).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()}.getOrNull();if(whenMs==null){error=true}else execute("create",JSONObject().put("room_id",UUID.randomUUID().toString()).put("title",title).put("description",description).put("scheduled_ms",whenMs).put("duration_minutes",duration.toInt()).put("invitees",JSONArray(invited.toList())))}){Text(tr("Créer","Create"))}
+ Button(enabled=!busy&&title.isNotBlank()&&(duration.toIntOrNull()?:0) in 5..480&&(workspace.kind!="individual"||passId.isNotEmpty()),onClick={val whenMs=runCatching{if(date.isBlank())System.currentTimeMillis() else LocalDateTime.parse(date).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()}.getOrNull();if(whenMs==null){error=true}else execute("create",JSONObject().put("room_id",UUID.randomUUID().toString()).put("title",title).put("description",description).put("scheduled_ms",whenMs).put("duration_minutes",duration.toInt()).put("invitees",JSONArray(invited.toList())).apply{if(workspace.kind=="individual")put("pass_id",passId)})}){Text(tr("Créer","Create"))}
  }else if(mode=="list"){
  list.forEach{r->TextButton(enabled=!busy,onClick={execute("read",JSONObject().put("room_id",r.optString("id")))}){Text(r.optString("title",tr("Réunion","Meeting"))+" — "+stateLabel(r.optString("status")))}}
  if(!busy&&!error&&list.isEmpty())Text(tr("Aucune réunion dans cet espace.","No meetings in this workspace."))
