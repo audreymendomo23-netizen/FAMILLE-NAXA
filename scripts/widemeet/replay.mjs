@@ -47,6 +47,7 @@ try{
  assert.equal(code.split(anchor).length,2);
  await writeFile(roomCopy,code.replace(anchor,"Deno.serve({port:8001},async request=>{"));
  await launch("supabase/functions/widemeet-auth/index.ts",8000);await launch(roomCopy,8001);
+ let individualSession;
  // Register real GoTrue accounts through the product gateway (test-only policy versions).
  for(const kind of ["individual","enterprise"]){
  const password="Qa7!"+randomBytes(18).toString("hex"),registration={installation_id:randomUUID(),request_id:randomUUID(),kind,display_name:"Replay "+kind,workspace_name:"Registration "+kind,password,accepted_terms:true,terms_version:"wm-replay-draft-20261126",privacy_version:"wm-replay-draft-20261126"};
@@ -56,10 +57,36 @@ try{
  const session=await login({login:registered.login_id,password});
  assert.equal(session.workspaces.length,1);
  assert.equal(session.workspaces[0].kind,kind);
+ if(kind==="individual")individualSession=session;
  assert.equal((await request(room+"/list",{},session.access_token)).status,403);
  assert.ok((await request(auth+"/register",{...registration,display_name:"Changed"})).status>=400);
  }
  pass("actual autonomous individual and enterprise registration, stable retry, no automatic entitlement");
+ // Exercise the pass using a synthetic receipt in this disposable database only.
+ assert.ok(individualSession);
+ const ps=individualSession.access_token;
+ const passIntent=await ok(auth+"/identity",{action:"billing-create",data:{request_id:randomUUID(),offer:"pass",period:"once",capacity:20,channel:"OM"}},ps);
+ assert.equal(passIntent.amount,1000);
+ assert.deepEqual(await ok(room+"/pass-list",{},ps),[]);
+ const settled=await success(base+"/rest/v1/rpc/wm_settle_verified_receipt",{p_id:passIntent.id,p_channel:"OM",p_reference:"fixture-pass-"+randomUUID(),p_amount:1000,p_currency:"XAF",p_proof_hash:randomBytes(32).toString("hex"),p_paid_at:new Date().toISOString()});
+ assert.equal(settled,true);
+ const paidPasses=await ok(room+"/pass-list",{},ps);assert.equal(paidPasses.length,1);assert.equal(paidPasses[0].room_id,null);
+ const meeting={room_id:randomUUID(),title:"Paid pass replay",description:"Isolated fixture",scheduled_ms:Date.now(),duration_minutes:30,invitees:[],pass_id:passIntent.id};
+ const attempts=await Promise.all([request(room+"/create",meeting,ps),request(room+"/create",{...meeting,room_id:randomUUID()},ps)]);
+ assert.equal(attempts.filter(x=>x.status===201).length,1);
+ assert.equal(attempts.filter(x=>x.status>=400).length,1);
+ const passRoom=attempts.find(x=>x.status===201).data;
+ const after=await ok(room+"/pass-list",{},ps);assert.equal(after[0].room_id,passRoom.id);assert.ok(Date.parse(after[0].valid_until)<=Date.now()+86400000);
+ assert.equal((await ok(room+"/list",{},ps)).length,1);
+ const noPass={...meeting,room_id:randomUUID()};delete noPass.pass_id;
+ assert.equal((await request(room+"/create",noPass,ps)).status,403);
+ const startedPass=await ok(room+"/command",{room_id:passRoom.id,request_id:randomUUID(),expected_revision:passRoom.revision,action:"start"},ps);
+ assert.equal(startedPass.status,"open");
+ const endedPass=await ok(room+"/command",{room_id:passRoom.id,request_id:randomUUID(),expected_revision:startedPass.revision,action:"end"},ps);
+ assert.equal(endedPass.status,"ended");
+ assert.ok((await request(room+"/create",{...meeting,room_id:randomUUID()},ps)).status>=400);
+ pass("actual N1 paid-pass fixture binds exactly one concurrent room, agenda, scoped lifecycle and no global entitlement");
+
  const hs=await login(h),gs=await login(g),os=await login(o);
  // A separate fixture proves real password rotation without disturbing the room accounts.
  const rotationUser=await fixture(other,"manager");
