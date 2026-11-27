@@ -6,6 +6,7 @@ import {createServer} from "node:http";
 import {readFile,writeFile,unlink} from "node:fs/promises";
 import {chromium} from "@playwright/test";
 import {RoomServiceClient,EgressClient} from "livekit-server-sdk";
+import {createWideMeetPresence} from "../../packages/media-core/widemeet-presence.mjs";
 import {createWideMeetRecorder} from "../../packages/media-core/widemeet-recorder.mjs";
 import {execFileSync} from "node:child_process";
 import {stat} from "node:fs/promises";
@@ -76,6 +77,8 @@ try{
  const inbound=page=>page.evaluate(async()=>{const seen={audio:false,video:false};for(const t of window.received){const s=await t.getRTCStatsReport();if(!s)continue;for(const x of s.values())if(x.type==="inbound-rtp"&&x.bytesReceived>0){if(t.kind==="audio")seen.audio=true;if(t.kind==="video"&&(x.framesDecoded??0)>0)seen.video=true}}return seen.audio&&seen.video});
  await until(async()=>await inbound(a)&&await inbound(b),"real WideMeet bidirectional RTP");
  console.log("PASS actual WideMeet opaque sessions, Edge-issued media grants, PostgreSQL admission and bidirectional SFU RTP");
+ const presence=createWideMeetPresence({supabaseUrl:base,serviceKey,sfu});
+ if(process.env.WM_PRESENCE_QUALIFIED==="true"){assert.equal((await presence.observe(rid)).persisted,true);await delay(1100);assert.equal((await presence.observe(rid)).persisted,true);}
  if(process.env.WM_RECORDING_QUALIFIED==="true"){
  const recorder=createWideMeetRecorder({supabaseUrl:base,serviceKey,egress:new EgressClient(upstream,key,secret),outputDirectory:process.env.WM_EGRESS_OUT,verifyAudio:async file=>{
  const p=JSON.parse(execFileSync("ffprobe",["-v","error","-show_streams","-show_format","-of","json",file],{encoding:"utf8"}));
@@ -122,9 +125,11 @@ try{
  const denied=await fresh.evaluate(async token=>{const r=new window.LivekitClient.Room();try{await r.connect("ws://127.0.0.1:7881",token);await r.disconnect();return false}catch{return true}},freshGuest.token);
  assert.equal(denied,true);
  console.log("PASS actual WideMeet moderation mutation evicts guest from SFU and rejects old unexpired grant");
+ if(process.env.WM_PRESENCE_QUALIFIED==="true"){await delay(1100);assert.equal((await presence.observe(rid)).observed,1);await delay(1100);assert.equal((await presence.observe(rid)).persisted,true);}
  await cmd(hs.access_token,"end");
  await until(async()=>evicted.has(h.id),"room closure eviction");
  console.log("PASS room closure revokes host transport");
+ if(process.env.WM_PRESENCE_QUALIFIED==="true"){const report=await good(roomApi+"/presence",{room_id:rid},hs.access_token);assert.equal(report.basis,"sfu_samples_not_continuous_presence");assert.ok(report.samples>=4&&report.coverage_ms>0);const hr=report.rows.find(x=>x.member_id===h.id),gr=report.rows.find(x=>x.member_id===g.id);assert.ok(hr.samples_seen>=4&&gr.samples_seen===2&&gr.estimated_ms>0&&hr.estimated_ms>=gr.estimated_ms);assert.equal((await request(roomApi+"/presence",{room_id:rid},gs.access_token)).status,403);console.log("PASS actual N4 SFU active transport samples, exclusion and restricted closed meeting report");}
 }finally{
  if(browser)await browser.close();if(rid)await sfu.deleteRoom("wm-"+rid).catch(()=>{});
  await Promise.all([app,proxy.server].map(s=>new Promise(r=>s.close(r))));

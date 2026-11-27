@@ -1,6 +1,6 @@
 // Separate WideMeet room endpoint on the configured WideMeet origin only.
 export async function roomRequest(authBase,action,body,token,fetcher=fetch){
- if(!["list","contacts","pass-list","read","create","command","media-grant","minutes","tasks","series-create","series-cancel"].includes(action)||typeof token!=="string"||!/^[a-f0-9]{64}$/.test(token))throw Error("INVALID_REQUEST");
+ if(!["list","contacts","pass-list","read","create","command","media-grant","minutes","tasks","series-create","series-cancel","presence"].includes(action)||typeof token!=="string"||!/^[a-f0-9]{64}$/.test(token))throw Error("INVALID_REQUEST");
  const u=new URL(authBase);
  if(u.protocol!=="https:"||u.username||u.password||u.search||u.hash||!u.pathname.replace(/\/$/,"").endsWith("/widemeet-auth"))throw Error("INVALID_API");
  u.pathname=u.pathname.replace(/\/$/,"").replace(/\/widemeet-auth$/,"/widemeet-room/"+action);

@@ -57,6 +57,11 @@ Deno.serve(async request=>{
  const b=JSON.parse(text);if(b?.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
  const p_hash=await hash(token),now=Date.now();
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
+ if(action==="presence"){
+ if(Deno.env.get("WM_PRESENCE_QUALIFIED")!=="true"||!uuid.test(b.room_id??""))return send(403,{error:"forbidden"});
+ const result=await rpc("wm_presence_report",{p_hash,p_room:b.room_id.toLowerCase()});
+ return result?send(200,result):send(403,{error:"forbidden"});
+ }
  if(action==="tasks"){
  if(Deno.env.get("WM_MINUTES_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
  if(!["list","create","submit","approve","return","cancel"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(400,{error:"invalid_request"});

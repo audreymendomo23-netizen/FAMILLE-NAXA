@@ -10,7 +10,7 @@ class RoomGateway(private val authBase:String){
  private fun endpoint(action:String):URI{
   val u=URI(authBase)
   require(u.scheme=="https"&&!u.host.isNullOrBlank()&&u.userInfo==null&&u.query==null&&u.fragment==null&&u.path.trimEnd('/').endsWith("/widemeet-auth"))
-  require(action in setOf("list","contacts","pass-list","read","create","command","media-grant","minutes","tasks","series-create","series-cancel"))
+  require(action in setOf("list","contacts","pass-list","read","create","command","media-grant","minutes","tasks","series-create","series-cancel","presence"))
   return URI(u.scheme,u.authority,u.path.trimEnd('/').removeSuffix("/widemeet-auth")+"/widemeet-room/"+action,null,null)
  }
  suspend fun request(action:String,body:JSONObject,session:Session):Any=withContext(Dispatchers.IO){
