@@ -112,7 +112,11 @@ internal class LocalAccessPinManager(context: Context) {
         }.getOrElse { LocalAccessPinResult(LocalAccessPinCode.STORAGE_ERROR) }
     }
 
-    /** Only called after AuthApi.login has authenticated this exact member. */
+    @Synchronized fun biometricEnabled(memberId:String):Boolean = isConfigured(memberId) && preferences.getBoolean(prefix(memberId)+"biometric",false)
+    @Synchronized fun isLocked(memberId:String):Boolean = preferences.getLong(prefix(memberId)+"locked_until",0L)>System.currentTimeMillis()
+    @Synchronized fun setBiometric(memberId:String,enabled:Boolean):Boolean = isConfigured(memberId)&&preferences.edit().putBoolean(prefix(memberId)+"biometric",enabled).commit()
+
+    /** Only called after a live server login has authenticated this exact user. */
     @Synchronized fun resetAfterValidatedLogin(memberId: String): Boolean {
         if (memberId.isBlank()) return false
         return runCatching {
@@ -120,7 +124,7 @@ internal class LocalAccessPinManager(context: Context) {
             store.deleteEntry(alias(memberId))
             val p = prefix(memberId)
             preferences.edit().remove(p + "salt").remove(p + "verifier")
-                .remove(p + "failures").remove(p + "locked_until").commit()
+                .remove(p + "failures").remove(p + "locked_until").remove(p + "biometric").commit()
         }.getOrDefault(false)
     }
 
