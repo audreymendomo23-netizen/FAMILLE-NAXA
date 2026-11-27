@@ -88,6 +88,11 @@ begin
  select * into e from public.wm_minutes_eligibility where room_id=rid and retain_until>clock_timestamp();
  if not found then return null;end if;
  host:=r.host_id=s.account_id and a_role in ('owner','promoteur','manager');
+ if p_action='prepare' then
+  if not host then return null;end if;
+  select coalesce(max(version),0) into latest from public.wm_minutes_versions where room_id=rid;
+  return jsonb_build_object('room_id',rid,'latest_version',latest,'premium',e.premium,'snapshot',e.snapshot,'recipients',coalesce((select jsonb_agg(jsonb_build_object('member_id',m.account_id,'display_name',ac.display_name) order by ac.display_name) from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=r.workspace_id and m.enabled and exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=m.account_id::text and p->>'response'='accepted' and p->>'excluded'='false')),'[]'::jsonb));
+ end if;
  if p_action='read' then
   select * into v from public.wm_minutes_versions where id=vid and room_id=rid and revoked_at is null;
   if not found then return null;end if;
@@ -95,7 +100,7 @@ begin
    if v.published_at is null or not exists(select 1 from public.wm_minutes_recipients where version_id=vid and account_id=s.account_id and revoked_at is null) then return null;end if;
    update public.wm_minutes_recipients set read_at=coalesce(read_at,clock_timestamp()) where version_id=vid and account_id=s.account_id and revoked_at is null;
   end if;
-  return jsonb_build_object('room_id',rid,'version_id',v.id,'version',v.version,'body',v.body,'approved_at',v.approved_at,'published_at',v.published_at,'snapshot',e.snapshot,'can_manage',host,'origin','human_draft');
+  return jsonb_build_object('room_id',rid,'version_id',v.id,'version',v.version,'body',v.body,'approved_at',v.approved_at,'published_at',v.published_at,'snapshot',case when host then e.snapshot else e.snapshot-'participants' end,'can_manage',host,'origin','human_draft');
  end if;
  if not host or not e.premium then return null;end if;
  if p_action='draft' then
