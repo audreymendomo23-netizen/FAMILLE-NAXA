@@ -49,11 +49,16 @@ begin
    (select count(*) from samples x where m.mid=any(x.observed)) as samples_seen,
    (select min(observed_at) from samples x where m.mid=any(x.observed)) as first_seen,
    (select max(observed_at) from samples x where m.mid=any(x.observed)) as last_seen,
-   coalesce((select sum(gap_ms) from intervals x where x.gap_ms between 1 and 10000 and m.mid=any(x.observed) and m.mid=any(x.next_members)),0)::bigint as estimated_ms
+   coalesce((select sum(gap_ms) from intervals x where x.gap_ms between 1 and 10000 and m.mid=any(x.observed) and m.mid=any(x.next_members)),0)::bigint as estimated_ms,
+   (select count(*) from intervals x where x.gap_ms between 1 and 10000 and m.mid=any(x.observed) and not(m.mid=any(x.next_members))) as observed_departures,
+   (select count(*) from intervals x where x.gap_ms between 1 and 10000 and not(m.mid=any(x.observed)) and m.mid=any(x.next_members)) as observed_arrivals
   from members m join public.wm_accounts a on a.id=m.mid
  )
  select jsonb_build_object('room_id',p_room,'basis','sfu_samples_not_continuous_presence','samples',(select count(*) from samples),
  'coverage_ms',coalesce((select sum(gap_ms) from intervals where gap_ms between 1 and 10000),0),
+ 'unobserved_gap_count',(select count(*) from intervals where gap_ms>10000),
+ 'unobserved_gap_ms',coalesce((select sum(gap_ms) from intervals where gap_ms>10000),0),
+ 'summary',(select jsonb_build_object('participants',count(*),'accepted',count(*) filter(where response='accepted'),'declined',count(*) filter(where response='declined'),'observed',count(*) filter(where samples_seen>0),'unknown',count(*) filter(where samples_seen=0)) from report_rows),
  'rows',coalesce((select jsonb_agg(to_jsonb(q)||jsonb_build_object('attendance',case when q.samples_seen>0 then 'observed' else 'unknown' end) order by q.display_name,q.member_id) from report_rows q),'[]'::jsonb))
  into report;return report;
 end $wm$;
