@@ -242,4 +242,27 @@ grant execute on function public.grillad_workspace() to authenticated;
 grant execute on function grillad_private.run(uuid,uuid,uuid,text,jsonb),grillad_private.snapshot(uuid,uuid,date,date) to authenticated;
 revoke all on function public.grillad_action(uuid,uuid,uuid,text,jsonb),public.grillad_snapshot(uuid,uuid,date,date) from public,anon,authenticated;
 grant execute on function public.grillad_action(uuid,uuid,uuid,text,jsonb),public.grillad_snapshot(uuid,uuid,date,date) to authenticated;
+-- Complete direct-sale receipt, independent of the 200-row history window.
+create function grillad_private.receipt(p_org uuid,p_site uuid,p_sale uuid) returns jsonb
+language plpgsql stable security definer set search_path=pg_catalog as $
+declare r text; u uuid:=auth.uid(); out jsonb;
+begin
+ r:=grillad_private.scope(p_org,p_site);
+ select jsonb_build_object('id',p_sale,'organization',o.legal_name,'site',l.name,
+ 'at',min(s.created_at),'currency','FCFA','cancelled',bool_or(s.cancelled_at is not null),
+ 'total',sum(s.total),'net_total',coalesce(sum(s.total) filter(where s.cancelled_at is null),0),
+ 'lines',jsonb_agg(jsonb_build_object('name',i.name,'qty',s.qty,'price',s.price,'total',s.total) order by s.id))
+ into out from grillad_private.sales s join grillad_private.items i on i.id=s.item and i.org=s.org and i.site=s.site
+ join famille_core.locations l on l.id=s.site and l.organization_id=s.org
+ join famille_core.organizations o on o.id=s.org
+ where s.org=p_org and s.site=p_site and s.source='direct' and coalesce(s.direct_order,s.id)=p_sale
+ and (r<>'seller' or s.actor=u) group by o.legal_name,l.name;
+ if out is null then raise exception 'GRILLAD_RECEIPT' using errcode='42501';end if;
+ return out;
+end $;
+create function public.grillad_receipt(p_org uuid,p_site uuid,p_sale uuid) returns jsonb
+language sql stable security invoker set search_path=pg_catalog as $select grillad_private.receipt(p_org,p_site,p_sale)$;
+revoke all on function grillad_private.receipt(uuid,uuid,uuid),public.grillad_receipt(uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function grillad_private.receipt(uuid,uuid,uuid),public.grillad_receipt(uuid,uuid,uuid) to authenticated;
+
 commit;

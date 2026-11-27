@@ -32,12 +32,16 @@ begin
  begin perform public.grillad_action(o,b,gen_random_uuid(),'prepare',jsonb_build_object('item',i,'qty',1));raise exception 'expected cross site rejection';exception when insufficient_privilege then null;end;
  v:=public.grillad_action(o,a,gen_random_uuid(),'change_price',jsonb_build_object('item',i,'price',1200,'reason','Test'));if (v->>'old_price')::int<>1000 or (v->>'new_price')::int<>1200 then raise exception 'price history';end if;
  perform public.grillad_action(o,a,gen_random_uuid(),'expense','{"label":"Bois","value":200}');
+ v:=public.grillad_receipt(o,a,basket);if not (v->>'cancelled')::boolean or (v->>'net_total')::int<>0 then raise exception 'cancelled receipt';end if;
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,ca}')::int<>2000 or (v#>>'{finance,charges}')::int<>200 or jsonb_array_length(v->'expenses')<>1 or (v->'items'->0->>'price')::int<>1200 then raise exception 'finance';end if;
  perform public.grillad_action(o,a,j,'add_item','{"name":"Porc","family":"Porc","price":800,"cost":300}');
  perform public.grillad_action(o,a,gen_random_uuid(),'prepare',jsonb_build_object('item',j,'qty',4));
  payload:=jsonb_build_object('lines',jsonb_build_array(jsonb_build_object('item',i,'qty',1,'price',1200),jsonb_build_object('item',j,'qty',2,'price',800)));
  v:=public.grillad_action(o,a,basket,'sell_basket',payload);
  if (v->>'total')::int<>2800 or public.grillad_action(o,a,basket,'sell_basket',payload)<>v then raise exception 'basket total or replay';end if;
+ v:=public.grillad_receipt(o,a,basket);if (v->>'total')::int<>2800 or jsonb_array_length(v->'lines')<>2 or (v->>'cancelled')::boolean then raise exception 'receipt basket';end if;
+ v:=public.grillad_receipt(o,a,s);if (v->'lines'->0->>'price')::int<>1000 then raise exception 'receipt historical price';end if;
+ begin perform public.grillad_receipt(o,b,s);raise exception 'receipt cross site';exception when insufficient_privilege then null;end;
  v:=public.grillad_snapshot(o,a,day,day);
  if (v#>>'{finance,ca}')::int<>4800 or (v#>>'{finance,sales_count}')::int<>2 then raise exception 'basket counted as multiple sales';end if;
  begin perform public.grillad_action(o,a,gen_random_uuid(),'sell_basket',jsonb_build_object('lines',jsonb_build_array(jsonb_build_object('item',i,'qty',1,'price',1200),jsonb_build_object('item',j,'qty',100,'price',800))));raise exception 'expected basket rollback';exception when invalid_parameter_value then null;end;
@@ -56,6 +60,7 @@ begin
  v:=public.grillad_snapshot(o,a,day,day);
  if v->'finance'<>'null'::jsonb or jsonb_array_length(v->'sales')<>0 or (v->'items'->0)?'cost' then raise exception 'seller leak';end if;
  begin perform public.grillad_snapshot(o,b,day,day);raise exception 'expected site denial';exception when insufficient_privilege then null;end;
+ begin perform public.grillad_receipt(o,a,'94000000-0000-0000-0000-000000000003');raise exception 'receipt other seller';exception when insufficient_privilege then null;end;
  begin perform public.grillad_action(o,a,gen_random_uuid(),'open_cash','{"opening":0}');raise exception 'expected role denial';exception when insufficient_privilege then null;end;
  begin perform count(*) from grillad_private.items;raise exception 'expected table denial';exception when insufficient_privilege then null;end;
 end $$;

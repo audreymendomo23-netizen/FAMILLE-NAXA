@@ -8,6 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 @Composable internal fun GrilladReportFilters(site:JSONObject?,data:JSONObject,period:String,enabled:Boolean,request:suspend(JSONObject)->JSONObject){
@@ -15,6 +17,8 @@ import org.json.JSONObject
  var network by remember(site,period){mutableStateOf(false)};var family by remember(site,period){mutableStateOf("")}
  var actor by remember(site,period){mutableStateOf("")};var item by remember(site,period){mutableStateOf("")}
  var result by remember(site,period){mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")}
+ var pdfLines by remember(site,period){mutableStateOf<List<String>?>(null)}
+ val pdfLauncher=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")){uri->val lines=pdfLines;pdfLines=null;if(uri!=null&&lines!=null)try{writeGrilladPdf(context,uri,"GRILLAD - Rapport",lines);message="PDF enregistré"}catch(e:Exception){message="Export PDF impossible"}}
  Text("Rapport détaillé",style=MaterialTheme.typography.titleMedium)
  if(data.optJSONObject("pilotage")?.optBoolean("network_allowed")==true)Row{Text("Réseau");Switch(network,{network=it;result=null},enabled=enabled&&!busy)}
  Row(Modifier.horizontalScroll(rememberScrollState())){(listOf("")+families).forEach{x->TextButton({family=x;result=null},enabled=enabled&&!busy){Text((if(family==x)"✓ " else "")+x.ifEmpty{"Toutes familles"})}}}
@@ -27,5 +31,6 @@ import org.json.JSONObject
  Text("Coût "+amount("cost")+" · Dépenses "+amount("expenses"))
  rows(r.optJSONArray("sites")).forEach{x->Text(x.optString("name")+" : "+x.optString("ca")+" F")}
  Text(r.optString("from")+" → "+r.optString("to")+" · Confirmé serveur uniquement")
- OutlinedButton({val content=buildString{append("GRILLAD — rapport ");append(r.optString("from"));append(" / ");append(r.optString("to"));append("\nCA ");append(amount("ca"));append("\n");rows(r.optJSONArray("sites")).forEach{x->append(x.optString("name")+" : "+x.optString("ca")+" F\n")}};context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,content)},"Partager le rapport"))},enabled=enabled){Text("Partager le rapport")}}
+ OutlinedButton({val content=buildString{append("GRILLAD — rapport ");append(r.optString("from"));append(" / ");append(r.optString("to"));append("\nCA ");append(amount("ca"));append("\n");rows(r.optJSONArray("sites")).forEach{x->append(x.optString("name")+" : "+x.optString("ca")+" F\n")}};context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,content)},"Partager le rapport"))},enabled=enabled){Text("Partager le rapport")}
+ OutlinedButton({pdfLines=reportPdfLines(r);pdfLauncher.launch("grillad-rapport-"+r.optString("from")+"-"+r.optString("to")+".pdf")},enabled=enabled){Text("Exporter PDF")}}
 }
