@@ -54,7 +54,7 @@ begin
  if (select count(*) from public.wm_room_list(c))<>1 then raise exception 'paid room not in agenda';end if;
  next_state:=jsonb_set(jsonb_set(jsonb_set(state,'{revision}','2'::jsonb),'{status}','"open"'::jsonb),'{endMs}',to_jsonb(floor(extract(epoch from clock_timestamp()+interval '30 minutes')*1000)::bigint));
  if not public.wm_room_write(c,rid,1,'owner','premium',next_state) then raise exception 'paid room start refused';end if;
- update public.wm_paid_passes set consumed_at=clock_timestamp()-interval '25 hours',valid_until=clock_timestamp()-interval '1 hour' where intent_id=pid;
+ update public.wm_paid_passes set consumed_at=t-interval '25 hours',valid_until=t-interval '1 hour' where intent_id=pid;
  if public.wm_room_read(c,rid) is not null or exists(select 1 from public.wm_room_actor_for(c,rid)) or (select count(*) from public.wm_room_list(c))<>0 then raise exception 'expired pass retained access';end if;
  if public.wm_pass_room_create(c,pid,state) then raise exception 'expired pass reused';end if;
 end $wm$;
