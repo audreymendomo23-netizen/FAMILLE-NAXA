@@ -9,6 +9,7 @@ const DEVICE_A = "70000000-0000-4000-8000-000000000001";
 const DEVICE_B = "70000000-0000-4000-8000-000000000002";
 const ORG = "20000000-0000-4000-8000-000000000001";
 const OTHER_ORG = "20000000-0000-4000-8000-000000000002";
+const MEMBER = "member-a";
 const SITE = "30000000-0000-4000-8000-000000000001";
 
 async function clearDatabase() {
@@ -27,34 +28,34 @@ beforeEach(async () => {
 describe("NAXA Services Web IndexedDB sync storage", () => {
   it("assigns a monotone sequence per device and keeps duplicate event IDs idempotent", async () => {
     const event1 = {
-      appId: APP, eventId: "event-device-a-1", deviceId: DEVICE_A, organizationId: ORG,
+      appId: APP, memberId: MEMBER, eventId: "event-device-a-1", deviceId: DEVICE_A, organizationId: ORG,
       payload: JSON.stringify({ org_id: ORG, action_code: "customer.created", customer_id: "customer-1" }),
       state: "queued" as const, createdAt: 100,
     };
     await enqueue(event1);
     await enqueue({ ...event1, createdAt: 200 });
     await enqueue({
-      appId: APP, eventId: "event-device-a-2", deviceId: DEVICE_A, organizationId: ORG,
+      appId: APP, memberId: MEMBER, eventId: "event-device-a-2", deviceId: DEVICE_A, organizationId: ORG,
       payload: JSON.stringify({ org_id: ORG, action_code: "service.created", service_id: "service-1" }),
       state: "queued", createdAt: 300,
     });
     await enqueue({
-      appId: APP, eventId: "event-device-b-1", deviceId: DEVICE_B, organizationId: ORG,
+      appId: APP, memberId: MEMBER, eventId: "event-device-b-1", deviceId: DEVICE_B, organizationId: ORG,
       payload: JSON.stringify({ org_id: ORG, action_code: "customer.created", customer_id: "customer-b" }),
       state: "queued", createdAt: 400,
     });
 
     await enqueue({
-      appId: APP, eventId: "event-device-a-other-org", deviceId: DEVICE_A, organizationId: OTHER_ORG,
+      appId: APP, memberId: MEMBER, eventId: "event-device-a-other-org", deviceId: DEVICE_A, organizationId: OTHER_ORG,
       payload: JSON.stringify({ org_id: OTHER_ORG, action_code: "customer.created", customer_id: "private-to-other-org" }),
       state: "queued", createdAt: 500,
     });
-    const deviceA = await listAppEvents(APP, DEVICE_A, ORG);
-    const deviceB = await listAppEvents(APP, DEVICE_B, ORG);
-    const otherOrgEvents = await listAppEvents(APP, DEVICE_A, OTHER_ORG);
-    const pendingA = await listQueued(APP, DEVICE_A, ORG);
-    const pendingB = await listQueued(APP, DEVICE_B, ORG);
-    const pendingOtherOrg = await listQueued(APP, DEVICE_A, OTHER_ORG);
+    const deviceA = await listAppEvents(APP, DEVICE_A, ORG, MEMBER);
+    const deviceB = await listAppEvents(APP, DEVICE_B, ORG, MEMBER);
+    const otherOrgEvents = await listAppEvents(APP, DEVICE_A, OTHER_ORG, MEMBER);
+    const pendingA = await listQueued(APP, DEVICE_A, ORG, MEMBER);
+    const pendingB = await listQueued(APP, DEVICE_B, ORG, MEMBER);
+    const pendingOtherOrg = await listQueued(APP, DEVICE_A, OTHER_ORG, MEMBER);
     expect(deviceA.map((item) => item.deviceSequence)).toEqual([1, 2]);
     expect(deviceA).toHaveLength(2);
     expect(deviceB.map((item) => item.deviceSequence)).toEqual([1]);
@@ -69,44 +70,44 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
   it("leases concurrent batches without returning the same outbox row twice", async () => {
     for (let index = 1; index <= 4; index++) {
       await enqueue({
-        appId: APP, eventId: "lease-event-" + index, deviceId: DEVICE_A,
-        payload: JSON.stringify({ sequence: index }), state: "queued", createdAt: index,
+        appId: APP, memberId: MEMBER, eventId: "lease-event-" + index, deviceId: DEVICE_A, organizationId: ORG,
+        payload: JSON.stringify({ org_id: ORG, sequence: index }), state: "queued", createdAt: index,
       });
     }
     await enqueue({
-      appId: APP, eventId: "lease-event-device-b", deviceId: DEVICE_B,
-      payload: JSON.stringify({ sequence: 1 }), state: "queued", createdAt: 5,
+      appId: APP, memberId: MEMBER, eventId: "lease-event-device-b", deviceId: DEVICE_B, organizationId: ORG,
+      payload: JSON.stringify({ org_id: ORG, sequence: 1 }), state: "queued", createdAt: 5,
     });
     const [left, right] = await Promise.all([
-      acquireDueBatch(3, 10_000, 60_000, APP, DEVICE_A),
-      acquireDueBatch(3, 10_000, 60_000, APP, DEVICE_A),
+      acquireDueBatch(3, 10_000, 60_000, APP, DEVICE_A, ORG, MEMBER),
+      acquireDueBatch(3, 10_000, 60_000, APP, DEVICE_A, ORG, MEMBER),
     ]);
     const all = [...left, ...right];
     expect(all).toHaveLength(4);
     expect(new Set(all.map((item) => item.eventId)).size).toBe(4);
     expect(all.every((item) => item.state === "sending" && item.deviceId === DEVICE_A)).toBe(true);
-    const otherDeviceBatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_B);
+    const otherDeviceBatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_B, ORG, MEMBER);
     expect(otherDeviceBatch).toHaveLength(1);
     expect(otherDeviceBatch[0].deviceId).toBe(DEVICE_B);
   });
 
   it("leases only events belonging to the authenticated organization", async () => {
     await expect(enqueue({
-      appId: APP, eventId: "mismatched-org-event", deviceId: DEVICE_A, organizationId: ORG,
+      appId: APP, memberId: MEMBER, eventId: "mismatched-org-event", deviceId: DEVICE_A, organizationId: ORG,
       payload: JSON.stringify({ org_id: OTHER_ORG, action_code: "customer.created" }), state: "queued", createdAt: 0,
     })).rejects.toThrow("QUEUE_ORGANIZATION_MISMATCH");
     await enqueue({
-      appId: APP, eventId: "org-a-event", deviceId: DEVICE_A, organizationId: ORG,
+      appId: APP, memberId: MEMBER, eventId: "org-a-event", deviceId: DEVICE_A, organizationId: ORG,
       payload: JSON.stringify({ org_id: ORG, action_code: "customer.created" }), state: "queued", createdAt: 1,
     });
     await enqueue({
-      appId: APP, eventId: "org-b-event", deviceId: DEVICE_A, organizationId: OTHER_ORG,
+      appId: APP, memberId: MEMBER, eventId: "org-b-event", deviceId: DEVICE_A, organizationId: OTHER_ORG,
       payload: JSON.stringify({ org_id: OTHER_ORG, action_code: "customer.created" }), state: "queued", createdAt: 2,
     });
 
-    const orgABatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_A, ORG);
+    const orgABatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_A, ORG, MEMBER);
     expect(orgABatch.map(item => item.eventId)).toEqual(["org-a-event"]);
-    const orgBBatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_A, OTHER_ORG);
+    const orgBBatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_A, OTHER_ORG, MEMBER);
     expect(orgBBatch.map(item => item.eventId)).toEqual(["org-b-event"]);
   });
 
@@ -127,15 +128,15 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
       recorded_at: "2026-11-22T10:00:00.000Z",
     };
     const page = { changes: [change], next_cursor: 1, has_more: false };
-    await applySyncPage(APP, DEVICE_A, page, ORG);
-    await applySyncPage(APP, DEVICE_A, page, ORG);
+    await applySyncPage(APP, DEVICE_A, page, ORG, MEMBER);
+    await applySyncPage(APP, DEVICE_A, page, ORG, MEMBER);
 
-    expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(1);
-    expect(await listSyncChanges(APP, DEVICE_A, ORG)).toHaveLength(1);
-    await expect(applySyncPage(APP, DEVICE_A, { changes: [], next_cursor: 0, has_more: false }, ORG))
+    expect(await getSyncCursor(APP, DEVICE_A, ORG, MEMBER)).toBe(1);
+    expect(await listSyncChanges(APP, DEVICE_A, ORG, MEMBER)).toHaveLength(1);
+    await expect(applySyncPage(APP, DEVICE_A, { changes: [], next_cursor: 0, has_more: false }, ORG, MEMBER))
       .rejects.toThrow("SYNC_CURSOR_REGRESSION");
-    expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(1);
-    expect(await listSyncChanges(APP, DEVICE_B, ORG)).toHaveLength(0);
+    expect(await getSyncCursor(APP, DEVICE_A, ORG, MEMBER)).toBe(1);
+    expect(await listSyncChanges(APP, DEVICE_B, ORG, MEMBER)).toHaveLength(0);
   });
 
   it("partitions inbound cursors and projections by organization on the same device", async () => {
@@ -154,13 +155,13 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
       payload: { customer_id: aggregateId, display_name: aggregateId, org_id: organizationId, site_id: SITE },
       recorded_at: "2026-11-23T09:00:00.000Z",
     });
-    await applySyncPage(APP, DEVICE_A, { changes: [change("org-a-change", "org-a-customer", ORG)], next_cursor: 1, has_more: false }, ORG);
-    await applySyncPage(APP, DEVICE_A, { changes: [change("org-b-change", "org-b-customer", OTHER_ORG)], next_cursor: 1, has_more: false }, OTHER_ORG);
+    await applySyncPage(APP, DEVICE_A, { changes: [change("org-a-change", "org-a-customer", ORG)], next_cursor: 1, has_more: false }, ORG, MEMBER);
+    await applySyncPage(APP, DEVICE_A, { changes: [change("org-b-change", "org-b-customer", OTHER_ORG)], next_cursor: 1, has_more: false }, OTHER_ORG, MEMBER);
 
-    expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(1);
-    expect(await getSyncCursor(APP, DEVICE_A, OTHER_ORG)).toBe(1);
-    expect((await listSyncChanges(APP, DEVICE_A, ORG)).map(item => item.aggregate_id)).toEqual(["org-a-customer"]);
-    expect((await listSyncChanges(APP, DEVICE_A, OTHER_ORG)).map(item => item.aggregate_id)).toEqual(["org-b-customer"]);
+    expect(await getSyncCursor(APP, DEVICE_A, ORG, MEMBER)).toBe(1);
+    expect(await getSyncCursor(APP, DEVICE_A, OTHER_ORG, MEMBER)).toBe(1);
+    expect((await listSyncChanges(APP, DEVICE_A, ORG, MEMBER)).map(item => item.aggregate_id)).toEqual(["org-a-customer"]);
+    expect((await listSyncChanges(APP, DEVICE_A, OTHER_ORG, MEMBER)).map(item => item.aggregate_id)).toEqual(["org-b-customer"]);
   });
 
   it("rejects an inbound change outside its page cursor", async () => {
@@ -172,27 +173,27 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
         aggregate_version: 1, payload: { customer_id: "customer-2" }, recorded_at: "2026-11-22T10:00:00.000Z",
       }],
       next_cursor: 1, has_more: false,
-    }, ORG)).rejects.toThrow("INVALID_SYNC_CHANGE");
-    expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(0);
+    }, ORG, MEMBER)).rejects.toThrow("INVALID_SYNC_CHANGE");
+    expect(await getSyncCursor(APP, DEVICE_A, ORG, MEMBER)).toBe(0);
   });
 });
 
  it("preserves NAXA Services events across more than twelve billing holds and resumes after payment", async () => {
     const eventId="billing-hold";
     const payload=JSON.stringify({org_id:ORG,action_code:"customer.created"});
-    await enqueue({appId:APP,eventId,deviceId:DEVICE_A,organizationId:ORG,payload,state:"queued",createdAt:1});
+    await enqueue({appId:APP,memberId:MEMBER,eventId,deviceId:DEVICE_A,organizationId:ORG,payload,state:"queued",createdAt:1});
     let now=10000;
     for(let i=0;i<15;i++){
-      const batch=await acquireDueBatch(1,now,60000,APP,DEVICE_A,ORG);
+      const batch=await acquireDueBatch(1,now,60000,APP,DEVICE_A,ORG,MEMBER);
       expect(batch.map(item=>item.eventId)).toEqual([eventId]);
       expect(await scheduleRetry(eventId,{status:402,errorCode:"NS_SUBSCRIPTION_ACCESS_REQUIRED"},now,APP)).toBe(true);
       now+=30*60*1000;
     }
-    const pending=await listQueued(APP,DEVICE_A,ORG);
+    const pending=await listQueued(APP,DEVICE_A,ORG,MEMBER);
     expect(pending).toHaveLength(1);
     expect(pending[0].attemptCount).toBe(0);
     expect(pending[0].payload).toBe(payload);
-    expect((await acquireDueBatch(1,now,60000,APP,DEVICE_A,ORG))[0].eventId).toBe(eventId);
+    expect((await acquireDueBatch(1,now,60000,APP,DEVICE_A,ORG,MEMBER))[0].eventId).toBe(eventId);
  });
 
 describe("Bulk C: member-bound offline recovery and stale lease fencing",()=>{
@@ -200,12 +201,30 @@ describe("Bulk C: member-bound offline recovery and stale lease fencing",()=>{
     const base={appId:APP,deviceId:DEVICE_A,organizationId:ORG,payload:JSON.stringify({org_id:ORG}),state:"queued" as const,createdAt:1};
     await enqueue({...base,eventId:"member-a-event",memberId:"member-a"});
     await enqueue({...base,eventId:"member-b-event",memberId:"member-b"});
-    await enqueue({...base,eventId:"legacy-unbound"});
+    await expect(enqueue({...base,eventId:"legacy-unbound"})).rejects.toThrow("NS_LOCAL_SCOPE_REQUIRED");
+    // Inject an actual pre-upgrade row; never use the new API to fabricate legacy state.
+    await new Promise<void>((resolve,reject)=>{
+      const request=indexedDB.open("famille-naxa-offline",3);
+      request.onerror=()=>reject(request.error);
+      request.onsuccess=()=>{
+        const db=request.result,tx=db.transaction("events","readwrite");
+        tx.objectStore("events").add({...base,eventId:"legacy-unbound"});
+        tx.oncomplete=()=>{db.close();resolve();};
+        tx.onerror=()=>{db.close();reject(tx.error);};
+        tx.onabort=()=>{db.close();reject(tx.error);};
+      };
+    });
     await expect(enqueue({...base,eventId:"member-a-event",memberId:"member-b"})).rejects.toThrow("QUEUE_MEMBER_SCOPE_MISMATCH");
     expect((await listAppEvents(APP,DEVICE_A,ORG,"member-a")).map(x=>x.eventId)).toEqual(["member-a-event"]);
     expect((await listQueued(APP,DEVICE_A,ORG,"member-b")).map(x=>x.eventId)).toEqual(["member-b-event"]);
     expect((await acquireDueBatch(10,10000,5000,APP,DEVICE_A,ORG,"member-a")).map(x=>x.eventId)).toEqual(["member-a-event"]);
-    expect((await listAppEvents(APP,DEVICE_A,ORG)).length).toBe(3);
+    await expect(listAppEvents(APP,DEVICE_A,ORG)).rejects.toThrow("NS_LOCAL_SCOPE_REQUIRED");
+    const retained=await new Promise<unknown>((resolve,reject)=>{
+      const request=indexedDB.open("famille-naxa-offline",3);
+      request.onerror=()=>reject(request.error);
+      request.onsuccess=()=>{const db=request.result,r=db.transaction("events").objectStore("events").get("legacy-unbound");r.onsuccess=()=>{db.close();resolve(r.result);};r.onerror=()=>{db.close();reject(r.error);};};
+    });
+    expect(retained).toMatchObject({eventId:"legacy-unbound",payload:base.payload});
   });
   it("expired tab lease cannot overwrite a newer receipt or restart a confirmed operation",async()=>{
     await enqueue({appId:APP,eventId:"retry-event",deviceId:DEVICE_A,organizationId:ORG,memberId:"member-a",payload:JSON.stringify({org_id:ORG}),state:"queued",createdAt:1});
