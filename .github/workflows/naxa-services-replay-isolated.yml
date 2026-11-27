@@ -263,7 +263,7 @@ jobs:
           unset FCM_SERVICE_ACCOUNT_JSON NS_FIREBASE_PROJECT_ID
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
-          import { runB4 } from './scripts/naxa-services/b4-real-erp-recipe.mjs';
+          import { runB4,runB4BrowserProfiles } from './scripts/naxa-services/b4-real-erp-recipe.mjs';
           import {randomUUID,randomBytes} from 'node:crypto';
           import {spawn,execFileSync} from 'node:child_process';
           import {chromium} from '@playwright/test';
@@ -575,6 +575,7 @@ jobs:
                 assert.equal(await count('ns_supplier_payments','purchase_id=eq.'+order.aggregate_id),1);
                 const inventory=page.getByRole('region',{name:'B4 inventaire physique'});await inventory.getByLabel('B4 inventaire article').selectOption(item.aggregate_id);await inventory.getByRole('button',{name:'Relever stock B4'}).click();await inventory.locator('[data-b4-inventory-quantity="15"]').waitFor();await inventory.getByLabel('B4 inventaire comptage').fill('14');await inventory.getByLabel('B4 inventaire motif').fill('Comptage physique de recette');const countEvent=await apply('inventory_movement.created',()=>inventory.getByRole('button',{name:'Valider inventaire B4'}).click());assert.equal(countEvent.payload.expected_quantity,15);const [after]=await success(base+'/rest/v1/ns_inventory_items?id=eq.'+item.aggregate_id+'&select=quantity',undefined,admin,admin,'GET');assert.equal(Number(after.quantity),14);
               });
+              await scenario('B4 real browser matrix of 13 activity profiles',()=>runB4BrowserProfiles({browser,fixture,success,base,admin,pass}));
               await scenario('B4 real browser transfer from request to destination reception',async()=>{
                 const network=await fixture('B4-WEB-TRANSFER','multi_site_network');
                 const [destination]=await rest('ns_sites',{org_id:network.org.id,code:'B4-DEST',name:'Destination B4 Web'});

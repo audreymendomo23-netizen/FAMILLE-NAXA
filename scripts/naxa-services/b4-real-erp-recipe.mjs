@@ -1,5 +1,16 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+export const B4_PROFILE_FIELDS={
+ coiffure:{style:'coupe',technique:'Recette'},couture:{garment:'Vêtement recette',measurements:'Mesures recette'},
+ beaute:{treatment:'soin_visage',protocol:'Recette'},parfumerie:{product:'Parfum recette',format:'30ml'},
+ reparation:{device:'Appareil recette',fault:'Panne recette'},menuiserie:{piece:'Meuble recette',dimensions:'Mesures recette'},
+ garage:{vehicle:'Véhicule recette',fault:'Panne recette'},nettoyage:{site:'Site recette',tasks:'Tâches recette'},
+ domicile:{address:'Adresse recette',service:'Prestation recette'},impression:{format:'A6',quantity:'1'},
+ photo_evenementiel:{event:'Événement recette',date:'2028-02-29',deliverables:'Livrables recette'},
+ autre:{service:'Service recette',specifications:'Recette'}
+ };
+export const B4_PROFILE_STAGES={"coiffure":["received","approved","in_progress","quality_check","ready","delivered","closed"],"beaute":["received","approved","in_progress","quality_check","ready","delivered","closed"],"couture":["received","measurement","fitting","ready","delivered","closed"],"parfumerie":["received","quote_pending","approved","in_progress","quality_check","ready","delivered","closed"],"reparation":["received","diagnostic","quote_pending","approved","in_progress","quality_check","ready","delivered","closed"],"garage":["received","diagnostic","quote_pending","approved","in_progress","quality_check","ready","delivered","closed"],"menuiserie":["received","diagnostic","quote_pending","approved","fabrication","quality_check","ready","delivered","closed"],"nettoyage":["received","approved","planning","on_site","in_progress","quality_check","ready","delivered","closed"],"domicile":["received","approved","planning","on_site","in_progress","quality_check","ready","delivered","closed"],"impression":["received","proof_ready","production","quality_check","ready","delivered","closed"],"photo_evenementiel":["received","planning","shooting","post_production","quality_check","ready","delivered","closed"],"autre":["received","approved","in_progress","quality_check","ready","delivered","closed"]};
+
 export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  const f=await fixture('B4-REAL','multi_site_network'), a=await login(f), b=await login({...f,device:{...f.device,installation_id:randomUUID()}});
  const org=f.org.id,site=f.site.id,seq=new Map(),url=base+'/rest/v1/rpc/ns_apply_sync_event';
@@ -38,16 +49,7 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  assert.equal(concurrent.filter(r=>r.status===200&&r.data.status==='applied').length,1,JSON.stringify(concurrent));assert.equal(concurrent.filter(r=>r.status>=400).length,1);
  pass('B4 appointments: simultaneous reservation of one provider and interval, one acceptance only');
 
- const fields={
- coiffure:{style:'coupe',technique:'Recette'},couture:{garment:'Vêtement recette',measurements:'Mesures recette'},
- beaute:{treatment:'soin_visage',protocol:'Recette'},parfumerie:{product:'Parfum recette',format:'30ml'},
- reparation:{device:'Appareil recette',fault:'Panne recette'},menuiserie:{piece:'Meuble recette',dimensions:'Mesures recette'},
- garage:{vehicle:'Véhicule recette',fault:'Panne recette'},nettoyage:{site:'Site recette',tasks:'Tâches recette'},
- domicile:{address:'Adresse recette',service:'Prestation recette'},impression:{format:'A6',quantity:'1'},
- photo_evenementiel:{event:'Événement recette',date:'2028-02-29',deliverables:'Livrables recette'},
- autre:{service:'Service recette',specifications:'Recette'}
- };
- const paths={"coiffure":["received","approved","in_progress","quality_check","ready","delivered","closed"],"beaute":["received","approved","in_progress","quality_check","ready","delivered","closed"],"couture":["received","measurement","fitting","ready","delivered","closed"],"parfumerie":["received","quote_pending","approved","in_progress","quality_check","ready","delivered","closed"],"reparation":["received","diagnostic","quote_pending","approved","in_progress","quality_check","ready","delivered","closed"],"garage":["received","diagnostic","quote_pending","approved","in_progress","quality_check","ready","delivered","closed"],"menuiserie":["received","diagnostic","quote_pending","approved","fabrication","quality_check","ready","delivered","closed"],"nettoyage":["received","approved","planning","on_site","in_progress","quality_check","ready","delivered","closed"],"domicile":["received","approved","planning","on_site","in_progress","quality_check","ready","delivered","closed"],"impression":["received","proof_ready","production","quality_check","ready","delivered","closed"],"photo_evenementiel":["received","planning","shooting","post_production","quality_check","ready","delivered","closed"],"autre":["received","approved","in_progress","quality_check","ready","delivered","closed"]};
+ const fields=B4_PROFILE_FIELDS,paths=B4_PROFILE_STAGES;
  for(const [profile,stages] of Object.entries(paths)){
    const kind=['coiffure','beaute','nettoyage','domicile'].includes(profile)?'service_order':['garage','reparation'].includes(profile)?'repair_order':'work_order';
    const id=randomUUID(), payload={...document(id,kind,1000,0,'received'),metadata_json:{activity_profile:profile,fields:fields[profile]}};
@@ -147,4 +149,82 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  const peer=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:a.device_id,p_after_cursor:0,p_limit:200},a.access_token,anon);
  assert.ok(Array.isArray(peer.changes));assert.ok(peer.changes.some(x=>x.aggregate_id===invoice&&x.action_code==='invoice.status_changed'));
  pass('B4 peer sync: second device settlement visible through authenticated pull');
+}
+
+/** Run the same approved B4 workflow matrix against real authenticated browser forms. */
+export async function runB4BrowserProfiles({browser,fixture,success,base,admin,pass}) {
+ const profiles=['pressing',...Object.keys(B4_PROFILE_STAGES)];
+ const modes=['solo','single_site_multi_workstation','multi_site_network'];
+ async function one(profile,index){
+  let checkpoint='fixture',ctx;
+  try{
+   const f=await fixture('B4-UI-'+profile,modes[index%modes.length]);
+   await success(base+'/rest/v1/ns_organizations?id=eq.'+f.org.id,{activity_profile:profile,activity_profile_selected_at:new Date().toISOString(),activity_profile_selected_by:f.member.id},admin,admin,'PATCH');
+   ctx=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
+   const page=await ctx.newPage();page.setDefaultTimeout(20000);
+   checkpoint='login';await page.goto('https://127.0.0.1:8443/');
+   await page.getByLabel('Identifiant NAXA Services').fill(f.login);
+   await page.getByLabel('Mot de passe',{exact:true}).fill(f.password);
+   await page.getByRole('button',{name:'Se connecter',exact:true}).click();
+   await page.getByRole('heading',{name:'Une journée bien organisée commence ici.'}).waitFor();
+   const apply=async(action,click)=>{
+    const response=page.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-accounting')&&r.request().method()==='POST'&&r.request().postDataJSON()?.event?.action_code===action,{timeout:25000});
+    const [res]=await Promise.all([response,click()]);const body=await res.json();
+    assert.equal(res.status(),200,profile+' '+action);assert.equal(body.result?.status,'applied',profile+' '+action);
+    return res.request().postDataJSON().event;
+   };
+   const title='Dossier recette '+profile;
+   let created,kind,stages;
+   checkpoint='create';
+   if(profile==='pressing'){
+    await page.locator('.side-nav button.nav-item').filter({hasText:'Pressing'}).first().click();
+    await page.getByRole('button',{name:'Créer un ticket',exact:true}).click();
+    await page.getByLabel('Nom du client').fill(title);
+    await page.getByLabel('Articles déposés').fill('Une chemise de recette');
+    await page.getByLabel('Montant total FCFA').fill('1000');
+    await page.getByLabel('Date promise').fill('2027-03-10T12:00');
+    kind='pressing_order';stages=['received','in_progress','ready','picked_up'];
+    created=await apply(kind+'.created',()=>page.getByRole('button',{name:'Enregistrer',exact:true}).click());
+   }else{
+    await page.locator('.side-nav button.nav-item').filter({hasText:'Dossiers métier'}).click();
+    await page.locator('.activity-work-layout .eyebrow').first().waitFor();
+    assert.match(await page.locator('.activity-work-layout .eyebrow').first().textContent(),new RegExp(profile.toUpperCase()));
+    await page.getByLabel("Client / donneur d'ordre").fill('Client synthétique');
+    await page.getByLabel('Intitulé du dossier').fill(title);
+    assert.equal(await page.locator('.activity-work-layout form').evaluate(form=>form.checkValidity()),false);
+    for(const [key,value] of Object.entries(B4_PROFILE_FIELDS[profile])){
+     const input=page.locator('[data-activity-field="'+key+'"]').locator('input, textarea, select');
+     if(await input.evaluate(el=>el.tagName)==='SELECT')await input.selectOption(value);else await input.fill(value);
+    }
+    await page.getByLabel('Montant estimatif (FCFA)').fill('1000');
+    kind=['coiffure','beaute','nettoyage','domicile'].includes(profile)?'service_order':['garage','reparation'].includes(profile)?'repair_order':'work_order';
+    stages=B4_PROFILE_STAGES[profile];
+    created=await apply(kind+'.created',()=>page.getByRole('button',{name:'Créer et synchroniser le dossier'}).click());
+    assert.equal(created.payload.metadata_json.activity_profile,profile);
+   }
+   const row=page.locator('.activity-record[data-record-id="'+created.aggregate_id+'"]');
+   await row.locator('[data-testid="record-confirmation"][data-version="1"]').waitFor();
+   for(let v=1;v<stages.length;v++){
+    checkpoint=stages[v-1]+' → '+stages[v];
+    const reason=row.getByLabel("Motif du changement d'étape");await reason.fill('Recette '+stages[v]);
+    assert.equal(await reason.inputValue(),'Recette '+stages[v]);
+    const next=row.locator('[data-stage-code="'+stages[v]+'"]');
+    const event=await apply(kind==='pressing_order'?kind+'.status_changed:'+stages[v]:kind+'.status_changed',()=>next.click());
+    assert.equal(event.aggregate_id,created.aggregate_id);assert.equal(event.payload.expected_version,v);
+    await row.locator('[data-testid="record-confirmation"][data-version="'+(v+1)+'"]').waitFor();
+   }
+   checkpoint='database verification';const table=kind==='pressing_order'?'ns_pressing_orders':'ns_management_records';
+   const records=await success(base+'/rest/v1/'+table+'?id=eq.'+created.aggregate_id+'&select=status,revision',undefined,admin,admin,'GET');
+   assert.equal(records.length,1);assert.equal(records[0].status,stages.at(-1));assert.equal(records[0].revision,stages.length);
+   pass('B4 real Chromium profile '+profile+' / '+modes[index%modes.length]+' complete lifecycle and PostgreSQL revision');
+  }catch(e){console.log('B4 profile browser failure:',profile,checkpoint,e instanceof Error?e.name:'Error');throw new Error(profile+' at '+checkpoint);}
+  finally{if(ctx)await ctx.close();}
+ }
+ const failures=[];
+ // Bound concurrency to avoid Chromium memory starvation; each fixture has its own org and browser context.
+ for(let start=0;start<profiles.length;start+=4){
+  const result=await Promise.allSettled(profiles.slice(start,start+4).map((profile,index)=>one(profile,start+index)));
+  failures.push(...result.filter(x=>x.status==='rejected').map(x=>x.reason.message));
+ }
+ assert.deepEqual(failures,[],'B4 all 13 browser profiles');
 }

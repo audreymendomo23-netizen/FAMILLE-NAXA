@@ -1507,6 +1507,7 @@ function PressingPage({
   const t=useTranslation();
   const [reasons,setReasons]=useState<Record<string,string>>({});
   const [error,setError]=useState("");
+  const [transitioning,setTransitioning]=useState("");
   const nextStatus:Record<string,string>={received:"in_progress",in_progress:"ready",ready:"picked_up"};
   const statusLabels:Record<string,string>={received:"Reçu",in_progress:"En cours",ready:"Prêt",picked_up:"Retiré"};
   return <div className="module-layout">
@@ -1521,15 +1522,20 @@ function PressingPage({
       {entries.length?entries.map(entry=>{
         const status=entry.status??"received";
         const next=nextStatus[status];
-        return <div className="activity-record" key={entry.id}>
-          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small>{t(confirmedActivityRevision(entry)?"Confirmé":entry.state)}</small></div><span className="status-tag local">{t(statusLabels[status]??entry.state)}</span></div>
+        const decisionKey=`${entry.id}:${entry.revision}:${status}`;
+        return <div className="activity-record" key={entry.id} data-record-id={entry.id}>
+          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small data-testid="record-confirmation" data-version={confirmedActivityRevision(entry)?entry.revision:0}>{t(confirmedActivityRevision(entry)?"Confirmé":entry.state)}</small></div><span className="status-tag local">{t(statusLabels[status]??entry.state)}</span></div>
           {canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(entry.id)} disabled={status==="picked_up"}>{t("Avancer l'aperçu")}</button>}
           {authenticated&&next&&entry.recordType==="pressing_order"&&entry.siteId&&confirmedActivityRevision(entry)?<div className="activity-transition">
-            <label>{t("Motif du changement d'étape")}<input value={reasons[entry.id]??""} onChange={e=>setReasons(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500}/></label>
-            <button className="btn secondary" disabled={busy||(reasons[entry.id]??"").trim().length<3} onClick={()=>void onTransition(entry,next,reasons[entry.id]??"").then(
-              ()=>setReasons(previous=>({...previous,[entry.id]:""})),
-              cause=>setError(cause instanceof Error?cause.message:"Transition refusée.")
-            )}>{busy?"Envoi…":"Passer à "+statusLabels[next]}</button>
+            <label>{t("Motif du changement d'étape")}<input key={decisionKey} disabled={busy||transitioning===entry.id} value={reasons[decisionKey]??""} onChange={e=>setReasons(previous=>({...previous,[decisionKey]:e.target.value}))} minLength={3} maxLength={500}/></label>
+            <button className="btn secondary" data-stage-code={next} disabled={busy||transitioning===entry.id||(reasons[decisionKey]??"").trim().length<3} onClick={()=>{
+              if(busy||transitioning)return;
+              setTransitioning(entry.id);setError("");
+              void onTransition(entry,next,reasons[decisionKey]??"").then(
+                ()=>setReasons(previous=>{const result={...previous};delete result[decisionKey];return result;}),
+                cause=>setError(cause instanceof Error?cause.message:"Transition refusée.")
+              ).finally(()=>setTransitioning(""));
+            }}>{busy||transitioning===entry.id?"Envoi…":"Passer à "+statusLabels[next]}</button>
           </div>:authenticated&&next&&<p className="muted">{t("Patientez jusqu'à la confirmation du ticket.")}</p>}
         </div>;
       }):<Empty text={t("Aucun ticket disponible pour cet établissement.")}/>}
@@ -1570,10 +1576,12 @@ function WorkOrdersPage({
     finally { setSaving(false); }
   }
   async function transition(entry:Entry,next:string) {
+    if(busy||transitioning)return;
+    const decisionKey=`${entry.id}:${entry.revision}:${entry.status}`;
     setTransitioning(entry.id);setError("");
     try {
-      await onTransition(entry,next,reasonByEntry[entry.id]??"");
-      setReasonByEntry(previous=>({...previous,[entry.id]:""}));
+      await onTransition(entry,next,reasonByEntry[decisionKey]??"");
+      setReasonByEntry(previous=>{const result={...previous};delete result[decisionKey];return result;});
     } catch(cause) { setError(cause instanceof Error?cause.message:"Transition refusée."); }
     finally { setTransitioning(""); }
   }
@@ -1627,6 +1635,7 @@ function WorkOrdersPage({
         const entryProfile=entry.activityProfile??workflow.profile;
         const entryWorkflow=getActivityWorkflow(entryProfile);
         const status=entry.status??"received";
+        const decisionKey=`${entry.id}:${entry.revision}:${entry.status}`;
         const stage=getActivityStage(entryProfile,status);
         const next=stage?.next??[];
         const detailRows=Object.entries(entry.metadata??{}).filter(([,value])=>Boolean(value));
@@ -1634,8 +1643,8 @@ function WorkOrdersPage({
           <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail||entry.createdAt}</small><small data-testid="record-confirmation" data-version={confirmedActivityRevision(entry)?entry.revision:0}>{t(confirmedActivityRevision(entry)?"Confirmé":entry.state)}</small></div><span className="status-tag local">{stage?.label??entry.state}</span></div>
           {detailRows.length>0&&<ul className="brief-list">{detailRows.map(([key,value])=><li key={key}>{key} : {value}</li>)}</ul>}
           {authenticated&&next.length>0&&confirmedActivityRevision(entry)&&entry.siteId&&<div className="activity-transition">
-            <label>{t("Motif du changement d'étape")}<input value={reasonByEntry[entry.id]??""} onChange={e=>setReasonByEntry(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500} /></label>
-            <div className="activity-transition-buttons">{next.map(code=><button className="btn secondary" key={code} disabled={busy||transitioning===entry.id||(reasonByEntry[entry.id]??"").trim().length<3} onClick={()=>void transition(entry,code)}>{transitioning===entry.id?"Envoi…":entryWorkflow.stages.find(item=>item.code===code)?.label??code}</button>)}</div>
+            <label>{t("Motif du changement d'étape")}<input key={decisionKey} disabled={busy||transitioning===entry.id} value={reasonByEntry[decisionKey]??""} onChange={e=>setReasonByEntry(previous=>({...previous,[decisionKey]:e.target.value}))} minLength={3} maxLength={500} /></label>
+            <div className="activity-transition-buttons">{next.map(code=><button className="btn secondary" key={code} data-stage-code={code} disabled={busy||transitioning===entry.id||(reasonByEntry[decisionKey]??"").trim().length<3} onClick={()=>void transition(entry,code)}>{transitioning===entry.id?"Envoi…":entryWorkflow.stages.find(item=>item.code===code)?.label??code}</button>)}</div>
           </div>}
         </div>;
       })}
