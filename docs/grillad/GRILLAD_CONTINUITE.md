@@ -8,7 +8,7 @@
 - [Décisions](../DECISIONS.md)
 
 ## Décisions non régressives
-Cinq familles strictes : porc, poulet, poisson, brochettes, omelettes. Vente directe uniquement dans la baseline. Préparé/vendu/restant, caisse, dépenses, coût de revient, marges, organisation mono/multisite et plusieurs vendeurs par point. ACCÈS : 2 000 F/mois, 24 000 F/an, un point multi-vendeurs. PREMIUM : 6 000 F/mois, 60 000 F/an, plusieurs points multi-vendeurs. Pas de PRO, pas de plafond inventé. Les propositions et points ouverts de V1.3 ne sont pas activés implicitement.
+Cinq familles strictes : porc, poulet, poisson, brochettes, omelettes. Vente directe comme canal principal ; GRILLAD Connect côté ZIPPLE Snack-Bar est l'unique exception partenaire validée en V1.4. Préparé/vendu/restant, caisse, dépenses, coût de revient, marges, organisation mono/multisite et plusieurs vendeurs par point. ACCÈS : 2 000 F/mois, 24 000 F/an, un point multi-vendeurs. PREMIUM : 6 000 F/mois, 60 000 F/an, plusieurs points multi-vendeurs. Pas de PRO, pas de plafond inventé. Les autres propositions et points ouverts de V1.4 ne sont pas activés implicitement.
 
 ## 2. Audit statique du 27/11/2026
 
