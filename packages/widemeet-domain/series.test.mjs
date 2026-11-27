@@ -1,0 +1,3 @@
+import test from "node:test";import assert from "node:assert/strict";import{seriesDates}from"./series.mjs";
+test("monthly recurrence retains initial day where possible and clamps short months",()=>{const d=Date.UTC(2028,0,31,9);assert.deepEqual(seriesDates(d,"monthly",3).map(x=>new Date(x).toISOString()),["2028-01-31T09:00:00.000Z","2028-02-29T09:00:00.000Z","2028-03-31T09:00:00.000Z"])});
+test("bounded daily/weekly/custom interval, invalid recurrence rejects",()=>{assert.deepEqual(seriesDates(0,"weekly",3,2),[0,1209600000,2419200000]);assert.throws(()=>seriesDates(0,"daily",13));assert.throws(()=>seriesDates(0,"monthly",2,0));assert.throws(()=>seriesDates(0,"hourly",2));});
