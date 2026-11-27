@@ -174,3 +174,34 @@ Marqueurs SQL confirmés : achats multi-lignes, recettes versionnées, conversio
 ### Arbitrages et limites de la clôture
 Une revue refuse définitivement l'opération obsolète et permet une nouvelle opération distincte après actualisation ; aucun écrasement automatique de stock. Les affectations comptables sont configurables, pas une certification SYSCOHADA ni une déclaration fiscale. Le CDC sections 9–12, 17.3, 17.5 et 23.7 conserve des écarts fonctionnels fins à qualifier : workflow complet d'approbation des dépenses et achats/contrôle qualité/retours fournisseur, fiscalité/taxes et exports réglementaires, inventaire par scan, couverture de toutes mutations hors ligne autorisées. Justificatifs privés contrôlés mais antivirus/rétention/stockage industriel non qualifiés. Les preuves natives de cette passe ciblent les parcours réels spécifiés, pas la parité exhaustive, le matériel physique ou la recette hébergée (Bulk 6). Aucun changement main, production, migration hébergée ou application sœur.
 Ne déclarer vert que la matrice exécutée et effectivement réussie ; ne pas assimiler au vert exhaustif du CDC.
+
+
+## Relevé de conformité Bulk 3 — 27/11/2026
+Candidat fonctionnel/test `6a1950a82eca01b29a2fa1f4d3fd968dc39e7ff4`, branche `work/zipple-completion-20261126`. Corrections par réutilisation NAXA Services (inventory.ts, fournisseur/compta v4) et NAXA (migrations 192,194, socle comptable du 20/10 et garde exports réglementaires). Scan HID/texte avec refus ambigu; contrôles achats/dépenses versionnés, qualité avant réception, retour fournisseur valorisé, crédit/remboursement et rapprochement, règles fiscales datées et capture TTC sur reçu, revue documentaire manuelle append-only et journal téléchargement avec blocage et contrôle SHA-256 serveur; soumission dépense offline sans écriture avant approbation. Révision df99304 puis 61b22b7 (maintien droits insert-only sur document). 6a1950a : assertions E2E navigateur supplémentaires contrôle qualité, scan, fiscalité/CSV et contrôle documentaire. Les taux du test fiscal sont synthétiques, jamais un paramétrage légal. Les seuils et taux doivent être renseignés par le responsable, aucune activation arbitraire. Pas de paiement externe ni déploiement production.
+
+| Commit | Workflow | Run | État observé |
+|---|---|---|---|
+| 6a1950a | ZIPPLE N2–N5 — isolated business candidate | [45970085903](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45970085903) | in_progress |
+| 6a1950a | ZIPPLE business — real local Supabase | [45970086093](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45970086093) | in_progress |
+| 61b22b7 | ZIPPLE N2–N5 — isolated business candidate | [45969903593](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969903593) | in_progress |
+| 61b22b7 | ZIPPLE business — real local Supabase | [45969903427](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969903427) | in_progress |
+| df99304 | ZIPPLE N1 — hosted Android debug handoff | [45969863002](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969863002) | in_progress |
+| df99304 | ZIPPLE N1 — live Cloudflare Pages recipe | [45969862928](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969862928) | in_progress |
+| df99304 | ZIPPLE N1 — isolated foundation | [45969862917](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969862917) | in_progress |
+| df99304 | ZIPPLE business — real local Supabase | [45969862923](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969862923) | in_progress |
+| df99304 | ZIPPLE — Cloudflare Pages build qualification | [45969863022](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969863022) | success |
+| df99304 | ZIPPLE N2–N5 — isolated business candidate | [45969862993](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969862993) | success |
+| df99304 | ZIPPLE N1 — PWA multi-browser qualification | [45969863060](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969863060) | success |
+| 0715f46 | ZIPPLE — Cloudflare Pages build qualification | [45969581711](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969581711) | success |
+| 0715f46 | ZIPPLE business — real local Supabase | [45969581718](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969581718) | in_progress |
+| 0715f46 | ZIPPLE N2–N5 — isolated business candidate | [45969581705](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969581705) | success |
+| 0715f46 | ZIPPLE N1 — PWA multi-browser qualification | [45969581730](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969581730) | success |
+| 0715f46 | ZIPPLE N1 — live Cloudflare Pages recipe | [45969581741](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969581741) | success |
+| 0715f46 | ZIPPLE N1 — isolated foundation | [45969581794](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969581794) | in_progress |
+| 0715f46 | ZIPPLE N1 — hosted Android debug handoff | [45969581733](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45969581733) | success |
+
+Marqueurs SQL effectivement lus :
+- Run 45969862993 : ZIPPLE_BULK3_DOCUMENT_REVIEW_AUDIT_PASS; ZIPPLE_BULK3_OFFLINE_EXPENSE_SUBMISSION_PASS; ZIPPLE_BULK3_VERSIONED_GROSS_TAX_REPORT_PASS; ZIPPLE_BULK3_SUPPLIER_RETURN_CREDIT_REFUND_PASS; ZIPPLE_BULK3_ERP_APPROVAL_AND_QUALITY_CONTROL_PASS; tests 46; pass 46; fail 0; skipped 0
+- Run 45969581705 : ZIPPLE_BULK3_VERSIONED_GROSS_TAX_REPORT_PASS; ZIPPLE_BULK3_SUPPLIER_RETURN_CREDIT_REFUND_PASS; ZIPPLE_BULK3_ERP_APPROVAL_AND_QUALITY_CONTROL_PASS; tests 46; pass 46; fail 0; skipped 0
+
+Conclusion contradictoire : vert limité aux preuves terminées sur leurs révisions. Les tests E2E ajoutés et la recette Android complète du candidat final doivent être constatés, non présumés. Restent notamment scan caméra/matériel, toutes mutations offline admissibles (hors règlement réel et contrôle autoritatif en ligne), retenue et stockage industriel/antivirus des justificatifs (revue manuelle ne constitue pas un scan), approbation de conformité par comptable, exports réglementaires SYSCOHADA/fiscalité et ventilation des ajustements. Les retours d'un lot enrichi par excédent restent refusés par précaution. Pas de clôture exhaustive fictive du CDC. Aucune modification main ni production.
