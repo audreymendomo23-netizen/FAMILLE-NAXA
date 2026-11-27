@@ -35,7 +35,19 @@ private fun stamp(ms:Long)= "%02d:%02d".format(java.util.Locale.ROOT,ms/60000,ms
  for(x in items){Text(x.getString("finished_at")+" · "+status(x.getString("status")));TextButton(enabled=!busy,onClick={work{action(if(x.optString("status")=="not_requested")"request" else "read",x.getString("recording_id"))}}){Text(if(x.optString("status")=="not_requested")tr("Demander la transcription","Request transcription")else tr("Consulter","View"))}}
  if(!busy&&items.isEmpty())Text(tr("Aucun segment audio conservé.","No retained audio segments."))
  selected?.let{v->Text(status(v.optString("status")));if(v.optString("status")=="failed"&&v.optInt("attempts")<3)Button(enabled=!busy,onClick={work{action("retry",v.getString("recording_id"))}}){Text(tr("Relancer","Retry"))}
- v.optJSONObject("result")?.let{result->Text(tr("Langue détectée","Detected language")+": "+result.optString("language"));val segments=asrRows(result,"segments");val lines=segments.map{s->"["+stamp(s.getLong("start_ms"))+"–"+stamp(s.getLong("end_ms"))+"] "+s.getString("text")+(if(s.optBoolean("uncertain"))" "+tr("[incertain]","[uncertain]")else "")};for(line in lines)Text(line);if(lines.isEmpty())Text(tr("Aucune parole détectée.","No speech detected."));val draft=tr("Extraits de transcription à vérifier — segment ","Transcript excerpts to verify — segment ")+v.optString("recording_id")+"\n"+lines.joinToString("\n");if(onDraft!=null&&lines.isNotEmpty())Button(enabled=!busy&&draft.length<=8000,onClick={onDraft(draft)}){Text(tr("Insérer les extraits dans le brouillon","Insert excerpts into draft"))}}
+ v.optJSONObject("result")?.let{result->Text(tr("Langue détectée","Detected language")+": "+result.optString("language"));val segments=asrRows(result,"segments");val lines=segments.map{s->"["+stamp(s.getLong("start_ms"))+"–"+stamp(s.getLong("end_ms"))+"] "+s.getString("text")+(if(s.optBoolean("uncertain"))" "+tr("[incertain]","[uncertain]")else "")};for(line in lines)Text(line);
+ val review=result.optJSONObject("review")?.takeIf{it.optString("recording_id")==v.optString("recording_id")};if(review!=null){
+ fun sourceLine(x:JSONObject)="["+stamp(x.getLong("start_ms"))+"–"+stamp(x.getLong("end_ms"))+"] "+x.getString("text")+(if(x.optBoolean("uncertain"))" "+tr("[incertain]","[uncertain]")else "")
+ val excerpts=asrRows(review,"excerpts").map(::sourceLine);val candidates=asrRows(review,"decision_candidates").map(::sourceLine)
+ Text(tr("Extraits sourcés à vérifier","Source excerpts to review"),style=MaterialTheme.typography.titleSmall)
+ Text(tr("Sélection extractive, pas une synthèse générative. Les décisions restent à confirmer.","Extractive selection, not a generated summary. Decisions require confirmation."))
+ for(line in excerpts)Text(line)
+ Text(tr("Décisions et actions candidates","Candidate decisions and actions"),style=MaterialTheme.typography.titleSmall)
+ val none=tr("Aucune détectée par les règles.","None detected by rules.")
+ for(line in candidates)Text(line);if(candidates.isEmpty())Text(none)
+ val reviewDraft=tr("Extraits sourcés à vérifier — ","Source excerpts to review — ")+v.optString("recording_id")+"\n"+excerpts.joinToString("\n")+"\n\n"+tr("Décisions/actions candidates (non validées)","Candidate decisions/actions (not approved)")+"\n"+(if(candidates.isEmpty())none else candidates.joinToString("\n"))
+ if(onDraft!=null&&excerpts.isNotEmpty())Button(enabled=!busy&&reviewDraft.length<=8000,onClick={onDraft(reviewDraft)}){Text(tr("Insérer la revue sourcée dans le brouillon","Insert source review into draft"))}
+ };if(lines.isEmpty())Text(tr("Aucune parole détectée.","No speech detected."));val draft=tr("Extraits de transcription à vérifier — segment ","Transcript excerpts to verify — segment ")+v.optString("recording_id")+"\n"+lines.joinToString("\n");if(onDraft!=null&&lines.isNotEmpty())Button(enabled=!busy&&draft.length<=8000,onClick={onDraft(draft)}){Text(tr("Insérer les extraits dans le brouillon","Insert excerpts into draft"))}}
  }}
  if(onArchives!=null)TextButton(onClick=onArchives){Text(tr("Ouvrir les comptes rendus","Open minutes"))}
  }}
