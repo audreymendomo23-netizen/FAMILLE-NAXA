@@ -232,3 +232,25 @@ Preuve lue sur c061a74 : run 45974386935 job 140422366599 : 46 tests, 46 réussi
 | ea39b41 | ZIPPLE — Cloudflare Pages build qualification | [45973990373](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990373) | success |
 
 Aucune modification de main, des applications sœurs ou de production. Reprise sur les runs en attente et les écarts ci-dessus.
+
+
+## Consolidation des interfaces et preuves — 27/11/2026
+Candidat fonctionnel `3277412a8779bca2070802a048cd2cff17d3fb71`. Six commits après la passation 276773a, 28 fichiers modifiés. 550b4ee : pauses géolocalisées et RH demandes/validation; 1d76eb4 : consommation d'avantage non financier, preuve et restauration; 8e74590 : carte fidélité distincte du parrainage, rattachement invité limité à sa commande, consentement et limite de tentatives; 4dfbaf0 : recettes Web/Android élargies; b732538 : préférence FR/EN appliquée et message WhatsApp préparé avec consentement; 3277412 : inbox enrichie et navigation vers écrans métier. Aucun virement ou remise financière implicite, aucune donnée client réelle utilisée.
+
+Preuves effectivement constatées :
+- dcd8080 run [45974575632](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974575632) terminé SUCCESS; suites navigateur dédiées et historique 1/1 chacune, Android 1/1, 0 échec/0 ignoré. Marqueurs ZIPPLE_BULK45_REAL_BROWSER_NINE_WORKSPACES_PASS, ZIPPLE_BULK4_REAL_BROWSER_LOYALTY_DELIVERY_CONNECTIONS_PASS, ZIPPLE_BULK45_NATIVE_WORKSPACES_PASS et ZIPPLE_BULK45_NATIVE_WORKSPACE_PERSISTENCE_PASS. Archives vérifiées : [captures 15186543724](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974575632/artifacts/15186543724), [rapport Android 15186793133](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974575632/artifacts/15186793133). Ces preuves concernent l'ancien périmètre (12 espaces), pas la dernière révision complète.
+- [45975561465](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45975561465) 550b4ee : ZIPPLE_BULK5_HR_APPROVAL_AND_GPS_BREAK_PASS, 46/46.
+- [45975879038](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45975879038) 1d76eb4 : ZIPPLE_LOYALTY_REAL_REDEMPTION_AND_RESTORE_PASS, 46/46.
+- [45976055801](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976055801) 8e74590 et [45976448002](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976448002) b732538 : ZIPPLE_GUEST_LOYALTY_OPAQUE_CARD_SCOPE_PASS + RH et consommation, 46/46, 0 échec/skip. Dernier build Web b732538 SUCCESS [45976447952](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976447952). Vérification de l'intégralité du candidat final non présumée.
+
+| Gate candidat 3277412 | Exécution | État observé |
+|---|---|---|
+| ZIPPLE N1 — hosted Android debug handoff | [45976604387](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604387) | queued |
+| ZIPPLE N1 — isolated foundation | [45976604507](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604507) | queued |
+| ZIPPLE N1 — PWA multi-browser qualification | [45976604931](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604931) | queued |
+| ZIPPLE N2–N5 — isolated business candidate | [45976604475](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604475) | queued |
+| ZIPPLE — Cloudflare Pages build qualification | [45976604515](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604515) | in_progress |
+| ZIPPLE business — real local Supabase | [45976604468](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604468) | queued |
+| ZIPPLE N1 — live Cloudflare Pages recipe | [45976604388](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604388) | queued |
+
+Limites restant ouvertes : livraison publique opérationnelle (QR dédié, tarif/frais comptabilisés, géolocalisation/routage, missions et remise réelle), confirmation opérateur via contrat NAXA compatible sans compte, vidéo SECURITY et contrats HOTEL/GRILLAD, support central/livechat et push réels, assistant conversationnel/voix/OCR, intégration complète de paie/comptabilité et progression RH, traduction Fulfulde, scan caméra Android/QR natif, parité exhaustive et qualification hébergée. Les demandes de connexion partenaires ne constituent pas un raccordement. Les avantages non financiers sont distincts de la remise tarifaire. Aucun déploiement ou migration production, aucun changement main ou application sœur. Le statut global demeure PARTIEL jusqu'aux preuves manquantes.
