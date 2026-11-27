@@ -3,6 +3,7 @@ import {calculerBalance} from "./accounting/calculs";
 import {downloadCsv} from "./accounting/exports";
 import {LedgerAllocations} from "./LedgerAllocations";
 import {FinancialStatements} from "./FinancialStatements";
+import {LedgerMappings} from "./LedgerMappings";
 import type {CompteComptable,EcritureComptable} from "./accounting/types";
 type Props={call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean};
 export function LedgerWorkspace({call,disabled,en}:Props){
@@ -33,6 +34,7 @@ export function LedgerWorkspace({call,disabled,en}:Props){
  <label>{t("Compte crédit","Credit account")}<select value={credit} onChange={e=>CR(e.target.value)}><option value="">—</option>{accounts.map(x=><option key={x.id} value={x.id}>{x.code} · {x.libelle}</option>)}</select></label>
  <label>{t("Libellé de l’écriture","Entry description")}<input value={desc} onChange={e=>DS(e.target.value)}/></label>
  <button disabled={lock||!event||!debit||!credit||debit===credit||!journal.trim()||desc.trim().length<5} onClick={()=>run(async()=>{const body={kind:event.kind,source_id:event.source_id,journal,debit_account:debit,credit_account:credit,label:desc};const encoded=JSON.stringify(body);if(pending.current?.body!==encoded)pending.current={body:encoded,id:crypto.randomUUID()};await call("ledger_post",{...body,request_id:pending.current.id});pending.current=null;SO("");DS("");await load()})}>{t("Valider l’écriture équilibrée","Post balanced entry")}</button>
+ <LedgerMappings call={call} disabled={lock} en={en} data={data} kinds={kinds} refresh={load}/>
  <LedgerAllocations call={call} disabled={lock} en={en} data={data} refresh={load}/>
  <h5>{t("Journal validé","Posted journal")}</h5>
  <button disabled={lock||!entries.length} onClick={()=>downloadCsv("zipple-journal.csv",[[t("Date","Date"),t("Journal","Journal"),t("Écriture","Entry"),t("Source","Source"),t("Libellé","Description"),t("Compte","Account"),t("Débit FCFA","Debit XAF"),t("Crédit FCFA","Credit XAF")],...entries.flatMap(x=>x.lignes.map(l=>[x.dateEcriture,x.journalCode,x.id,x.referenceSource,x.libelle,accounts.find(a=>a.id===l.compteId)?.code,String(l.debitFcfa),String(l.creditFcfa)]))])}>{t("Exporter le journal CSV","Export journal CSV")}</button>{entries.map(x=><div key={x.id}><p>{x.dateEcriture} · {x.journalCode} · {x.libelle}</p>{x.lignes.map((l,i)=><p key={i}>{accounts.find(a=>a.id===l.compteId)?.code} · {t("Débit","Debit")} {money(BigInt(l.debitFcfa))} · {t("Crédit","Credit")} {money(BigInt(l.creditFcfa))}</p>)}</div>)}

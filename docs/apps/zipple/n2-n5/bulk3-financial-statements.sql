@@ -54,4 +54,43 @@ declare m public.zp_members;s public.zp_credit_sales;x public.zp_credit_followup
 do $$ declare t text;f record;begin
  foreach t in array array['zp_ledger_classifications','zp_credit_limit_history','zp_credit_followups'] loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert on public.%I to service_role',t);end loop;
  for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_ledger_classify','zp_ledger_statement','zp_credit_limit_revise','zp_credit_followup') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;end $$;
+
+-- Explicitly authorized accounting rules; no preset tax regime or automatic financial posting.
+create table public.zp_ledger_mapping_versions(
+ id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,member_id uuid not null,request_id uuid not null,
+ kind text not null,version int not null check(version>0),debit_account uuid not null,credit_account uuid not null,
+ journal_code text not null check(length(journal_code) between 1 and 30),reason text not null check(length(reason) between 5 and 500),
+ created_at timestamptz not null default now(),unique(site_id,kind,version),unique(member_id,request_id),
+ check(debit_account<>credit_account),foreign key(debit_account,org_id,site_id) references public.zp_ledger_accounts(id,org_id,site_id),
+ foreign key(credit_account,org_id,site_id) references public.zp_ledger_accounts(id,org_id,site_id),foreign key(member_id,org_id) references public.zp_members(id,org_id));
+create table public.zp_ledger_mapping_posts(entry_id uuid primary key references public.zp_ledger_entries(id),mapping_id uuid not null references public.zp_ledger_mapping_versions(id));
+create function public.zp_ledger_mapping_set(p_access text,p_site uuid,p_request uuid,p_kind text,p_expected int,p_debit uuid,p_credit uuid,p_journal text,p_reason text) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $map$
+declare m public.zp_members;x public.zp_ledger_mapping_versions;v int;i uuid;j text:=upper(trim(coalesce(p_journal,'')));why text:=trim(coalesce(p_reason,''));begin
+ m:=public.zp_ledger_owner(p_access,p_site);perform 1 from public.zp_site_modes where site_id=p_site for update;
+ if p_request is null or p_kind is null or p_kind not in ('sale','credit_sale','credit_payment','sale_cost','purchase_receipt','supplier_payment','expense','inventory_loss','deposit_in','deposit_out','braise_loss','transfer_loss','prepared_transfer_loss','refund','withdrawal','prepared_expiry_loss','inventory_gain','credit_note','credit_refund','stock_return') or p_expected is null or p_expected<0 or p_debit is null or p_credit is null or p_debit=p_credit or length(j) not between 1 and 30 or length(why) not between 5 and 500 then raise exception 'INVALID_LEDGER_MAPPING';end if;
+ select * into x from public.zp_ledger_mapping_versions where member_id=m.id and request_id=p_request;
+ if x.id is not null then if (x.site_id,x.kind,x.version,x.debit_account,x.credit_account,x.journal_code,x.reason) is distinct from (p_site,p_kind,p_expected+1,p_debit,p_credit,j,why) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return x.id;end if;
+ if (select count(*) from public.zp_ledger_accounts a join public.zp_ledger_classifications c on c.account_id=a.id where a.org_id=m.org_id and a.site_id=p_site and a.id in (p_debit,p_credit))<>2 then raise exception 'LEDGER_MAPPING_REQUIRES_CLASSIFIED_ACCOUNTS';end if;
+ select coalesce(max(version),0) into v from public.zp_ledger_mapping_versions where site_id=p_site and kind=p_kind;
+ if v<>p_expected then raise exception 'STALE_LEDGER_MAPPING';end if;
+ insert into public.zp_ledger_mapping_versions(org_id,site_id,member_id,request_id,kind,version,debit_account,credit_account,journal_code,reason) values(m.org_id,p_site,m.id,p_request,p_kind,v+1,p_debit,p_credit,j,why) returning id into i;return i;end $map$;
+create function public.zp_ledger_mapping_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $map$
+declare m public.zp_members;begin m:=public.zp_ledger_owner(p_access,p_site);
+ return jsonb_build_object('rules',coalesce((select jsonb_agg(to_jsonb(v) order by v.kind,v.version desc) from (select x.id,x.kind,x.version,x.debit_account,x.credit_account,x.journal_code,x.reason,x.created_at,d.code debit_code,c.code credit_code,(x.version=max(x.version) over(partition by x.kind)) active from public.zp_ledger_mapping_versions x join public.zp_ledger_accounts d on d.id=x.debit_account join public.zp_ledger_accounts c on c.id=x.credit_account where x.org_id=m.org_id and x.site_id=p_site)v),'[]'::jsonb),'accounts',coalesce((select jsonb_agg(jsonb_build_object('id',a.id,'code',a.code,'label',a.label,'kind',c.kind) order by a.code) from public.zp_ledger_accounts a join public.zp_ledger_classifications c on c.account_id=a.id where a.org_id=m.org_id and a.site_id=p_site),'[]'::jsonb));end $map$;
+create function public.zp_ledger_post_mapped(p_access text,p_site uuid,p_mapping uuid,p_source uuid,p_request uuid,p_label text) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $map$
+declare m public.zp_members;x public.zp_ledger_mapping_versions;e public.zp_ledger_entries;i uuid;begin
+ m:=public.zp_ledger_owner(p_access,p_site);perform 1 from public.zp_site_modes where site_id=p_site for update;
+ select * into x from public.zp_ledger_mapping_versions where id=p_mapping and org_id=m.org_id and site_id=p_site;if x.id is null then raise exception 'DENIED';end if;
+ select * into e from public.zp_ledger_entries where member_id=m.id and request_id=p_request;
+ if e.id is not null then if not exists(select 1 from public.zp_ledger_mapping_posts where entry_id=e.id and mapping_id=x.id) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return public.zp_ledger_post(p_access,p_site,x.kind,p_source,p_request,x.journal_code,x.debit_account,x.credit_account,p_label);end if;
+ if exists(select 1 from public.zp_ledger_mapping_versions where site_id=p_site and kind=x.kind and version>x.version) then raise exception 'STALE_LEDGER_MAPPING';end if;
+ i:=public.zp_ledger_post(p_access,p_site,x.kind,p_source,p_request,x.journal_code,x.debit_account,x.credit_account,p_label);
+ insert into public.zp_ledger_mapping_posts values(i,x.id);return i;end $map$;
+alter table public.zp_ledger_mapping_versions enable row level security;
+alter table public.zp_ledger_mapping_posts enable row level security;
+revoke all on public.zp_ledger_mapping_versions,public.zp_ledger_mapping_posts from public,anon,authenticated;
+grant select,insert on public.zp_ledger_mapping_versions,public.zp_ledger_mapping_posts to service_role;
+revoke all on function public.zp_ledger_mapping_set(text,uuid,uuid,text,int,uuid,uuid,text,text),public.zp_ledger_mapping_snapshot(text,uuid),public.zp_ledger_post_mapped(text,uuid,uuid,uuid,uuid,text) from public,anon,authenticated;
+grant execute on function public.zp_ledger_mapping_set(text,uuid,uuid,text,int,uuid,uuid,text,text),public.zp_ledger_mapping_snapshot(text,uuid),public.zp_ledger_post_mapped(text,uuid,uuid,uuid,uuid,text) to service_role;
+
 commit;
