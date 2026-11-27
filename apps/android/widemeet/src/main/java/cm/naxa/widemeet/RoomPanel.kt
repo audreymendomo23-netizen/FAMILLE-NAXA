@@ -82,6 +82,14 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  if(r!=null){val status=r.optString("status");val isHost=r.optString("hostId")==session.memberId&&hostRole
  var remaining by remember(r.optLong("endMs"),r.optLong("serverNowMs")){mutableStateOf(0L)}
  LaunchedEffect(r.optLong("endMs"),r.optLong("serverNowMs"),status){val end=r.optLong("endMs");val base=r.optLong("serverNowMs",System.currentTimeMillis());val start=android.os.SystemClock.elapsedRealtime();while(status in setOf("open","paused")){remaining=((end-base-(android.os.SystemClock.elapsedRealtime()-start)+999)/1000).coerceAtLeast(0);delay(1000)}}
+ if(!isHost&&status=="open"&&r.optString("response")=="accepted"&&r.optBoolean("lobbyRequired")&&r.optString("lobbyStatus")!="admitted"){
+ Text(when(r.optString("lobbyStatus")){"waiting"->tr("En attente de l’organisateur","Waiting for the host");"rejected"->tr("Admission refusée","Admission declined");else->tr("Salle d’attente","Waiting room")})
+ Button(enabled=!busy&&!r.optBoolean("admissionLocked")&&r.optString("lobbyStatus")!="waiting",onClick={command("lobby_request")}){Text(tr("Demander à rejoindre","Request to join"))}
+ }
+ if(isHost&&status=="open"&&r.optBoolean("lobbyRequired")){
+ Text(tr("Salle d’attente","Waiting room"))
+ rows(r.optJSONArray("participants")).filter{it.optString("lobbyStatus")=="waiting"}.forEach{p->val id=p.optString("memberId");Text(displayName(id));TextButton(enabled=!busy&&!r.optBoolean("admissionLocked"),onClick={command("lobby_admit",null,id)}){Text(tr("Admettre","Admit"))};TextButton(enabled=!busy,onClick={command("lobby_reject",null,id)}){Text(tr("Refuser","Decline"))}}
+ }
  if(isHost&&status in setOf("scheduled","open")){
  Text(tr("Inviter un membre","Invite a member"))
  contacts.filter{c->rows(r.optJSONArray("participants")).none{it.optString("memberId")==c.optString("member_id")}}.forEach{c->TextButton(enabled=!busy,onClick={command("invite_member",null,c.optString("member_id"))}){Text(c.optString("display_name"))}}
@@ -92,6 +100,7 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  TextButton(enabled=!busy,onClick={execute("read",JSONObject().put("room_id",r.getString("id")))}){Text(tr("Actualiser","Refresh"))}
  if(!isHost&&status in setOf("scheduled","open")){listOf("accepted" to tr("Accepter","Accept"),"maybe" to tr("Peut-être","Maybe"),"declined" to tr("Décliner","Decline")).forEach{(v,l)->TextButton(enabled=!busy,onClick={command("respond",v)}){Text(l)}}}
  if(isHost&&status=="scheduled"){
+ TextButton(enabled=!busy,onClick={command("lobby_config",!r.optBoolean("lobbyRequired"))}){Text(if(r.optBoolean("lobbyRequired"))tr("Désactiver la salle d’attente","Disable waiting room")else tr("Activer la salle d’attente","Enable waiting room"))}
  TextButton(enabled=!busy,onClick={title=r.optString("title");description=r.optString("description");duration=r.optInt("durationMinutes").toString();date=java.time.Instant.ofEpochMilli(r.optLong("scheduledMs")).atZone(ZoneId.systemDefault()).toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"));editing=true}){Text(tr("Modifier la réunion","Edit meeting"))}
  TextButton(enabled=!busy,onClick={cancelConfirm=true}){Text(tr("Annuler la réunion","Cancel meeting"))}
  if(cancelConfirm)AlertDialog(onDismissRequest={cancelConfirm=false},title={Text(tr("Annuler cette réunion ?","Cancel this meeting?"))},confirmButton={TextButton(onClick={cancelConfirm=false;command("cancel")}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={cancelConfirm=false}){Text(tr("Retour","Back"))}})
