@@ -60,7 +60,8 @@ internal val portalPages=listOf(PortalPage("hr","Absences et rémunérations","L
  if(manage||page=="tickets"){
  OutlinedTextField(v("title"),{set("title",it.take(160))},label={Text(t("Intitulé","Title"))},modifier=Modifier.fillMaxWidth(),enabled=allowed)
  OutlinedTextField(v("detail"),{set("detail",it.take(1000))},label={Text(t("Description","Description"))},modifier=Modifier.fillMaxWidth(),enabled=allowed)
- OutlinedTextField(v("category"),{set("category",it.take(80))},label={Text(t("Catégorie","Category"))},modifier=Modifier.fillMaxWidth(),enabled=allowed)
+ val categories=when(page){"tickets"->listOf("account" to t("Compte","Account"),"payment" to t("Paiement","Payment"),"technical" to t("Technique","Technical"),"other" to t("Autre","Other"));"incidents"->listOf("service" to t("Service","Service"),"quality" to t("Qualité","Quality"),"safety" to t("Sécurité","Safety"));else->emptyList()}
+ if(categories.isNotEmpty())PortalSelect(t("Catégorie","Category"),categories,v("category"),allowed){set("category",it)}else OutlinedTextField(v("category"),{set("category",it.take(80))},label={Text(t("Thème","Topic"))},modifier=Modifier.fillMaxWidth(),enabled=allowed)
  PortalSelect(t("Priorité","Priority"),listOf("normal" to t("Normale","Normal"),"urgent" to t("Urgente","Urgent")),v("priority").ifBlank{"normal"},allowed){set("priority",it)}
  if(manage)PortalSelect(t("Employé affecté","Assigned employee"),options,v("assignee_id"),allowed){set("assignee_id",it)}
  if(page=="planning")OutlinedTextField(v("starts_at"),{set("starts_at",it)},label={Text(t("Début AAAA-MM-JJTHH:MM (Douala)","Start YYYY-MM-DDTHH:MM (Douala)"))},modifier=Modifier.fillMaxWidth(),enabled=allowed)

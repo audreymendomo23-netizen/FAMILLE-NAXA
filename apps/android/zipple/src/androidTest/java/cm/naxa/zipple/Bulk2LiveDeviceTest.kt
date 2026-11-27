@@ -123,7 +123,7 @@ class Bulk2LiveDeviceTest {
   click("Profil")
   step("profile edit"){val matcher=hasText("Nom affiché",substring=false) and hasSetTextAction();compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1};compose.onNode(matcher).performScrollTo().performTextReplacement("Profil ERP natif")}
   input("Téléphone professionnel","699123456");click("Enregistrer le profil");awaitText("Opération enregistrée")
-  click("Support professionnel");input("Intitulé","Ticket ERP natif");input("Description","Demande interne native");input("Catégorie","technical");click("Créer");awaitText("Ticket ERP natif · Ouvert")
+  click("Support professionnel");input("Intitulé","Ticket ERP natif");input("Description","Demande interne native");click("Catégorie : —");click("Technique");click("Créer");awaitText("Ticket ERP natif · Ouvert")
   click("Ouvrir le dossier");input("Message ou observation","Réponse native");click("Envoyer");awaitText("Opération enregistrée")
   click("En cours");awaitText("Ticket ERP natif · En cours");click("Terminé");awaitText("Ticket ERP natif · Terminé")
   click("Notifications");awaitText("Ticket ERP natif · Nouveau");click("Filtrer les notifications : Toutes");click("Lues");step("unread ticket excluded"){compose.onNodeWithText("Ticket ERP natif · Nouveau",substring=false).assertDoesNotExist()};click("Filtrer les notifications : Lues");click("Non lues");awaitText("Ticket ERP natif · Nouveau")

@@ -106,3 +106,35 @@ test("B5-009 assigned incident dialogue, manager state and immutable closed hist
  assert.equal(saved.state,"done");assert.equal(saved.messages.length,1);assert.equal(saved.messages[0].body,"Correction proposée");
  console.log("ZIPPLE_QA_CASE_PARTIAL B5-009 INCIDENT_SCOPE_AND_CLOSURE_PASS");
 });
+
+test("B5-006 B5-008 objectives and training scoped lifecycle and validation",async()=>{
+ const {org,site,ok}=await fixture();const staff=await actor(org,site,"staff"),other=await actor(org,site,"staff"),manager=await actor(org,site,"manager");
+ const write=(operation,payload,request_id=id())=>({operation,payload,request_id});
+ for(const [kind,page] of [["objective","objectives"],["training","training"]]){
+  const payload={kind,title:"QA "+kind,detail:"Suivi et validation humaine",category:"service",priority:"urgent",assignee_id:staff.member,due_at:"2027-05-04T12:00:00Z"};
+  assert.equal((await staff.b("workspace_write",write("work_create",payload))).status,403);
+  const req=write("work_create",payload),record=await manager.ok("workspace_write",req);assert.equal((await manager.ok("workspace_write",req)).id,record.id);
+  const assigned=(await staff.ok("workspace_snapshot",{page})).rows.find(x=>x.id===record.id);assert.equal(assigned.priority,"urgent");assert.equal(assigned.assignee_id,staff.member);assert.equal(assigned.state,"open");
+  assert.equal((await other.ok("workspace_snapshot",{page})).rows.some(x=>x.id===record.id),false);
+  assert.equal((await staff.b("workspace_write",write("work_state",{work_id:record.id,expected_state:"open",state:"in_progress"}))).status,403);
+  await manager.ok("workspace_write",write("work_state",{work_id:record.id,expected_state:"open",state:"in_progress"}));
+  await denied(manager.b,"workspace_write",write("work_state",{work_id:record.id,expected_state:"open",state:"cancelled"}),"INVALID_TRANSITION");
+  await staff.ok("workspace_write",write("work_reply",{work_id:record.id,body:"Travail soumis au contrôle"}));
+  await manager.ok("workspace_write",write("work_state",{work_id:record.id,expected_state:"in_progress",state:"done"}));
+  const saved=(await staff.ok("workspace_snapshot",{page})).rows.find(x=>x.id===record.id);assert.equal(saved.state,"done");assert.equal(saved.messages.length,1);
+  assert.equal(Number(await scalar("select count(*) from zp_work_items where id=$1 and site_id=$2 and state='done'",[record.id,site])),1);
+  console.log("ZIPPLE_QA_CASE_PARTIAL "+(kind==="objective"?"B5-006":"B5-008")+" ASSIGNMENT_VALIDATION_SCOPE_PASS");
+ }
+});
+test("B4-034 private inbox read persistence and independent member state",async()=>{
+ const {org,site,ok}=await fixture();const staff=await actor(org,site,"staff"),other=await actor(org,site,"staff");
+ const write=(operation,payload,request_id=id())=>({operation,payload,request_id});
+ const record=await ok("workspace_write",write("work_create",{kind:"incident",title:"QA notification privée",detail:"Notification assignée",category:"service",priority:"urgent",assignee_id:staff.member,due_at:"2027-05-05T12:00:00Z"}));
+ const event=(await staff.ok("workspace_snapshot",{page:"notifications"})).rows.find(x=>x.event_key.startsWith("work:"+record.id+":"));assert.ok(event);assert.equal(event.is_read,false);
+ const mark=write("inbox_read",{event_key:event.event_key});assert.equal((await other.b("workspace_write",mark)).status,403);
+ assert.equal((await staff.ok("workspace_write",mark)).confirmed,true);assert.equal((await staff.ok("workspace_write",mark)).confirmed,true);
+ assert.equal((await staff.ok("workspace_snapshot",{page:"notifications"})).rows.find(x=>x.event_key===event.event_key).is_read,true);
+ assert.equal((await ok("workspace_snapshot",{page:"notifications"})).rows.find(x=>x.event_key===event.event_key).is_read,false);
+ assert.equal(Number(await scalar("select count(*) from zp_inbox_reads where site_id=$1 and event_key=$2",[site,event.event_key])),1);
+ console.log("ZIPPLE_QA_CASE_PARTIAL B4-034 PRIVATE_READ_PERSISTENCE_PASS");
+});
