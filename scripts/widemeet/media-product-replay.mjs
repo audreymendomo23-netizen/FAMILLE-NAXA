@@ -125,9 +125,23 @@ try{
  await cmd(gs.access_token,"consent",true);await cmd(hs.access_token,"record",true);
  await until(()=>phase("active"),"consented actual Egress active",90000);
  const statusActive=await good(roomApi+"/read",{room_id:rid},gs.access_token);assert.equal(statusActive.recordingStatus.phase,"active");assert.equal(statusActive.recordingStatus.provider_id,undefined);
- await delay(2500);
+ const liveEnabled=process.env.WM_LIVE_CAPTIONS_QUALIFIED==="true";
  const first=(await getRuns())[0];assert.ok(first.provider_id);
+ if(liveEnabled){
+  await b.evaluate(()=>window.r.localParticipant.setMicrophoneEnabled(false));
+  await delay(12000);
+  const liveWorker=createLiveCaptions({supabaseUrl:base,serviceKey,outputDirectory:process.env.WM_EGRESS_OUT,python:process.env.WM_ASR_PYTHON,modelDir:process.env.WM_ASR_MODEL});
+  await until(async()=>await liveWorker.tick()>0,"actual caption before consent withdrawal",45000);
+  const live=await good(roomApi+"/transcription",{action:"live-captions",data:{room_id:rid,language:"original"}},hs.access_token);assert.equal(live.status,"ready");
+ }else await delay(2500);
  await cmd(gs.access_token,"consent",false);
+ if(liveEnabled){
+  const blocked=await request(roomApi+"/transcription",{action:"live-captions",data:{room_id:rid,language:"original"}},hs.access_token);assert.equal(blocked.data.status,"unavailable");
+  const guest=await request(roomApi+"/transcription",{action:"live-captions",data:{room_id:rid,language:"original"}},gs.access_token);assert.equal(guest.status,403);
+  const rows=await fetch(base+"/rest/v1/wm_live_captions?recording_id=eq."+first.id,{headers:{apikey:serviceKey,Authorization:"Bearer "+serviceKey}});assert.ok(rows.ok);assert.deepEqual(await rows.json(),[]);
+  await b.evaluate(()=>window.r.localParticipant.setMicrophoneEnabled(true));
+  console.log("PASS actual participant consent withdrawal immediately fences and purges live captions");
+ }
  assert.equal((await getRuns())[0].phase,"stopping");
  assert.equal((await good(roomApi+"/read",{room_id:rid},hs.access_token)).recordingStatus.phase,"stopping");
  await until(()=>phase("discarded"),"withdrawal Egress stop and quarantine removal",90000);
