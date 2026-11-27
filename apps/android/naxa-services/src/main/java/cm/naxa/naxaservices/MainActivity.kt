@@ -370,9 +370,10 @@ private fun NaxaServicesRoot(
     LaunchedEffect(session?.accessToken,localPinUnlockedMemberId,rememberSession,offlineRestored) {
         val current=session?:return@LaunchedEffect
         if(offlineRestored||!rememberSession||localPinUnlockedMemberId!=current.account.memberId||!localPinManager.isConfigured(current.account.memberId))return@LaunchedEffect
+        val expected=vault.binding()?:return@LaunchedEffect
         try{
             val access=api.subscriptionAccess(current.accessToken)
-            if(session?.accessToken==current.accessToken&&!offlineRestored&&rememberSession)vault.saveOfflineSnapshot(current,access)
+            if(session?.accessToken==current.accessToken&&!offlineRestored&&rememberSession)vault.saveOfflineSnapshot(current,access,expected)
         }catch(c:CancellationException){throw c}catch(_:Exception){}
     }
     LaunchedEffect(offlineRestored,session?.refreshToken) {
@@ -545,15 +546,15 @@ private fun NaxaServicesRoot(
                                 busy = busy,
                                 error = message,
                                 onLogout = {
+                                    val logoutToken=vault.loadAccessToken()?:current.accessToken
+                                    vault.clear()
+                                    NaxaServicesSyncScheduler.cancel(context)
+                                    PushTokenRegistry.disable(context)
+                                    rememberSession=false;session=null;pendingRefresh=null;localPinUnlockedMemberId=null
+                                    offlineRestored=false;tourActive=false;route=AppRoute.LOGIN.name
                                     scope.launch {
-                                        runCatching { api.revokeCurrentDevicePushTokens(current.accessToken) }
-                                        PushTokenRegistry.disable(context)
-                                        runCatching { api.logout(current.accessToken) }
-                                        vault.clear()
-                                        rememberSession = false
-                                        session = null
-                                        tourActive = false
-                                        route = AppRoute.LOGIN.name
+                                        runCatching { api.revokeCurrentDevicePushTokens(logoutToken) }
+                                        runCatching { api.logout(logoutToken) }
                                     }
                                 }
                             ) { selected ->
@@ -648,21 +649,18 @@ private fun NaxaServicesRoot(
                                     },
                                     onNavigate = { route = it.name },
                                     onLogout = {
+                                        val logoutToken=vault.loadAccessToken()?:current.accessToken
+                                        vault.clear()
+                                        NaxaServicesSyncScheduler.cancel(context)
+                                        androidx.work.WorkManager.getInstance(context).cancelUniqueWork(
+                                            "naxa-services-charge-reminders-" + current.account.organizationId
+                                        )
+                                        PushTokenRegistry.disable(context)
+                                        rememberSession=false;localPinUnlockedMemberId=null;session=null;pendingRefresh=null
+                                        offlineRestored=false;tourActive=false;route=AppRoute.LOGIN.name
                                         scope.launch {
-                                            androidx.work.WorkManager.getInstance(context).cancelUniqueWork(
-                                                "naxa-services-charge-reminders-" + current.account.organizationId
-                                            )
-                                            NaxaServicesSyncScheduler.cancel(context)
-                                            runCatching { api.revokeCurrentDevicePushTokens(current.accessToken) }
-                                            PushTokenRegistry.disable(context)
-                                            runCatching { api.logout(current.accessToken) }
-                                            vault.clear()
-                                            rememberSession = false
-                                            localPinUnlockedMemberId = null
-                                            session = null
-                                            offlineRestored=false
-                                            tourActive = false
-                                            route = AppRoute.LOGIN.name
+                                            runCatching { api.revokeCurrentDevicePushTokens(logoutToken) }
+                                            runCatching { api.logout(logoutToken) }
                                         }
                                     },
                                     message = message,

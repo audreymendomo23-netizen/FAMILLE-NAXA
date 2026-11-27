@@ -77,7 +77,7 @@ class OfflineSessionVaultInstrumentedTest {
                 setOf("terms:2026-11-v1","privacy:2026-11-v1"),true,true)
             val session=AuthSession(jwt,"fixture-refresh",600,false,account,"fixture-device")
             val access=JSONObject().put("state","active").put("paid_access",true).put("erp_access",true).put("period_end_exclusive","2099-01-01")
-            vault.save(session);vault.saveOfflineSnapshot(session,access)
+            vault.save(session);val originalBinding=vault.binding()!!;vault.saveOfflineSnapshot(session,access,originalBinding)
             val restored=SessionVault(context).loadOfflineSnapshot()
             assertNotNull(restored)
             assertEquals(account,restored!!.account)
@@ -89,6 +89,12 @@ class OfflineSessionVaultInstrumentedTest {
             assertFalse(cipher.contains("Fixture name"))
             vault.save(session.copy(refreshToken="rotated-fixture"))
             assertNull(SessionVault(context).loadOfflineSnapshot())
+            vault.clear()
+            vault.save(session) // Same fixture tokens and account, but a different login generation.
+            vault.saveOfflineSnapshot(session,access,originalBinding)
+            assertNull(SessionVault(context).loadOfflineSnapshot())
+            vault.saveOfflineSnapshot(session,access,vault.binding())
+            assertNotNull(SessionVault(context).loadOfflineSnapshot())
             vault.clear()
             assertNull(SessionVault(context).loadOfflineSnapshot())
         }finally{vault.clear()}

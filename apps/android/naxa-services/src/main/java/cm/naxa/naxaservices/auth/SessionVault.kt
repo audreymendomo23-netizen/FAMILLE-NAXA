@@ -31,7 +31,9 @@ class SessionVault(private val context: Context) {
     fun save(session: AuthSession) = synchronized(vaultLock) {
         val previous=binding()
         val generation=if(previous?.memberId==session.account.memberId&&previous.deviceId==session.deviceId)previous.generation else UUID.randomUUID().toString()
-        preferences.edit()
+        val editor=preferences.edit()
+        if(previous?.generation!=generation || loadAccessToken()!=session.accessToken || loadRefreshToken()!=session.refreshToken)editor.remove("offline_snapshot")
+        editor
             .putString("access", encrypt(session.accessToken))
             .putString("refresh", encrypt(session.refreshToken))
             .putString("member_id", session.account.memberId)
@@ -79,8 +81,10 @@ class SessionVault(private val context: Context) {
     fun loadDeviceId(): String? = preferences.getString("device_id", null)?.let(::decrypt)
 
     private fun bootCount():Int = Settings.Global.getInt(context.contentResolver,"boot_count",-1)
-    internal fun clearOfflineSnapshot(){preferences.edit().remove("offline_snapshot").apply()}
-    internal fun saveOfflineSnapshot(session:AuthSession,access:JSONObject) {
+    internal fun clearOfflineSnapshot(){synchronized(vaultLock){preferences.edit().remove("offline_snapshot").apply()}}
+    internal fun saveOfflineSnapshot(session:AuthSession,access:JSONObject,expected:RememberedBinding?=binding()) {
+        synchronized(vaultLock){
+        if(expected==null||binding()!=expected||expected.memberId!=session.account.memberId||expected.deviceId!=session.deviceId)return
         if(loadRefreshToken()!=session.refreshToken||loadAccessToken()!=session.accessToken)return
         val wall=System.currentTimeMillis();val boot=bootCount()
         if(boot<0)return
@@ -90,15 +94,18 @@ class SessionVault(private val context: Context) {
         val until=OfflineSessionPolicy.expiresAt(session,access,exp,wall)?:run{clearOfflineSnapshot();return}
         val a=session.account;val sites=JSONArray()
         a.activeSites.forEach{s->sites.put(JSONObject().put("id",s.id).put("code",s.code).put("name",s.name).put("address",s.addressLabel).put("phone",s.phoneContact))}
-        val payload=JSONObject().put("access",session.accessToken).put("refresh",session.refreshToken).put("device",session.deviceId)
+        val payload=JSONObject().put("generation",expected.generation).put("access",session.accessToken).put("refresh",session.refreshToken).put("device",session.deviceId)
             .put("member",a.memberId).put("display",a.displayName).put("role",a.roleCode).put("org",a.organizationId)
             .put("org_name",a.organizationName).put("mode",a.businessMode).put("locale",a.defaultLocale).put("activity",a.activityProfile)
             .put("legal",JSONArray(a.acceptedLegalDocs.toList())).put("site_ids",JSONArray(a.activeSiteIds)).put("sites",sites)
             .put("wall",wall).put("elapsed",SystemClock.elapsedRealtime()).put("boot",boot).put("until",until)
         preferences.edit().putString("offline_snapshot",encrypt(payload.toString())).apply()
+        }
     }
-    internal fun loadOfflineSnapshot():AuthSession? = runCatching{
+    internal fun loadOfflineSnapshot():AuthSession? = synchronized(vaultLock){runCatching{
         val json=JSONObject(preferences.getString("offline_snapshot",null)?.let(::decrypt)?:return null)
+        val binding=binding()?:return null
+        if(json.optString("generation")!=binding.generation||json.optString("member")!=binding.memberId||json.optString("device")!=binding.deviceId)return null
         val now=System.currentTimeMillis()
         if(!OfflineSessionPolicy.valid(json.getLong("wall"),json.getLong("elapsed"),json.getInt("boot"),json.getLong("until"),now,SystemClock.elapsedRealtime(),bootCount()))return null
         if(loadAccessToken()!=json.getString("access")||loadRefreshToken()!=json.getString("refresh")||loadDeviceId()!=json.getString("device"))return null
@@ -109,7 +116,7 @@ class SessionVault(private val context: Context) {
             AuthAccount(json.getString("member"),json.getString("display"),json.getString("role"),json.getString("org"),json.getString("org_name"),
                 json.getString("mode"),json.getString("locale"),strings("site_ids"),sites,json.getString("activity"),strings("legal").toSet(),true,true),
             json.getString("device"))
-    }.getOrNull()
+    }.getOrNull()}
 
     fun clear() = synchronized(vaultLock) {
         preferences.edit().clear().apply()
