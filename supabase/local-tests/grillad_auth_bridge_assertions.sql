@@ -27,6 +27,26 @@ begin
 end $$;
 reset role;
 do $$begin if (select count(*) from famille_private.account_devices where app_code='grillad' and status='active')<>4 then raise exception 'cross seller eviction';end if;end $$;
+-- Profile isolation, revisions and replay on two distinct bound users.
+set role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+do $test$ declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';v jsonb;
+begin
+ if (public.grillad_profile_get(o,s)->>'revision')::int<>0 then raise exception 'profile initial';end if;
+ v:=public.grillad_profile_set(o,s,'Test propriétaire',0);
+ if (v->>'revision')::int<>1 or public.grillad_profile_set(o,s,'Test propriétaire',0)<>v then raise exception 'profile replay';end if;
+ begin perform public.grillad_profile_set(o,s,'Autre nom',0);raise exception 'stale profile accepted';exception when invalid_parameter_value then null;end;
+ begin perform public.grillad_profile_get(o,gen_random_uuid());raise exception 'cross site profile';exception when insufficient_privilege then null;end;
+ begin perform count(*) from grillad_private.personal_profiles;raise exception 'profile table leak';exception when insufficient_privilege then null;end;
+end $test$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000002',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000012","app_metadata":{}}',true);
+do $test$ declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';begin
+ if public.grillad_profile_get(o,s)->>'display_name'<>'' then raise exception 'owner profile leaked';end if;
+ perform public.grillad_profile_set(o,s,'Vendeur test',0);
+end $test$;
+reset role;
 -- Explicit bilateral fake fixture only.
 update famille_core.applications set status='active' where code='zipple';
 insert into famille_core.organizations(id,legal_name,organization_type,status) values('b2000000-0000-0000-0000-000000000002','Test ZIPPLE','retail','active');

@@ -1,0 +1,6 @@
+import React,{useState} from 'react';
+export function PersonalProfile({request,disabled}:{request:(b:any)=>Promise<any>;disabled:boolean}){
+ const [profile,P]=useState<any>(null),[name,N]=useState(''),[busy,B]=useState(false),[message,M]=useState('');
+ async function invoke(body:any){B(true);M('');try{const v=await request(body);P(v);N(v.display_name??'');if(body.action==='profile_set')M('Profil enregistré')}catch{M('Profil indisponible ou modifié ailleurs. Actualisez avant de réessayer.')}finally{B(false)}}
+ return <article><h2>Mon profil</h2><p>Nom d’affichage GRILLAD, visible uniquement sur votre compte. Ne modifie pas votre identité de connexion.</p><button type="button" disabled={disabled||busy} onClick={()=>void invoke({action:'profile_get'})}>{profile?'Actualiser mon profil':'Afficher mon profil'}</button>{profile&&<form onSubmit={e=>{e.preventDefault();void invoke({action:'profile_set',name:name.trim(),revision:profile.revision})}}><input aria-label="Mon nom d’affichage" value={name} onChange={e=>N(e.target.value)} minLength={2} maxLength={80} required/><button disabled={disabled||busy||name.trim().length<2}>Enregistrer mon profil</button></form>}{message&&<p role="status">{message}</p>}</article>
+}

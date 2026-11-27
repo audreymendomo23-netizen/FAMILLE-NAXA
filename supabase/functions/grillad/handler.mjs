@@ -77,6 +77,8 @@ export async function handle(request,env,fetcher=fetch){
   }
   if(body.action==='renewal_status')return upstream(await post('/rest/v1/rpc/grillad_renewal_status',scope,token));
   if(body.action==='renewal_action'&&uuid.test(body.event)&&['renewal_request','central_request_cancel'].includes(body.operation)&&body.payload&&typeof body.payload==='object'&&!Array.isArray(body.payload))return upstream(await post('/rest/v1/rpc/grillad_renewal_action',{...scope,p_event:body.event,p_action:body.operation,p_payload:body.payload},token));
+  if(body.action==='profile_get')return upstream(await post('/rest/v1/rpc/grillad_profile_get',scope,token));
+  if(body.action==='profile_set'&&typeof body.name==='string'&&body.name.trim().length>=2&&body.name.length<=80&&Number.isSafeInteger(body.revision)&&body.revision>=0&&body.revision<=2147483647)return upstream(await post('/rest/v1/rpc/grillad_profile_set',{...scope,p_name:body.name,p_revision:body.revision},token));
   if(body.action==='prediction')return upstream(await post('/rest/v1/rpc/grillad_prediction',scope,token));
   if(body.action==='security_list')return upstream(await post('/rest/v1/rpc/grillad_security_list',scope,token));
   if(body.action==='pilotage_status')return upstream(await post('/rest/v1/rpc/grillad_pilotage_status',scope,token));
