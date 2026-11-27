@@ -52,17 +52,29 @@ async function login(f){return good(auth+"/login",{identifier:f.login,password:f
 try{
  const [w]=await rest("wm_workspaces",{kind:"enterprise",name:"Media replay"});
  await rest("wm_room_entitlements",{workspace_id:w.id,plan:"premium",valid_until:new Date(Date.now()+7200000).toISOString(),enabled:true});
- const h=await fixture(w.id,"promoteur"),g=await fixture(w.id,"staff");
+ const external=process.env.WM_EXTERNAL_GUESTS_QUALIFIED==="true";
+ const guestWorkspace=external?(await rest("wm_workspaces",{kind:"enterprise",name:"External media guest fixture"}))[0]:w;
+ const h=await fixture(w.id,"promoteur"),g=await fixture(guestWorkspace.id,"staff");
  const code=await readFile("supabase/functions/widemeet-room/index.ts","utf8");
  const anchor="Deno.serve(async request=>{";assert.equal(code.split(anchor).length,2);
  await writeFile(roomCopy,code.replace(anchor,"Deno.serve({port:8001},async request=>{"));
  await launch("supabase/functions/widemeet-auth/index.ts",8000);await launch(roomCopy,8001);
  const hs=await login(h),gs=await login(g);
  rid=randomUUID();
- let state=await good(roomApi+"/create",{room_id:rid,title:"Media integration",description:"Isolated",scheduled_ms:Date.now(),duration_minutes:30,invitees:[g.id]},hs.access_token);
+ let state=await good(roomApi+"/create",{room_id:rid,title:"Media integration",description:"Isolated",scheduled_ms:Date.now(),duration_minutes:30,invitees:external?[]:[g.id]},hs.access_token);
  async function cmd(token,action,value=null,target=null){state=await good(roomApi+"/command",{room_id:rid,request_id:randomUUID(),expected_revision:state.revision,action,value,target},token);return state;}
- assert.equal((await request(roomApi+"/media-grant",{room_id:rid},gs.access_token)).status,403);
- await cmd(gs.access_token,"respond","accepted");await cmd(hs.access_token,"start");
+ let inviteId;
+ if(external){
+  await cmd(hs.access_token,"lobby_config",true);
+  inviteId=randomUUID();const token=randomBytes(32).toString("hex");
+  await good(roomApi+"/external-invite",{action:"issue",data:{room_id:rid,invite_id:inviteId,login_id:g.login,token}},hs.access_token);
+  assert.equal((await good(roomApi+"/external-invite",{action:"redeem",data:{token}},gs.access_token)).room_id,rid);
+  state=await good(roomApi+"/read",{room_id:rid},hs.access_token);
+  assert.equal((await request(roomApi+"/media-grant",{room_id:rid},gs.access_token)).status,403);
+  await cmd(hs.access_token,"start");await cmd(gs.access_token,"lobby_request");
+  assert.equal((await request(roomApi+"/media-grant",{room_id:rid},gs.access_token)).status,403);
+  await cmd(hs.access_token,"lobby_admit",null,g.id);
+ }else{assert.equal((await request(roomApi+"/media-grant",{room_id:rid},gs.access_token)).status,403);await cmd(gs.access_token,"respond","accepted");await cmd(hs.access_token,"start");}
  const hg=await good(roomApi+"/media-grant",{room_id:rid},hs.access_token),gg=await good(roomApi+"/media-grant",{room_id:rid},gs.access_token);
  assert.equal(hg.url,"wss://127.0.0.1:7881");assert.equal(gg.url,hg.url);
  // Test private signaling on loopback only; TLS/public routing separately qualified.
@@ -78,6 +90,8 @@ try{
  const inbound=page=>page.evaluate(async()=>{const seen={audio:false,video:false};for(const t of window.received){const s=await t.getRTCStatsReport();if(!s)continue;for(const x of s.values())if(x.type==="inbound-rtp"&&x.bytesReceived>0){if(t.kind==="audio")seen.audio=true;if(t.kind==="video"&&(x.framesDecoded??0)>0)seen.video=true}}return seen.audio&&seen.video});
  await until(async()=>await inbound(a)&&await inbound(b),"real WideMeet bidirectional RTP");
  console.log("PASS actual WideMeet opaque sessions, Edge-issued media grants, PostgreSQL admission and bidirectional SFU RTP");
+ if(external)console.log("PASS real cross-workspace named guest with no subscription, explicit lobby admission and bidirectional media");
+ let finishAtEnd=null;
  const presence=createWideMeetPresence({supabaseUrl:base,serviceKey,sfu});
  if(process.env.WM_PRESENCE_QUALIFIED==="true"){assert.equal((await presence.observe(rid)).persisted,true);await delay(1100);assert.equal((await presence.observe(rid)).persisted,true);}
  if(process.env.WM_RECORDING_QUALIFIED==="true"){
@@ -119,22 +133,23 @@ try{
  const final=(await getRuns())[0];assert.match(final.content_sha256,/^[a-f0-9]{64}$/);assert.ok(final.bytes>1000);
  const st=await stat(process.env.WM_EGRESS_OUT+"/"+final.object_name);assert.equal(st.mode&0o777,0o600);
  console.log("PASS actual consent-driven recording normal stop, private audio-only verified file and SHA-256 ledger");
+ finishAtEnd=async()=>{await cmd(hs.access_token,"record",true);await until(()=>phase("active"),"recording active before host end",90000);await delay(3000);await cmd(hs.access_token,"end");await until(()=>phase("complete"),"host-end recording finalization",90000);console.log("PASS actual host ends room with recording active; valid audio retained rather than discarded")};
  if(enableStorage){assert.equal(final.storage_key,rid+"/"+final.id+".ogg");assert.ok(final.stored_at);const unauth=await fetch(base+"/storage/v1/object/public/wm-recordings/"+final.storage_key);assert.ok(!unauth.ok);assert.equal((await request(roomApi+"/recordings",{room_id:rid},hs.access_token)).status,403);}
  }
  const freshGuest=await good(roomApi+"/media-grant",{room_id:rid},gs.access_token);
- await cmd(hs.access_token,"exclude",null,g.id);
+ if(external){await good(roomApi+"/external-invite",{action:"revoke",data:{room_id:rid,invite_id:inviteId}},hs.access_token);state=await good(roomApi+"/read",{room_id:rid},hs.access_token)}else await cmd(hs.access_token,"exclude",null,g.id);
  await until(async()=>evicted.has(g.id)&&!(await sfu.listParticipants("wm-"+rid)).some(p=>p.identity===g.id),"database-driven SFU eviction");
- assert.equal((await request(roomApi+"/media-grant",{room_id:rid},gs.access_token)).status,404);
+ assert.ok([403,404].includes((await request(roomApi+"/media-grant",{room_id:rid},gs.access_token)).status));
  assert.ok(freshGuest.expires_at>Date.now(),"revocation test must precede expiry");
  const fresh=await ctx.newPage();await fresh.goto(origin);
  const denied=await fresh.evaluate(async token=>{const r=new window.LivekitClient.Room();try{await r.connect("ws://127.0.0.1:7881",token);await r.disconnect();return false}catch{return true}},freshGuest.token);
  assert.equal(denied,true);
  console.log("PASS actual WideMeet moderation mutation evicts guest from SFU and rejects old unexpired grant");
  if(process.env.WM_PRESENCE_QUALIFIED==="true"){await delay(1100);assert.equal((await presence.observe(rid)).observed,1);await delay(1100);assert.equal((await presence.observe(rid)).persisted,true);}
- await cmd(hs.access_token,"end");
+ if(finishAtEnd)await finishAtEnd();else await cmd(hs.access_token,"end");
  await until(async()=>evicted.has(h.id),"room closure eviction");
  console.log("PASS room closure revokes host transport");
- if(process.env.WM_RECORDING_STORAGE_QUALIFIED==="true"){const archive=await good(roomApi+"/recordings",{room_id:rid},hs.access_token);assert.equal(archive.items.length,2);assert.equal((await request(roomApi+"/recordings",{room_id:rid},gs.access_token)).status,403);const file=archive.items.at(-1),body={app_id:"WIDEMEET",room_id:rid,recording_id:file.recording_id,request_id:randomUUID()};const download=async token=>fetch(roomApi+"/recording-download",{method:"POST",headers:{apikey:anon,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});assert.equal((await download(gs.access_token)).status,403);const res=await download(hs.access_token);assert.equal(res.status,200);const data=Buffer.from(await res.arrayBuffer());assert.equal(data.length,file.bytes);assert.equal(createHash("sha256").update(data).digest("hex"),file.sha256);console.log("PASS actual N3 private Storage upload/readback, host-only export after closure, forbidden guest and SHA-256 integrity");}
+ if(process.env.WM_RECORDING_STORAGE_QUALIFIED==="true"){const archive=await good(roomApi+"/recordings",{room_id:rid},hs.access_token);assert.equal(archive.items.length,3);assert.equal((await request(roomApi+"/recordings",{room_id:rid},gs.access_token)).status,403);const file=archive.items.at(-1),body={app_id:"WIDEMEET",room_id:rid,recording_id:file.recording_id,request_id:randomUUID()};const download=async token=>fetch(roomApi+"/recording-download",{method:"POST",headers:{apikey:anon,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});assert.equal((await download(gs.access_token)).status,403);const res=await download(hs.access_token);assert.equal(res.status,200);const data=Buffer.from(await res.arrayBuffer());assert.equal(data.length,file.bytes);assert.equal(createHash("sha256").update(data).digest("hex"),file.sha256);console.log("PASS actual N3 private Storage upload/readback, host-only export after closure, forbidden guest and SHA-256 integrity");}
  if(process.env.WM_PRESENCE_QUALIFIED==="true"){const report=await good(roomApi+"/presence",{room_id:rid},hs.access_token);assert.equal(report.basis,"sfu_samples_not_continuous_presence");assert.ok(report.samples>=4&&report.coverage_ms>0);const hr=report.rows.find(x=>x.member_id===h.id),gr=report.rows.find(x=>x.member_id===g.id);assert.ok(hr.samples_seen>=4&&gr.samples_seen===2&&gr.estimated_ms>0&&hr.estimated_ms>=gr.estimated_ms);assert.equal((await request(roomApi+"/presence",{room_id:rid},gs.access_token)).status,403);console.log("PASS actual N4 SFU active transport samples, exclusion and restricted closed meeting report");}
 }finally{
  if(browser)await browser.close();if(rid)await sfu.deleteRoom("wm-"+rid).catch(()=>{});
