@@ -130,7 +130,7 @@ export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb
   const scope=[s.organization_id,s.app_id,s.user_id,site];
   await query('select bootik.bk_assert_scope($1,$2,$3,$4)',scope);
   if(!['security-state','admin-action','security-audit','recovery-list','recovery-complete','member-request','member-requests','notification-list','notification-read','notification-preference'].includes(action))await query('select bootik.bk_bind_device_site($1,$2,$3,$4,$5)',[...scope,s.device_session_id]);
-  const permissionAction=action==='business-overview'?'dashboard':['followup-list','followup-action'].includes(action)?'partners':action;
+  const permissionAction=action==='business-overview'?'dashboard':['followup-list','followup-action'].includes(action)?'partners':action==='purchase-group-create'?'purchase-create':action==='purchase-group-list'?'purchases':action;
   const permission=await first('select bootik.bk_permits_operation($1,$2,$3,$4,$5::jsonb) as allowed',[s.organization_id,s.app_id,s.user_id,permissionAction,JSON.stringify(p)]);if(!permission?.allowed)return reject(403);
   const resource=await first('select bootik.bk_resource_gate($1,$2,$3,$4,$5,$6::jsonb) as allowed',[...scope,permissionAction,JSON.stringify(p)]);if(!resource?.allowed){if(['sync-sale','sync-item-sale','sync-stock'].includes(action)&&validId(p.idempotency_key))return {status:200,body:{app_id:'BOOTIK',organization_id:s.organization_id,member_id:s.user_id,site_id:site,action,event_id:p.idempotency_key,state:'rejected',result:{reason:'BOOTIK_SCOPE_DENIED'}}};return reject(403)}
   let result;
@@ -308,6 +308,12 @@ export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb
    const approvalKind=p.kind==='close'?'cash-close':p.kind==='movement'&&['out','expense'].includes(p.movement_kind)?'cash-movement':null;
    const approval=approvalKind?(await first('select bootik.bk_approval_preflight($1,$2,$3,$4,$5,$6::jsonb) as state',[...scope,approvalKind,JSON.stringify(p)])).state:null;
    result=approval?{approval_id:p.request_id,approval_state:approval}:(await first('select bootik.bk_cash_action($1,$2,$3,$4,$5,$6::jsonb) as receipt',[...scope,p.kind,JSON.stringify(p)])).receipt;
+  }
+  else if(action==='purchase-group-create'&&validId(p.activity_id)&&validId(p.group_id)&&validId(p.supplier_id)&&typeof p.reference==='string'&&Array.isArray(p.lines)&&p.lines.length>=2&&p.lines.length<=20&&p.lines.every(x=>x&&validId(x.balance_id)&&typeof x.quantity==='number'&&Number.isFinite(x.quantity)&&x.quantity>0&&Number.isSafeInteger(x.unit_cost_fcfa)&&x.unit_cost_fcfa>=0)){
+   result=await first('select bootik.bk_purchase_group_create($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) as group_id',[...scope,p.activity_id,p.group_id,p.supplier_id,clean(p.reference,60,true),JSON.stringify(p.lines.map(x=>({balance_id:x.balance_id,quantity:x.quantity,unit_cost_fcfa:x.unit_cost_fcfa})))]);
+  }
+  else if(action==='purchase-group-list'&&validId(p.activity_id)){
+   result=(await first('select bootik.bk_purchase_group_list($1,$2,$3,$4,$5) as data',[...scope,p.activity_id])).data;
   }
   else if(action==='purchase-create'&&validId(p.order_id)&&validId(p.supplier_id)&&validId(p.balance_id)&&typeof p.reference==='string'&&typeof p.quantity==='number'&&Number.isFinite(p.quantity)&&Number.isSafeInteger(p.unit_cost_fcfa)){
    result=await first('select bootik.bk_purchase_create($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) as order_id',[...scope,p.order_id,p.supplier_id,p.balance_id,p.reference,p.quantity,p.unit_cost_fcfa]);

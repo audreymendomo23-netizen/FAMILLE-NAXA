@@ -61,3 +61,7 @@ grant execute on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uui
 create policy bk_runtime_followups on bootik.bk_followup_events to bootik_runtime using(true) with check(true);
 grant select,insert on bootik.bk_followup_events to bootik_runtime;
 grant execute on function bootik.bk_assert_business_scope(uuid,uuid,uuid,uuid,uuid,text),bootik.bk_business_overview(uuid,uuid,uuid,uuid,uuid,integer),bootik.bk_followup_action(uuid,uuid,uuid,uuid,uuid,uuid,jsonb),bootik.bk_followup_list(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
+
+create policy bk_runtime_purchase_groups on bootik.bk_purchase_groups to bootik_runtime using(true) with check(true);
+grant select,insert on bootik.bk_purchase_groups to bootik_runtime;
+grant execute on function bootik.bk_purchase_group_scope(uuid,uuid,uuid,uuid,uuid,text),bootik.bk_purchase_group_create(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb),bootik.bk_purchase_group_list(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;

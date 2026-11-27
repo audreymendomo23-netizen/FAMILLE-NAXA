@@ -881,4 +881,86 @@ revoke all on function bootik.bk_assert_business_scope(uuid,uuid,uuid,uuid,uuid,
  bootik.bk_followup_action(uuid,uuid,uuid,uuid,uuid,uuid,jsonb),
  bootik.bk_followup_list(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
 
+
+-- Multi-line purchasing: one immutable header, atomic creation of existing canonical purchase lines.
+create table bootik.bk_purchase_groups(
+ id uuid primary key,organization_id uuid not null,app_id uuid not null,activity_id uuid not null,location_id uuid not null,
+ actor uuid not null,supplier_id uuid not null,reference text not null,payload jsonb not null,line_ids uuid[] not null,
+ created_at timestamptz not null default clock_timestamp(),
+ unique(organization_id,app_id,activity_id,location_id,reference),
+ foreign key(activity_id,location_id,organization_id,app_id) references bootik.bk_activity_locations(activity_id,location_id,organization_id,app_id),
+ foreign key(supplier_id,organization_id,activity_id,app_id) references bootik.bk_suppliers(id,organization_id,activity_id,app_id),
+ check(cardinality(line_ids) between 2 and 20)
+);
+alter table bootik.bk_purchase_groups enable row level security;
+alter table bootik.bk_purchase_groups force row level security;
+revoke all on bootik.bk_purchase_groups from public,anon,authenticated;
+create function bootik.bk_purchase_group_scope(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_op text)
+returns void language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+declare u text;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if p_op not in ('purchase-create','purchases') or not bootik.bk_permits_operation(p_org,p_app,p_actor,p_op,'{}'::jsonb)
+ or not bootik.bk_resource_gate(p_org,p_app,p_actor,p_site,p_op,'{}'::jsonb)
+ or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,p_activity)
+ or not bootik.bk_resource_activity_access(p_org,p_app,p_actor,p_site,p_activity) then
+ raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ select a.universe_code into u from bootik.bk_activities a join bootik.bk_activity_locations l
+ on (l.activity_id,l.organization_id,l.app_id)=(a.id,a.organization_id,a.app_id)
+ where a.id=p_activity and a.organization_id=p_org and a.app_id=p_app and a.status='active' and l.location_id=p_site;
+ if not found or not bootik.bk_has_capability(p_org,p_app,u,'purchases') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+end $;
+create function bootik.bk_purchase_group_create(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_id uuid,p_supplier uuid,p_reference text,p_lines jsonb)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $
+declare old bootik.bk_purchase_groups%rowtype; line jsonb; idx integer:=0; bid uuid; lid uuid; ids uuid[]:=array[]::uuid[]; balances uuid[]:=array[]::uuid[]; q numeric; cost bigint; total numeric:=0; ref text;
+begin
+ perform bootik.bk_purchase_group_scope(p_org,p_app,p_actor,p_site,p_activity,'purchase-create');
+ ref:=btrim(coalesce(p_reference,''));
+ if p_id is null or p_supplier is null or length(ref) not between 3 and 60 or jsonb_typeof(p_lines) is distinct from 'array' then raise exception 'BOOTIK_GROUP_INVALID';end if;
+ if jsonb_array_length(p_lines) not between 2 and 20 then raise exception 'BOOTIK_GROUP_INVALID';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':purchase-group:'||p_id::text,0));
+ select * into old from bootik.bk_purchase_groups where id=p_id and organization_id=p_org and app_id=p_app;
+ if found then
+  if (old.actor,old.activity_id,old.location_id,old.supplier_id,old.reference,old.payload) is distinct from (p_actor,p_activity,p_site,p_supplier,ref,p_lines) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;
+  return old.id;
+ end if;
+ if not exists(select 1 from bootik.bk_suppliers where id=p_supplier and organization_id=p_org and app_id=p_app and activity_id=p_activity and status='active') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ for line in select value from jsonb_array_elements(p_lines) loop
+  idx:=idx+1;bid:=(line->>'balance_id')::uuid;q:=(line->>'quantity')::numeric;cost:=(line->>'unit_cost_fcfa')::bigint;
+  if bid is null or bid=any(balances) or q is null or cost is null or q<=0 or cost<0 then raise exception 'BOOTIK_GROUP_INVALID';end if;
+  if not exists(select 1 from bootik.bk_inventory_balances b where b.id=bid and b.organization_id=p_org and b.app_id=p_app and b.location_id=p_site and b.activity_id=p_activity) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  balances:=array_append(balances,bid);total:=total+q*cost;
+  if total>9007199254740991 then raise exception 'BOOTIK_GROUP_INVALID';end if;
+  -- Deterministic child identifier is only an idempotency key, not a secret.
+  lid:=md5(p_id::text||':line:'||idx::text)::uuid;
+  perform bootik.bk_purchase_create(p_org,p_app,p_actor,p_site,lid,p_supplier,bid,ref||'/'||lpad(idx::text,2,'0'),q,cost);
+  ids:=array_append(ids,lid);
+ end loop;
+ insert into bootik.bk_purchase_groups(id,organization_id,app_id,activity_id,location_id,actor,supplier_id,reference,payload,line_ids)
+ values(p_id,p_org,p_app,p_activity,p_site,p_actor,p_supplier,ref,p_lines,ids);
+ return p_id;
+end $;
+create function bootik.bk_purchase_group_list(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid)
+returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+declare answer jsonb;
+begin
+ perform bootik.bk_purchase_group_scope(p_org,p_app,p_actor,p_site,p_activity,'purchases');
+ with groups as (
+ select g.id,g.reference,g.supplier_id,s.display_name as supplier_name,g.created_at,
+  cardinality(g.line_ids) as line_count,
+  count(o.id) filter(where o.received_quantity=o.quantity) as received_lines,
+  coalesce(sum(o.quantity*o.unit_cost_fcfa),0)::text as ordered_fcfa,
+  coalesce(sum(o.received_amount_fcfa),0)::text as received_fcfa,
+  coalesce(sum(o.received_amount_fcfa-o.paid_amount_fcfa),0)::text as payable_fcfa,
+  g.line_ids
+ from bootik.bk_purchase_groups g join bootik.bk_suppliers s on (s.id,s.organization_id,s.app_id,s.activity_id)=(g.supplier_id,g.organization_id,g.app_id,g.activity_id)
+ join bootik.bk_purchase_orders o on o.id=any(g.line_ids) and (o.organization_id,o.app_id,o.activity_id,o.location_id)=(g.organization_id,g.app_id,g.activity_id,g.location_id)
+ where g.organization_id=p_org and g.app_id=p_app and g.location_id=p_site and g.activity_id=p_activity
+ group by g.id,s.display_name order by g.created_at desc,g.id limit 201
+ ), shown as (select * from groups limit 200)
+ select jsonb_build_object('items',coalesce((select jsonb_agg(to_jsonb(shown) order by created_at desc,id) from shown),'[]'::jsonb),'truncated',(select count(*)>200 from groups)) into answer;
+ return answer;
+end $;
+revoke all on function bootik.bk_purchase_group_scope(uuid,uuid,uuid,uuid,uuid,text),bootik.bk_purchase_group_create(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb),bootik.bk_purchase_group_list(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
+
 commit;

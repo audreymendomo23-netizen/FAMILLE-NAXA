@@ -254,6 +254,23 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const po=(await call('purchases',{activity_id:v})).body.result.orders.find(x=>x.id===purchase.order_id);assert.equal(po.state,'received');assert.equal(Number(po.payable_fcfa),750);
  await one("update bootik.bk_members set role='staff' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);assert.equal((await call('purchase-receive',receiptP)).status,403);
  await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
+
+ // Multi-line header: rollback for invalid second line, stable receipts, no phantom inventory/debt.
+ const groupId=randomUUID(),groupLines=[{balance_id:b,quantity:2,unit_cost_fcfa:50},{balance_id:cb.id,quantity:3,unit_cost_fcfa:100}];
+ const group={activity_id:v,group_id:groupId,supplier_id:supplier,reference:'TEST-GROUP',lines:groupLines};
+ const groupStockBefore=Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand);
+ assert.equal((await call('purchase-group-create',{...group,lines:[groupLines[0],{...groupLines[1],balance_id:distBal}]})).status,403);
+ assert.equal(Number((await one("select count(*) from bootik.bk_purchase_orders where organization_id=$1 and reference like 'TEST-GROUP/%'",[o])).count),0);
+ assert.equal((await call('purchase-group-create',group)).body.result.group_id,groupId);
+ assert.equal((await call('purchase-group-create',group)).body.result.group_id,groupId);
+ assert.equal((await call('purchase-group-create',{...group,lines:[groupLines[0],{...groupLines[1],quantity:4}]})).status,400);
+ assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),groupStockBefore);
+ const grouped=(await call('purchase-group-list',{activity_id:v})).body.result.items.find(x=>x.id===groupId);
+ assert.equal(grouped.line_count,2);assert.equal(Number(grouped.ordered_fcfa),400);assert.equal(Number(grouped.payable_fcfa),0);
+ assert.equal((await call('purchase-group-list',{activity_id:dist})).body.result.items.length,0);
+ assert.equal((await call('purchase-group-create',{...group,group_id:randomUUID(),reference:'DIST-FAIL',activity_id:dist,supplier_id:distSupplier})).status,403);
+ await assert.rejects(db.query('delete from bootik.bk_purchase_groups where id=$1',[groupId]));
+
  const cash=async(kind,p,site=s)=>call('cash-action',{kind,activity_id:v,request_id:randomUUID(),...p},site);
  const regId=randomUUID(),reg={request_id:regId,code:'CAISSE-1',name:'Principale'};assert.equal((await cash('register',reg)).status,200);
  assert.equal((await cash('register',reg)).body.result.register_id,regId);

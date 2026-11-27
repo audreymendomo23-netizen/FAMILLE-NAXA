@@ -121,6 +121,22 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  await page.getByText('Résultat : Appel effectué',{exact:true}).waitFor();
  assert.equal(Number((await one("select count(*) from bootik.bk_followup_events where task_id=$1",[follow.id])).count),2);
 
+
+ // The multi-line cart uses the existing catalog and creates two independently receivable lines.
+ await page.getByLabel('Référence d’achat',{exact:true}).fill('GROUPE-BROWSER');
+ await page.getByLabel('Article à commander',{exact:true}).selectOption(b);
+ await page.getByLabel('Quantité commandée',{exact:true}).fill('2');
+ await page.getByRole('button',{name:'Ajouter au panier achat',exact:true}).click();
+ const secondBalance=await one("select b.id from bootik.bk_inventory_balances b join bootik.bk_catalog_items c on c.id=b.item_id where b.organization_id=$1 and b.activity_id=$2 and b.location_id=$3 and b.id<>$4 and c.is_serialized=false limit 1",[o,v,s,b]);
+ assert.ok(secondBalance,'second catalog balance required');
+ {
+  await page.getByLabel('Article à commander',{exact:true}).selectOption(secondBalance.id);
+  await page.getByRole('button',{name:'Ajouter au panier achat',exact:true}).click();
+  await page.getByRole('button',{name:'Créer la commande multi-articles',exact:true}).click();
+  await page.getByText('GROUPE-BROWSER · 0/2 lignes reçues · dette 0 FCFA',{exact:true}).waitFor();
+  assert.equal(Number((await one("select count(*) from bootik.bk_purchase_orders where organization_id=$1 and reference like 'GROUPE-BROWSER/%'",[o])).count),2);
+ }
+
  // Register lifecycle and cash basket through the real web interface.
  await page.getByRole('button',{name:'Charger les activités caisse',exact:true}).click();await page.getByLabel('Activité caisse',{exact:true}).selectOption(v);
  await page.getByRole('button',{name:'Charger les caisses et articles',exact:true}).click();

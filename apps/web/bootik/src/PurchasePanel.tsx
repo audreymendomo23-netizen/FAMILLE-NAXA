@@ -2,11 +2,12 @@ import React,{useState,useRef}from 'react';
 import{operation,fetchCatalog}from './operations.mjs';
 export function PurchasePanel({base,session,site,activity}:{base:string,session:any,site:string,activity:string}){
  const [suppliers,S]=useState<any[]>([]),[items,I]=useState<any[]>([]),[orders,O]=useState<any[]>([]),[supplier,SP]=useState(''),[balance,Bal]=useState(''),[reference,Ref]=useState(''),[qty,Q]=useState('1'),[cost,C]=useState(''),[order,Order]=useState(''),[received,R]=useState(''),[freight,F]=useState('0'),[amount,A]=useState(''),[method,Method]=useState('bank'),[payRef,PR]=useState(''),[busy,B]=useState(false),[msg,M]=useState('');
+ const [basket,Cart]=useState<{balance_id:string,quantity:number,unit_cost_fcfa:number}[]>([]),[groups,G]=useState<any[]>([]);
  const pending=useRef<Record<string,{fp:string,id:string}>>({});
  const call=(action:string,p:object)=>operation(base,session,site,action,p);
  async function task(f:()=>Promise<void>){if(busy)return;B(true);M('');try{await f()}catch(e){if(e instanceof Error&&e.message.startsWith('APPROVAL:'))M(e.message.slice(9));else M('Opération non confirmée. Vérifiez la connexion, les montants et les droits.')}finally{B(false)}}
  function id(k:string,p:object){const fp=JSON.stringify(p);if(pending.current[k]?.fp!==fp)pending.current[k]={fp,id:crypto.randomUUID()};return pending.current[k].id}
- async function refresh(){O((await call('purchases',{activity_id:activity})).orders)}
+ async function refresh(){O((await call('purchases',{activity_id:activity})).orders);try{G((await call('purchase-group-list',{activity_id:activity})).items)}catch{G([])}}
  const validQty=(v:string)=>v.trim()!==''&&Number.isFinite(Number(v))&&Number(v)>0;
  const money=(v:string)=>v.trim()!==''&&Number.isSafeInteger(Number(v))&&Number(v)>=0;
  const chosen=orders.find(x=>x.id===order);
@@ -17,6 +18,12 @@ export function PurchasePanel({base,session,site,activity}:{base:string,session:
  <label>Article à commander<select aria-label="Article à commander" value={balance} onChange={e=>Bal(e.target.value)} disabled={busy}><option value="">Choisir</option>{items.map(x=><option key={x.balance_id} value={x.balance_id}>{x.display_name} {x.lot_code||''}</option>)}</select></label>
  <label>Référence d’achat<input value={reference} onChange={e=>Ref(e.target.value)} disabled={busy} maxLength={80}/></label><label>Quantité commandée<input type="number" value={qty} onChange={e=>Q(e.target.value)} disabled={busy}/></label><label>Coût unitaire fournisseur FCFA<input type="number" value={cost} onChange={e=>C(e.target.value)} disabled={busy}/></label>
  <button disabled={busy||!supplier||!balance||reference.trim().length<3||!validQty(qty)||!money(cost)} onClick={()=>task(()=>commit('purchase-create','create','order_id',{supplier_id:supplier,balance_id:balance,reference:reference.trim(),quantity:Number(qty),unit_cost_fcfa:Number(cost)}))}>Créer la commande fournisseur</button>
+ <h4>Commande fournisseur multi-articles</h4>
+ <button disabled={busy||!balance||!validQty(qty)||!money(cost)||basket.length>=20||basket.some(x=>x.balance_id===balance)} onClick={()=>Cart(b=>[...b,{balance_id:balance,quantity:Number(qty),unit_cost_fcfa:Number(cost)}])}>Ajouter au panier achat</button>
+ {basket.map(x=><p key={x.balance_id}>{items.find(i=>i.balance_id===x.balance_id)?.display_name||x.balance_id} · {x.quantity} × {x.unit_cost_fcfa} FCFA <button disabled={busy} onClick={()=>Cart(b=>b.filter(i=>i.balance_id!==x.balance_id))}>Retirer</button></p>)}
+ <button disabled={busy||!supplier||reference.trim().length<3||reference.trim().length>60||basket.length<2} onClick={()=>task(async()=>{await commit('purchase-group-create','group','group_id',{activity_id:activity,supplier_id:supplier,reference:reference.trim(),lines:basket});Cart([])})}>Créer la commande multi-articles</button>
+ {groups.map(g=><p key={g.id}>{g.reference} · {g.received_lines}/{g.line_count} lignes reçues · dette {g.payable_fcfa} FCFA</p>)}
+ <p>Réception et règlement par ligne dans la liste des commandes, sans double comptage.</p>
  <label>Commande fournisseur<select aria-label="Commande fournisseur" value={order} onChange={e=>Order(e.target.value)} disabled={busy}><option value="">Choisir</option>{orders.map(x=><option key={x.id} value={x.id}>{x.reference} — {x.supplier_name} — {x.item_name}</option>)}</select></label>
  {chosen&&<p>Reçu {chosen.received_quantity}/{chosen.quantity} · Dette {chosen.payable_fcfa} FCFA</p>}
  <label>Quantité réception achat<input type="number" value={received} onChange={e=>R(e.target.value)} disabled={busy}/></label><label>Frais attribuables FCFA<input type="number" value={freight} onChange={e=>F(e.target.value)} disabled={busy}/></label>
