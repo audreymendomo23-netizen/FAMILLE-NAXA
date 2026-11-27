@@ -1,6 +1,9 @@
 package cm.naxa.widemeet
 import androidx.compose.foundation.layout.*
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import android.os.Handler
+import android.os.Looper
 import java.util.Locale
 import android.app.Activity
 import android.view.WindowManager
@@ -24,11 +27,22 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
 private fun RecordingAnnouncement(active: Boolean, english: Boolean) {
     val context = LocalContext.current.applicationContext
     var ready by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
     var engine by remember { mutableStateOf<TextToSpeech?>(null) }
     DisposableEffect(context) {
-        val speech = TextToSpeech(context) { status -> ready = status == TextToSpeech.SUCCESS }
+        val handler = Handler(Looper.getMainLooper())
+        var alive = true
+        val speech = TextToSpeech(context) { status ->
+            handler.post { if (alive) { ready = status == TextToSpeech.SUCCESS; failed = !ready } }
+        }
+        speech.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) = Unit
+            override fun onDone(utteranceId: String?) = Unit
+            @Deprecated("Platform callback")
+            override fun onError(utteranceId: String?) { handler.post { if (alive) failed = true } }
+        })
         engine = speech
-        onDispose { speech.stop(); speech.shutdown() }
+        onDispose { alive = false; speech.stop(); speech.shutdown() }
     }
     val message = if (active) {
         if (english) "Audio recording is active." else "L’enregistrement audio est en cours."
@@ -37,10 +51,16 @@ private fun RecordingAnnouncement(active: Boolean, english: Boolean) {
     }
     LaunchedEffect(engine, ready, message) {
         val speech = engine
-        if (speech != null && ready && speech.setLanguage(if (english) Locale.ENGLISH else Locale.FRENCH) >= 0) {
-            speech.speak(message, TextToSpeech.QUEUE_FLUSH, null, "widemeet-recording")
+        if (speech != null && ready) {
+            failed = speech.setLanguage(if (english) Locale.ENGLISH else Locale.FRENCH) < 0 ||
+                speech.speak(message, TextToSpeech.QUEUE_FLUSH, null, "widemeet-recording") == TextToSpeech.ERROR
         }
     }
+    if (failed) Text(
+        if (english) "Voice announcement unavailable. Read the recording notice on screen."
+        else "Annonce vocale indisponible. Lisez l’information d’enregistrement à l’écran.",
+        color = MaterialTheme.colorScheme.error
+    )
 }
 @Composable fun RoomPanel(english:Boolean,gateway:RoomGateway,session:Session,workspace:Workspace,initialCreate:Boolean=false){
  fun tr(fr:String,en:String)=if(english)en else fr

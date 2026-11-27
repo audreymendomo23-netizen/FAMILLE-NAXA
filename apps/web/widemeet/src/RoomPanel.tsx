@@ -4,17 +4,21 @@ import{MediaPanel}from"./MediaPanel";
 import{ExternalInvite}from"./ExternalInvite";
 import{identityAction}from"./session.mjs";
 function RecordingAnnouncement({active, locale}){
+ const [unavailable,setUnavailable]=useState(false);
  const message=active
   ? (locale==="en"?"Audio recording is active.":"L’enregistrement audio est en cours.")
   : (locale==="en"?"Audio recording has been requested.":"Un enregistrement audio a été demandé.");
  useEffect(()=>{
-  if(!window.speechSynthesis || !window.SpeechSynthesisUtterance)return;
+  let alive=true;
+  setUnavailable(false);
+  if(!window.speechSynthesis || !window.SpeechSynthesisUtterance){setUnavailable(true);return;}
   const announcement=new SpeechSynthesisUtterance(message);
   announcement.lang=locale==="en"?"en":"fr";
-  window.speechSynthesis.speak(announcement);
-  return ()=>window.speechSynthesis.cancel();
+  announcement.onerror=()=>{if(alive)setUnavailable(true)};
+  try{window.speechSynthesis.speak(announcement)}catch{setUnavailable(true)}
+  return ()=>{alive=false;announcement.onerror=null;window.speechSynthesis.cancel()};
  },[message,locale]);
- return null;
+ return unavailable?<p role="alert">{locale==="en"?"Voice announcement unavailable. Read the recording notice on screen.":"Annonce vocale indisponible. Lisez l’information d’enregistrement à l’écran."}</p>:null;
 }
 export function RoomPanel({base,session,active,locale,initialMode="list"}){
  const tr=(fr,en)=>locale==="en"?en:fr;

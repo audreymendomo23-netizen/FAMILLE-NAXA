@@ -31,3 +31,9 @@ Gate 45963767069 SQL et Replay 45963767132 échouaient avant les tests sur le pr
 ## Matrice terminale du dernier code
 Révision 49f32852687af2602e209410afa30e5f0c90aa40 : Gate 45964621884 pending, Replay 45964621929 pending, audio 45964621877 en cours, SFU 45964621875 queued au dernier relevé. Révision 252bf85 Gate 45964420188 4/5 (188/188 contrats, SQL/Web/Edge success, Android en cours) ; autres recettes non terminales. Tous les nouveaux candidats restent non verts jusqu'à résultats terminaux et conformité fonctionnelle exhaustive.
 Aucun N5, main, fusion, hébergement Cloudflare, migration persistante, paiement réel ni dépense.
+
+
+## Reprise 09:53 — base 25e580b puis 35b3108
+25e580b : les quatre workflows sont terminaux SUCCESS (45967726452, 45967726280, 45967726329, 45967726386). Gate 5/5, contrats 188/188, aucun fail ou skip ; navigateur, Android émulateur/Keystore, PostgreSQL, Edge et média jetable sont qualifiés dans le périmètre exécuté.
+35b3108 : code de déverrouillage biométrique lié à une opération Keystore sur une enveloppe du refresh token, identité et espace dans les clés des composants, filtrage caractères XML interdits et test Android après purge. Nouveau candidat non qualifié au dernier relevé (45969439007, 45969439067, 45969439051, 45969439145).
+Correctif complémentaire : Android et Web affichent un avertissement si l'annonce TTS échoue, sans certifier qu'une annonce a été entendue. Fixture XLSX injectant U+FFFE/U+FFFF dans le titre, le lecteur openpyxl existant doit retrouver le titre nettoyé sans formules. Recettes du nouveau candidat à relever. Les dépendances externes et scénarios physiques, pipeline IA/transcription/traduction, récupération supervisée, push et purge réelle restent non qualifiés. Aucun main, production, Cloudflare, N5 ni dépense.
