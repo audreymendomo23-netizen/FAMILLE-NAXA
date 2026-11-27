@@ -114,7 +114,10 @@ jobs:
           source "$RUNNER_TEMP/zipple-business.env"
           set +a
           export ZIPPLE_TLS_KEY="$RUNNER_TEMP/zipple-ci.key" ZIPPLE_TLS_CERT="$RUNNER_TEMP/zipple-ci.crt"
-          node --test docs/apps/zipple/n2-n5/local-business.test.mjs
+          status=0
+          node --test docs/apps/zipple/n2-n5/local-workspaces.test.mjs || status=$?
+          node --test docs/apps/zipple/n2-n5/local-business.test.mjs || status=$?
+          exit "$status"
       - name: Prepare isolated Android TLS trust
         run: |
           set -euo pipefail
@@ -139,6 +142,14 @@ jobs:
           target: google_apis
           disable-animations: true
           script: bash docs/apps/zipple/n2-n5/local-business-device.sh
+      - name: Preserve workspace screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zipple-workspace-screenshots
+          path: ${{ runner.temp }}/zipple-workspace-evidence/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Preserve native test report
         if: always()
         uses: actions/upload-artifact@v4

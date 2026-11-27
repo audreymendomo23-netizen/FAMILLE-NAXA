@@ -1,0 +1,81 @@
+import test from "node:test";import assert from "node:assert/strict";import pg from "pg";import {randomUUID} from "node:crypto";import {chromium} from "playwright";import {createServer} from "node:https";import {readFile,mkdir} from "node:fs/promises";import {resolve,extname,sep} from "node:path";
+const base=process.env.API_URL,dbUrl=process.env.DB_URL,service=process.env.SERVICE_ROLE_KEY;
+assert.ok(/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(base));assert.ok(["127.0.0.1","localhost"].includes(new URL(dbUrl).hostname));
+const db=new pg.Pool({connectionString:dbUrl}),origin="https://zipple.test",publicOrigin="https://127.0.0.1:4443",configured="https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-business";
+const id=()=>randomUUID();
+const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0]??{})[0];
+async function call(fn,action,body,token,guest=false){const res=await fetch(base+"/functions/v1/"+fn+"/"+action,{method:"POST",headers:{origin,"Content-Type":"application/json",...(token?{authorization:(guest?"Guest ":"Bearer ")+token}:{})},body:JSON.stringify({app_id:"ZIPPLE",...body})});return {status:res.status,body:await res.json()}}
+test("ZIPPLE professional workspace pages on real GoTrue, Edge, PostgreSQL and browser",async()=>{
+ let server,browser;
+ try{
+  const org=id(),member=id(),site=id(),destination=id(),login="zipple-portal-fixture",email=id()+"@example.test",password="Fixture-"+id()+"-Aa9!";
+  const created=await fetch(base+"/auth/v1/admin/users",{method:"POST",headers:{apikey:service,authorization:"Bearer "+service,"content-type":"application/json"},body:JSON.stringify({email,password,email_confirm:true})});assert.ok(created.ok,"local Auth fixture");
+  const user=(await created.json()).id;
+  await db.query("insert into zp_organizations values($1,'ZIPPLE business fixture',true)",[org]);
+  await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,'promoteur')",[member,org,user,login,email]);
+  await db.query("insert into zp_sites values($1,$2,'Restaurant fixture',true)",[site,org]);await db.query("insert into zp_site_scopes values($1,$2,$3)",[member,org,site]);await db.query("insert into zp_sites values($1,$2,'Restaurant destination',true)",[destination,org]);await db.query("insert into zp_site_scopes values($1,$2,$3)",[member,org,destination]);
+  const auth=await call("zipple-n1","login",{identifier:login,password});assert.equal(auth.status,200);const token=auth.body.access_token;
+  const b=(action,body={},authToken=token,guest=false)=>call("zipple-business",action,{site_id:site,...body},authToken,guest);
+  const quote=await b("quote",{plan:"ACCESS",cadence:"monthly",provider:"mtn_momo",request_id:id()});assert.equal(quote.status,200);assert.equal(quote.body.data.amount_xaf,5000);
+  assert.equal((await b("snapshot")).status,403);assert.equal((await b("confirm_subscription",{verified:true})).status,403);
+  // Synthetic payment confirmation only through privileged SQL on the disposable database.
+  const premium=await b("quote",{plan:"PREMIUM",cadence:"monthly",provider:"mtn_momo",request_id:id()});assert.equal(premium.status,200);assert.equal(premium.body.data.amount_xaf,18000);
+  await scalar("select zp_confirm_subscription($1,'mtn_momo',$2,18000,'XAF')",[premium.body.data.id,id()]);
+  assert.equal((await b("mode",{space:"restaurant",bar:true,delivery:false})).status,200);
+  assert.equal((await b("mode",{site_id:destination,space:"restaurant",bar:false,delivery:false})).status,200);
+  const destinationIngredient=await b("ingredient_add",{site_id:destination,name:"Farine destination",sku:"FAR-TEST",unit:"kg",reorder_milli:0,supplier_whatsapp:""});assert.equal(destinationIngredient.status,200);
+  const item=await b("menu_add",{name:"Plat recette",post:"kitchen",price_xaf:2500,qty:3});assert.equal(item.status,200);
+  const table=await b("table_create",{label:"Table 1"});assert.equal(table.status,200);const tableId=table.body.data.id,qr=table.body.data.qr;
+  assert.equal((await b("table_open",{table_id:tableId})).status,200);
+  const root=resolve("apps/web/zipple/dist");
+  server=createServer({key:await readFile(process.env.ZIPPLE_TLS_KEY),cert:await readFile(process.env.ZIPPLE_TLS_CERT)},async(req,res)=>{
+   try{const u=new URL(req.url,publicOrigin);if(u.pathname.startsWith("/gateway/")&&req.method==="POST"){const chunks=[];for await(const c of req)chunks.push(c);const response=await fetch(base+"/functions/v1/zipple-n1/"+u.pathname.split("/").pop(),{method:"POST",headers:{origin,"content-type":"application/json",...(req.headers.authorization?{authorization:req.headers.authorization}:{})},body:Buffer.concat(chunks)});res.writeHead(response.status,{"content-type":"application/json","cache-control":"no-store"});res.end(Buffer.from(await response.arrayBuffer()));return}
+    if(req.method!=="GET"){res.writeHead(405).end();return}const path=resolve(root,"."+decodeURIComponent(u.pathname==="/"?"/index.html":u.pathname));if(!path.startsWith(root+sep)){res.writeHead(403).end();return}const data=await readFile(path);const mime={".html":"text/html",".js":"application/javascript",".css":"text/css",".png":"image/png",".svg":"image/svg+xml",".webp":"image/webp",".jpg":"image/jpeg",".json":"application/json",".webmanifest":"application/manifest+json"};res.writeHead(200,{"content-type":mime[extname(path)]??"application/octet-stream","cache-control":"no-store"});res.end(data)
+   }catch{res.writeHead(404).end()}
+  });await new Promise((ok,fail)=>{server.once("error",fail);server.listen(4443,"127.0.0.1",ok)});
+  browser=await chromium.launch({headless:true});
+  async function context(){const ctx=await browser.newContext({ignoreHTTPSErrors:true,reducedMotion:"reduce",serviceWorkers:"block",viewport:{width:390,height:844}});await ctx.route("**/*",async route=>{const req=route.request(),url=req.url();if(url.startsWith(publicOrigin+"/"))return route.continue();if(!url.startsWith(configured+"/"))return route.abort();const action=url.slice(configured.length+1);if(!/^[a-z_]+$/.test(action))return route.abort();const cors={"access-control-allow-origin":publicOrigin,"access-control-allow-headers":"authorization,content-type","access-control-allow-methods":"POST,OPTIONS","cache-control":"no-store"};if(req.method()==="OPTIONS")return route.fulfill({status:204,headers:cors});if(req.method()!=="POST")return route.abort();const response=await fetch(base+"/functions/v1/zipple-business/"+action,{method:"POST",headers:{origin,"content-type":"application/json",...(req.headers().authorization?{authorization:req.headers().authorization}:{})},body:req.postDataBuffer()??Buffer.from("{}")});return route.fulfill({status:response.status,headers:{...cors,"content-type":"application/json"},body:Buffer.from(await response.arrayBuffer())})});return ctx}
+  const staff=await context(),page=await staff.newPage();await page.goto(publicOrigin);await page.getByLabel("Identifiant").fill(login);await page.getByLabel("Mot de passe",{exact:true}).fill(password);await page.getByRole("button",{name:"Se connecter"}).click();await page.getByRole("heading",{name:"Gestion ZIPPLE"}).waitFor();await page.getByRole("combobox",{name:"Établissement autorisé",exact:true}).selectOption(site);await page.getByRole("heading",{name:"Nouvelle commande"}).waitFor();
+
+  const evidenceDir=resolve(process.env.RUNNER_TEMP??".","zipple-workspace-evidence");await mkdir(evidenceDir,{recursive:true});
+  const shot=async name=>page.screenshot({path:resolve(evidenceDir,name+".png"),fullPage:true});
+  // Exercise each new workspace through actual browser, authenticated Edge and SQL.
+  const openPortal=async(name,id)=>{await page.getByRole("button",{name,exact:true}).click();const root=page.getByTestId("portal-"+id);await root.waitFor();return root};
+  const profilePage=await openPortal("Profil","profile");await profilePage.getByLabel("Nom affiché",{exact:true}).fill("Profil recette ZIPPLE");await profilePage.getByLabel("Téléphone professionnel",{exact:true}).fill("699123456");
+  await profilePage.getByRole("button",{name:"Enregistrer le profil",exact:true}).click();await profilePage.getByText("Opération enregistrée",{exact:true}).waitFor();assert.equal(await scalar("select display_name from zp_profile_details where member_id=$1",[member]),"Profil recette ZIPPLE");
+  await shot("01-profile");const teamPage=await openPortal("Équipe","team");await teamPage.getByLabel("Employé",{exact:true}).selectOption(member);await teamPage.getByLabel("Poste occupé",{exact:true}).fill("Responsable recette");await teamPage.getByLabel("Compétences",{exact:true}).fill("Service");
+  await teamPage.getByRole("button",{name:"Enregistrer le dossier",exact:true}).click();await teamPage.getByText("Opération enregistrée",{exact:true}).waitFor();
+  assert.equal(await scalar("select job_title from zp_team_details where site_id=$1 and member_id=$2",[site,member]),"Responsable recette");
+  await shot("02-team");const ticketPage=await openPortal("Support professionnel","tickets");await ticketPage.getByLabel("Intitulé",{exact:true}).fill("Ticket navigateur");await ticketPage.getByLabel("Description",{exact:true}).fill("Demande interne");await ticketPage.getByLabel("Catégorie",{exact:true}).selectOption("technical");
+  await ticketPage.getByRole("button",{name:"Créer",exact:true}).click();await ticketPage.getByText("Ticket navigateur · Ouvert",{exact:true}).waitFor();
+  await ticketPage.getByRole("button",{name:"Ouvrir le dossier",exact:true}).click();await ticketPage.getByLabel("Message ou observation",{exact:true}).fill("Réponse navigateur");
+  await ticketPage.getByRole("button",{name:"Envoyer",exact:true}).click();await ticketPage.getByText(/Réponse navigateur/).waitFor();await ticketPage.getByRole("button",{name:"En cours",exact:true}).click();await ticketPage.getByText("Ticket navigateur · En cours",{exact:true}).waitFor();
+  await ticketPage.getByRole("button",{name:"Terminé",exact:true}).click();await ticketPage.getByText("Ticket navigateur · Terminé",{exact:true}).waitFor();
+  await shot("03-support");const inboxPage=await openPortal("Notifications","notifications");const ticketNotice=inboxPage.locator(".business-panel").filter({hasText:"Ticket navigateur"}).first();await ticketNotice.waitFor();await ticketNotice.getByRole("button",{name:"Marquer comme lu",exact:true}).click();await ticketNotice.getByText(/^Lu ·/).waitFor();
+  await shot("04-notifications");for(const [tab,pid,title] of [["Plannings","planning","Service de recette"],["Objectifs","objectives","Objectif de recette"],["Formation","training","Formation de recette"],["Feedback interne","incidents","Incident de recette"]]){
+   const root=await openPortal(tab,pid);await root.getByLabel("Intitulé",{exact:true}).fill(title);await root.getByLabel("Description",{exact:true}).fill("Suivi réel navigateur");
+   if(pid==="incidents")await root.getByLabel("Catégorie",{exact:true}).selectOption("service");else await root.getByLabel("Thème",{exact:true}).fill("Service");
+   await root.getByLabel("Employé affecté",{exact:true}).selectOption(member);
+   if(pid==="planning")await root.getByLabel("Début (heure Douala)",{exact:true}).fill("2027-01-01T08:00");
+   await root.getByLabel("Échéance (heure Douala)",{exact:true}).fill("2027-01-01T12:00");await root.getByRole("button",{name:"Créer",exact:true}).click();await root.getByText(title+" · Ouvert",{exact:true}).waitFor();await shot("workspace-"+pid);
+  }
+  const intelligencePage=await openPortal("ZIPPLE Intelligence","intelligence");await intelligencePage.getByRole("heading",{name:"Pilotage et recommandations",exact:true}).waitFor();await intelligencePage.getByText("Ventes enregistrées",{exact:true}).waitFor();
+  console.log("ZIPPLE_BULK45_REAL_BROWSER_NINE_WORKSPACES_PASS");await shot("09-intelligence");
+  const openCommerce=async(name,pid)=>{await page.getByRole("button",{name,exact:true}).click();const root=page.getByTestId("commerce-"+pid);await root.waitFor();return root};
+  const sponsor=(await b("customer_add",{name:"Parrain navigateur",phone:""})).body.data,customer=(await b("customer_add",{name:"Filleul navigateur",phone:""})).body.data;
+  const loyalty=await openCommerce("Fidélité et parrainage","loyalty");
+  for(const [label,value] of [["Tranche FCFA","100"],["Points par tranche","1"],["Bonus du parrain","10"],["Bonus du filleul","5"],["Référence de validation","Barème synthétique navigateur"]])await loyalty.getByLabel(label,{exact:true}).fill(value);
+  await loyalty.getByLabel("Activer le barème",{exact:true}).selectOption("yes");await loyalty.getByRole("button",{name:"Valider le barème",exact:true}).click();await loyalty.getByText("Opération enregistrée",{exact:true}).waitFor();
+  await loyalty.getByLabel("Client",{exact:true}).selectOption(sponsor);await loyalty.getByRole("button",{name:"Générer le code personnel",exact:true}).click();
+  await loyalty.getByRole("img",{name:"QR de parrainage",exact:true}).waitFor();const code=await scalar("select id from zp_loyalty_codes where customer_id=$1 and revoked_at is null",[sponsor]);
+  await loyalty.getByLabel("Client",{exact:true}).selectOption(customer);await loyalty.getByLabel("Code du parrain",{exact:true}).fill(code);await loyalty.getByRole("button",{name:"Rattacher le parrain",exact:true}).click();await loyalty.getByText(/Parrain navigateur → Filleul navigateur · En attente/).waitFor();
+  await shot("10-loyalty");
+  const delivery=await openCommerce("Livraison Restaurant","delivery");await delivery.getByLabel("Nom de zone",{exact:true}).fill("Zone navigateur");await delivery.getByLabel("Périmètre et consignes",{exact:true}).fill("Secteur de recette");await delivery.getByLabel("Frais FCFA",{exact:true}).fill("500");await delivery.getByRole("button",{name:"Enregistrer la zone",exact:true}).click();await delivery.getByText(/Zone navigateur · 500 FCFA/).waitFor();
+  await delivery.getByLabel("Livreur de l'établissement",{exact:true}).selectOption(member);await delivery.getByRole("button",{name:"Enregistrer le livreur",exact:true}).click();await delivery.getByText(/Livreur affecté : Profil recette ZIPPLE/).waitFor();
+  assert.equal(await scalar("select delivery_enabled from zp_site_modes where site_id=$1",[site]),false);await shot("11-delivery");
+  const connections=await openCommerce("NAXA SECURITY et partenaires","connections");await connections.getByLabel("Solution",{exact:true}).selectOption("naxa_security");await connections.getByLabel("Référence de l'établissement partenaire",{exact:true}).fill("SITE-TEST");await connections.getByLabel("Motif du raccordement",{exact:true}).fill("Demande navigateur de test");await connections.getByRole("button",{name:"Enregistrer la demande de raccordement",exact:true}).click();await connections.getByText(/SITE-TEST · Demande enregistrée — non connectée/).waitFor();await shot("12-connections");
+  await connections.getByRole("button",{name:"Annuler la demande",exact:true}).click();await connections.getByText(/SITE-TEST · Annulée/).waitFor();
+  console.log("ZIPPLE_BULK4_REAL_BROWSER_LOYALTY_DELIVERY_CONNECTIONS_PASS");
+  await staff.close();
+ }finally{if(browser)await browser.close();if(server)await new Promise(ok=>server.close(ok));await db.end()}
+});

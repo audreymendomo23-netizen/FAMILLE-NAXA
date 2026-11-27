@@ -113,6 +113,34 @@ class Bulk2LiveDeviceTest {
    val review=business.call(session,site,"erp_review_snapshot") as JSONObject
    assertTrue(review.rows("events").any{it.getString("event_id")==eventId&&!it.isNull("reviewed_at")&&it.getString("state")=="conflict"})
   }}
+  // Actual Compose UI and persisted Edge response, not a mock view.
+  click("Profil")
+  step("profile edit"){val matcher=hasText("Nom affiché",substring=false) and hasSetTextAction();compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1};compose.onNode(matcher).performScrollTo().performTextReplacement("Profil ERP natif")}
+  input("Téléphone professionnel","699123456");click("Enregistrer le profil");awaitText("Opération enregistrée")
+  click("Support professionnel");input("Intitulé","Ticket ERP natif");input("Description","Demande interne native");input("Catégorie","technical");click("Créer");awaitText("Ticket ERP natif · Ouvert")
+  click("Ouvrir le dossier");input("Message ou observation","Réponse native");click("Envoyer");awaitText("Opération enregistrée")
+  click("En cours");awaitText("Ticket ERP natif · En cours");click("Terminé");awaitText("Ticket ERP natif · Terminé")
+  click("Notifications");awaitText("Ticket ERP natif · Nouveau")
+  click("Équipe");awaitText("Employé : —")
+  click("Plannings");awaitText("Historique")
+  click("Objectifs");awaitText("Historique")
+  click("Formation");awaitText("Historique")
+  click("Feedback interne");awaitText("Historique")
+  click("ZIPPLE Intelligence");awaitText("Analyse explicable, sans assistant génératif connecté.")
+  click("Fidélité et parrainage");awaitText("Points non monétaires ; échange des récompenses à définir.")
+  click("Livraison Restaurant");awaitText("Préparation des zones et livreurs ; commande externe non activée.")
+  input("Nom de zone","Zone ERP native");input("Périmètre et consignes","Secteur test");input("Frais FCFA","500");click("Enregistrer la zone");awaitText("Opération enregistrée")
+  click("NAXA SECURITY et partenaires");awaitText("Demande enregistrée localement ; aucun flux vidéo ou accès externe ouvert.")
+  step("actual native workspace persistence"){runBlocking{
+   val profile=business.call(session,site,"workspace_snapshot",body("page" to "profile")) as JSONObject
+   assertEquals("Profil ERP natif",profile.getJSONObject("profile").getString("display_name"))
+   val tickets=business.call(session,site,"workspace_snapshot",body("page" to "tickets")) as JSONObject
+   assertTrue(tickets.rows("rows").any{it.optString("title")=="Ticket ERP natif"&&it.optString("state")=="done"})
+   val delivery=business.call(session,site,"connection_snapshot",body("page" to "delivery")) as JSONObject
+   assertTrue(delivery.rows("zones").any{it.optString("label")=="Zone ERP native"&&it.optInt("fee_xaf")==500})
+   assertFalse(delivery.optBoolean("service_active"))
+  }}
+  android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_BULK45_NATIVE_WORKSPACES_PASS")
   click("Déconnexion")
   awaitText("Se connecter")
  }
