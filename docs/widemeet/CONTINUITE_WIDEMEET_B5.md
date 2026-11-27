@@ -36,3 +36,27 @@ Score provisoire (2+0,5)/6 = 41,67 %, arrondi 42 %. Ce score historique est cons
 
 ## Journal
 27/11/2026 — audit documentaire/code et logs CI de la base effectués. Document de suivi B5 créé. Aucun correctif fonctionnel ni nouvelle recette exécuté dans cette passe ; aucune progression fonctionnelle additionnelle revendiquée.
+
+## 27/11/2026 — Passe de développement B5 (base code 64ad9058)
+### Audit de réemploi effectif
+- NAXA historique : migration audio 20261119150000_naxa_support_audio_calls.sql (blob 5bb8ea7a4acf022a06c8409007820aaf373233a1), migration consentement écran 20261120005321_naxa_support_screen_share_audit.sql (9d7a2a9c4336ff2d7b954f340e50b080822f8bca), SupportAudioCall.tsx (160fb9fef406c63c1bcf8da8f4a15b9d445b964e) : modèle agent assigné, permission, bail, consentement et arrêt de capture. Route admin/support-agents (c2125661a91a66497be6a97bbdffcc634bbaf9d9) : permissions explicites et cycle de vie. Contrats inspectés, pas de copie du transport/pharmacie ou des données. Recherche admin TOTP dans le monorepo sans résultat exploitable ; console et raccordement restent ouverts.
+- WideMeet : SQL support, route Edge identité, SupportCenter Web/Compose et HelpCenter lus et adaptés. Pas de migration persistante.
+
+### Livré sur la branche
+- B5.1 : fallback anonyme Web/Android corrigé ; accès explicite à la connexion, pas de déclaration erronée d'indisponibilité du Livechat texte. Commit ae5a5c89 (Android), aacb440c (Web).
+- B5.2 : note explicite 1–5 après clôture, demandeur uniquement, rejeu exact, autre valeur refusée, visibilité privée ; journal d'attribution append-only pour le service, remise en file par agent attribué et version d'attribution, refus du rejeu ancien même après reprise par le même agent. SQL service-only + RLS, route Edge et UI Web/Compose raccordées. Correctif de génération du SQL (substitution JS du motif regex) b8fe449f ; une seule définition de RPC, regex littérales préservées. Aucun résultat SQL ni build Android de cette révision encore attesté. Déploiement interdit.
+- Recette API étendue : note avant fermeture, hors plage et type invalide, agent/tiers, rejeu exact, ancien agent révoqué, nouvelle attribution et ancien rejeu. Recette Chromium étendue : sélection de note et confirmation par lecture serveur. Commit 64ad9058. Recettes écrites, pas déclarées réussies.
+- B5.4/B5.5 : contrat pur de politique média propre à WideMeet (packages/widemeet-domain/support-media-policy.mjs) et tests, adaptés du consentement et bail NAXA. Demande/acceptation/refus, identité/appareil, révocation bilatérale, version du ticket, échéance et renouvellement bilatéral, consentement écran explicite et arrêt. Les valeurs 60 s demande, 30 s bail, 30 min maximum sont des valeurs candidates de qualification, pas des règles commerciales approuvées. Le contrat exige des instantanés serveur authentifiés et n'est pas encore raccordé à une route, un stockage transactionnel ou un transport média. Les UI conservent l'indication d'indisponibilité audio/écran.
+- Preuve locale : Node 22.16.0, node --test support-media-policy.test.mjs : 37/37 PASS, 0 fail/skip. Copies contrôlées avec git hash-object : contrat 85779f17dccac5a6b02d25d78624f160ccb1680f, tests fad9607002412e8ffd6434bc30f070f8bed9ab19. Les 35 assertions directes de l'ancienne révision ne sont pas additionnées. Aucune preuve média réelle.
+
+### Jauge mise à jour (estimation de construction, non recette exhaustive)
+| Bloc | Avant | Après | Justification |
+|---|---:|---:|---|
+| B5.1 FAQ | 1 | 1 | base qualifiée, aide corrigée, requalification requise |
+| B5.2 Tickets/agents | 1 | 1 | base Replay qualifiée, feedback et remise en file candidats CI |
+| B5.3 Récupération | 0,5 | 0,5 | clé individuelle qualifiée, supervision ouverte |
+| B5.4 Audio | 0 | 0,5 | contrat pur testé, transport non raccordé |
+| B5.5 Écran | 0 | 0,5 | contrat pur testé, capture/transport non raccordés |
+| B5.6 Admin | 0 | 0 | audit de source agent, console non implémentée |
+Construction estimée : 42 % → 58 % (3,5/6 ; deux blocs qualifiés de base, trois partiels, un ouvert). Qualification historique de référence : 42 %, non augmentée par les seuls contrats. Les 37 tests concernent la logique, pas une certification E2E ; les extensions tickets doivent passer Replay/Android.
+Reprise stricte B5 : qualification API/Chromium et natif, branchement transactionnel de la politique (unicité des appels actifs, nonce de capture, sessions fraîches, audit, révocation effective), transport audio/écran Web et Android en environnement isolé, gestion complète des agents, récupération supervisée et administration centrale dédiée. Aucun accès de support aux réunions, aucun changement production/main ou autre bulk.
