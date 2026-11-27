@@ -44,3 +44,18 @@ export function objectivePeriod(period:string,now=new Date()){
 
 // The atomic RPC receipt includes a commit-ordered cursor, even when it omits recorded_at.
 export function chargeReceiptCursor(action:unknown,cursor:unknown):Record<string,unknown>{return typeof action==="string"&&action.startsWith("recurring_charge.")&&typeof cursor==="number"&&Number.isSafeInteger(cursor)&&cursor>0?{server_sync_cursor:cursor}:{};}
+
+export type B4RevenueReport={daily:Record<string,unknown>[];monthly:Record<string,unknown>[];annual:Record<string,unknown>[]};
+export function confirmedGoalProgress(goal:Record<string,unknown>|undefined,site:string,report:B4RevenueReport|null,fromDate:string){
+ const meta=goal?.metadata_json as Record<string,unknown>|undefined,period=meta?.period,start=meta?.period_start,amount=goal?.amount_xaf;
+ if(!report||!site||typeof amount!=="number"||!Number.isSafeInteger(amount)||amount<=0||typeof start!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(fromDate))return null;
+ if(period!=="daily"&&period!=="monthly"&&period!=="annual")return null;
+ const floor=period==="monthly"?fromDate.slice(0,7)+"-01":period==="annual"?fromDate.slice(0,4)+"-01-01":fromDate;
+ if(floor>start)return null;
+ const key=period==="daily"?"performance_day":period==="monthly"?"performance_month":"performance_year";
+ const matching=report[period].filter(r=>r.site_id===site&&r[key]===start);
+ if(matching.length!==1)return null;
+ const revenue=Number(matching[0].revenue_xaf);
+ if(!Number.isSafeInteger(revenue)||revenue<0)return null;
+ return {revenue,target:amount,percentage:revenue*100/amount,remaining:Math.max(0,amount-revenue)};
+}

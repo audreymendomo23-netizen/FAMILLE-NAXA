@@ -61,6 +61,10 @@ begin
   if p_record_type in ('quote','credit_note') and
     (p_amount_xaf<=0 or p_paid_xaf<>0 or p_status is null or p_status not in ('draft','open'))
     then raise exception 'NAXA_NON_PAYMENT_DOCUMENT_INVALID'; end if;
+  if p_record_type in ('staff_commission','staff_advance','staff_bonus','business_goal') and
+     (not public.ns_can_manage_site(p_org_id,p_site_id) or p_amount_xaf<=0 or p_paid_xaf<>0) then
+    raise exception 'NAXA_B4_MANAGEMENT_SCOPE_OR_AMOUNT_INVALID';
+  end if;
   if (p_record_type='appointment_waitlist' and p_status not in ('open','contacted'))
      or (p_record_type in ('staff_commission','staff_advance','staff_bonus') and p_status not in ('pending_review','draft'))
      or (p_record_type in ('staff_clock_in','staff_clock_out','staff_break_start','staff_break_end') and p_status<>'open')
@@ -119,7 +123,10 @@ begin
   if not found or v_record.record_type<>p_record_type then
     raise exception 'NAXA_MANAGEMENT_RECORD_NOT_FOUND';
   end if;
-  if p_record_type not in ('invoice','refund_due','customer_receivable','quote','credit_note') and v_record.status=p_to_status and v_record.revision>=p_expected_version then
+  if p_record_type in ('staff_commission','staff_advance','staff_bonus','business_goal') and not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_B4_MANAGEMENT_SCOPE_FORBIDDEN';
+  end if;
+  if p_record_type not in ('invoice','refund_due','customer_receivable','quote','credit_note','staff_commission','staff_advance','staff_bonus','business_goal') and v_record.status=p_to_status and v_record.revision>=p_expected_version then
     return jsonb_build_object('record_id',v_record.id,'status',v_record.status,
       'revision',v_record.revision,'idempotent',true);
   end if;
@@ -229,9 +236,9 @@ begin
       when 'staff_clock_out' then (p_from_status='open' and p_to_status in ('closed','cancelled'))
       when 'staff_break_start' then (p_from_status='open' and p_to_status in ('closed','cancelled'))
       when 'staff_break_end' then (p_from_status='open' and p_to_status in ('closed','cancelled'))
-      when 'staff_commission' then (p_from_status in ('pending_review','draft','approved') and p_to_status in ('approved','rejected','paid'))
-      when 'staff_advance' then (p_from_status in ('pending_review','draft','approved') and p_to_status in ('approved','rejected','paid'))
-      when 'staff_bonus' then (p_from_status in ('pending_review','draft','approved') and p_to_status in ('approved','rejected','paid'))
+      when 'staff_commission' then ((p_from_status in ('pending_review','draft') and p_to_status in ('approved','rejected')) or (p_from_status='approved' and p_to_status='paid'))
+      when 'staff_advance' then ((p_from_status in ('pending_review','draft') and p_to_status in ('approved','rejected')) or (p_from_status='approved' and p_to_status='paid'))
+      when 'staff_bonus' then ((p_from_status in ('pending_review','draft') and p_to_status in ('approved','rejected')) or (p_from_status='approved' and p_to_status='paid'))
       else false
     end;
   end if;
@@ -240,6 +247,9 @@ begin
 
   v_paid:=v_record.paid_xaf;
   v_metadata:=v_record.metadata_json || coalesce(p_metadata_json_delta,'{}'::jsonb);
+  if p_record_type='business_goal' and coalesce(p_metadata_json_delta,'{}'::jsonb) ?| array['period','period_start','period_end','baseline','version'] then
+    raise exception 'NAXA_B4_GOAL_BASELINE_IMMUTABLE';
+  end if;
   if p_record_type in ('invoice','refund_due','customer_receivable') then
     if p_to_status in ('partial','paid') then
       if coalesce(jsonb_typeof(p_metadata_json_delta->'paid_xaf'),'')<>'number'
@@ -255,6 +265,9 @@ begin
       raise exception 'NAXA_FINANCIAL_CANCEL_REQUIRES_REVERSAL';
     end if;
     v_metadata:=v_metadata-'paid_xaf';
+  end if;
+  if p_record_type in ('staff_commission','staff_advance','staff_bonus') and p_to_status='paid' then
+    v_paid:=v_record.amount_xaf;
   end if;
   if p_to_status='received' and p_record_type='inventory_transfer' then
     return jsonb_build_object('record_id',p_record_id,'status','received',
@@ -317,4 +330,35 @@ begin
  execute d;
 end;
 $patch$;
+do $count_patch$
+declare d text; old text:=$old$when 'inventory_movement.created' then
+      v_result := public.ns_record_inventory_movement($old$;
+ old_import text:=$old$when 'inventory_movement.import_adjustment' then
+      v_result := public.ns_record_inventory_movement($old$;
+ guard text:=$guard$
+      if p_payload ? 'expected_quantity' then
+        if not public.ns_can_manage_site(p_org_id,p_site_id)
+           or p_payload->>'movement_type' is distinct from 'adjustment'
+           or coalesce(jsonb_typeof(p_payload->'expected_quantity'),'')<>'number'
+           or (p_payload->>'expected_quantity')::numeric<0 then
+          raise exception 'NAXA_B4_INVENTORY_COUNT_INVALID';
+        end if;
+        perform 1 from public.ns_inventory_items i
+          where i.id=(p_payload->>'inventory_item_id')::uuid and i.org_id=p_org_id and i.site_id=p_site_id
+          and i.active and i.quantity=(p_payload->>'expected_quantity')::numeric for update;
+        if not found then raise exception 'NAXA_B4_INVENTORY_COUNT_CONFLICT'; end if;
+        if (p_payload->>'expected_quantity')::numeric+(p_payload->>'quantity_delta')::numeric <
+          (select coalesce(sum(t.quantity),0) from public.ns_inventory_transfers t
+           where t.org_id=p_org_id and t.source_site_id=p_site_id and t.inventory_item_id=(p_payload->>'inventory_item_id')::uuid and t.status in ('open','approved')) then
+          raise exception 'NAXA_B4_INVENTORY_RESERVED_QUANTITY';
+        end if;
+      end if;
+      v_result := public.ns_record_inventory_movement($guard$;
+begin
+ select pg_get_functiondef('public.ns_apply_sync_event(uuid,uuid,uuid,uuid,uuid,bigint,text,text,text,jsonb)'::regprocedure) into d;
+ if (length(d)-length(replace(d,old,'')))/length(old)<>1 or (length(d)-length(replace(d,old_import,'')))/length(old_import)<>1 then raise exception 'NAXA_V23_COUNT_PATCH_DRIFT'; end if;
+ d:=replace(replace(d,old,'when ''inventory_movement.created'' then'||guard),old_import,'when ''inventory_movement.import_adjustment'' then'||guard);
+ execute d;
+end;
+$count_patch$;
 rollback;

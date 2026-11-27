@@ -203,6 +203,16 @@ export async function handleAccountingRequest(
         });
         break;
       }
+      case "inventory_count_snapshot": {
+        const orgId=requiredString(body.org_id,"org_id"),siteId=requiredString(body.site_id,"site_id"),itemId=requiredString(body.inventory_item_id,"inventory_item_id");
+        if(![orgId,siteId,itemId].every(x=>EVENT_UUID.test(x)))throw Error("INVALID_INVENTORY_COUNT_SCOPE");
+        if(await postRpc(baseUrl,env.anonKey,token,"ns_can_manage_site",{p_org_id:orgId,p_site_id:siteId})!==true)throw Error("INVENTORY_COUNT_SCOPE_FORBIDDEN");
+        const query=new URLSearchParams({select:"id,site_id,quantity",org_id:"eq."+orgId,site_id:"eq."+siteId,id:"eq."+itemId,active:"eq.true",limit:"1"});
+        const response=await fetch(baseUrl+"/rest/v1/ns_inventory_items?"+query.toString(),{headers:{apikey:env.anonKey,Authorization:"Bearer "+token}});
+        const rows=await response.json().catch(()=>null);
+        if(!response.ok||!Array.isArray(rows)||rows.length!==1)throw Error("INVENTORY_COUNT_NOT_FOUND");
+        result=rows[0];break;
+      }
       case "performance": {
         const orgId = requiredString(body.org_id, "org_id");
         if (!Array.isArray(body.site_ids) || !body.site_ids.every((x) => typeof x === "string")) {

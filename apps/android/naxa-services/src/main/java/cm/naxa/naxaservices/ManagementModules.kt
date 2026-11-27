@@ -1972,7 +1972,7 @@ fun TeamPerformanceContent(
                     Button(
                         onClick = {
                             val value = amount.toLongOrNull() ?: 0L
-                            if (staff.isBlank() || detail.isBlank() || value <= 0 || siteId.isBlank()) {
+                            if (staff.isBlank() || detail.isBlank() || value <= 0 || siteId.isBlank() || session.account.roleCode !in setOf("promoter","network_manager","site_manager")) {
                                 error = when (session.account.defaultLocale) { "en" -> "Staff, reason and a positive amount are required."; "ff-CM" -> "Gollotooɗo, daliilu e ceede ɓurɗe 0 ko waajib."; else -> "Collaborateur, motif et montant positif requis." }
                             } else scope.launch {
                                 runCatching {
@@ -2010,7 +2010,7 @@ fun TeamPerformanceContent(
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(row.counterparty + " · " + labelRecord(row.recordType), fontWeight = FontWeight.SemiBold)
                     Text(row.title + " · " + xaf(row.amountXaf) + " · " + row.status, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (row.status == "pending_review") {
+                    if (row.status == "pending_review" && session.account.roleCode in setOf("promoter","network_manager","site_manager")) {
                         OutlinedTextField(
                             approvalReason,
                             { approvalReason = it },

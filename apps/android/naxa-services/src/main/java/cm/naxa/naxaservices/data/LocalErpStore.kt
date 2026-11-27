@@ -3249,7 +3249,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
                         createdAtMillis = now
                     )
                     dao.insertInventoryMovement(movement)
-                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_adjustment", siteId, inventoryMovementSyncSnapshot(movement))
+                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_adjustment", siteId, if (cm.naxa.naxaservices.BuildConfig.BILLING_SETTLEMENT_ENABLED) JSONObject(inventoryMovementSyncSnapshot(movement)).put("expected_quantity", existing.quantity).toString() else inventoryMovementSyncSnapshot(movement))
                 }
                 val updatedItem = changed.copy(quantity = row.quantity, supplierWhatsApp = row.supplierWhatsApp.filter(Char::isDigit))
                 dao.updateInventoryItem(updatedItem)
@@ -3348,20 +3348,20 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
     }
 
     suspend fun recordInventoryMovement(orgId: String, siteId: String, itemId: String, movementType: String, quantity: Double, reason: String, actorMemberId: String): LocalInventoryItem = database.withTransaction {
-        require(movementType in setOf("in", "consumption", "loss", "adjustment")) { "Type de mouvement invalide." }
-        require(quantity != 0.0 && reason.trim().length >= 3 && actorMemberId.isNotBlank()) { "Quantité non nulle, motif et opérateur obligatoires." }
-        require(movementType == "adjustment" || quantity > 0.0) { "Les entrées, consommations et pertes utilisent une quantité positive." }
+        require(movementType in setOf("in", "consumption", "loss", "adjustment") || movementType == "count" && cm.naxa.naxaservices.BuildConfig.BILLING_SETTLEMENT_ENABLED) { "Type de mouvement invalide." }
+        require(quantity.isFinite() && (movementType == "count" && quantity >= 0.0 || movementType != "count" && quantity != 0.0) && reason.trim().length >= 3 && actorMemberId.isNotBlank()) { "Quantité valide, motif et opérateur obligatoires." }
+        require(movementType in setOf("adjustment","count") || quantity > 0.0) { "Les entrées, consommations et pertes utilisent une quantité positive." }
         val current = dao.findInventoryItem(itemId, orgId, siteId) ?: throw IllegalArgumentException("Article introuvable sur ce point de vente.")
         require(current.orgId == orgId) { "Organisation de l'article invalide." }
-        val delta = if (movementType == "in" || movementType == "adjustment") quantity else -quantity
+        val delta = if (movementType == "count") java.math.BigDecimal.valueOf(quantity).subtract(java.math.BigDecimal.valueOf(current.quantity)).toDouble() else if (movementType == "in" || movementType == "adjustment") quantity else -quantity
         val updatedQuantity = current.quantity + delta
-        require(updatedQuantity >= 0.0) { "Stock insuffisant : le mouvement créerait un stock négatif." }
+        require(updatedQuantity >= 0.0 && delta != 0.0 && kotlin.math.abs(delta * 1000 - kotlin.math.round(delta * 1000)) < 0.000001) { "Stock insuffisant, écart nul ou précision invalide." }
         val movement = LocalInventoryMovement(
             id = UUID.randomUUID().toString(),
             orgId = orgId,
             siteId = siteId,
             itemId = itemId,
-            movementType = movementType,
+            movementType = if (movementType == "count") "adjustment" else movementType,
             quantityDelta = delta,
             reason = reason.trim(),
             actorMemberId = actorMemberId,
@@ -3370,7 +3370,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
         dao.insertInventoryMovement(movement)
         val updated = current.copy(quantity = updatedQuantity)
         dao.updateInventoryItem(updated)
-        enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.created", siteId, inventoryMovementSyncSnapshot(movement))
+        enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.created", siteId, if (movementType == "count") JSONObject(inventoryMovementSyncSnapshot(movement)).put("expected_quantity", current.quantity).toString() else inventoryMovementSyncSnapshot(movement))
         updated
     }
 

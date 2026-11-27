@@ -539,6 +539,7 @@ jobs:
                 const download=await downloadEvent;assert.equal(download.suggestedFilename(),'naxa-services-performance.xlsx');
                 const bytes=await readFile(await download.path());assert.equal(bytes.readUInt32LE(0),0x04034b50);assert.equal(bytes.readUInt32LE(bytes.length-22),0x06054b50);
                 assert.ok(bytes.includes(Buffer.from('<v>3500</v>')));
+                const goal=page.getByRole('region',{name:'B4 charges et objectifs'}).locator('[data-b4-goal]').filter({hasText:'Objectif B4 Web'});await goal.locator('[data-b4-goal-revenue="3500"]').waitFor();await goal.getByText(/14\.0 %/).waitFor();
               });
               await scenario('real stock and supplier lifecycle with partial receipt and payment gating',async()=>{
                 await nav('Consommables');
@@ -572,6 +573,7 @@ jobs:
                 await page.getByLabel('Référence bancaire').fill('REPLAY-VIR-001');
                 await apply('supplier.payment.recorded',()=>pay.click());
                 assert.equal(await count('ns_supplier_payments','purchase_id=eq.'+order.aggregate_id),1);
+                const inventory=page.getByRole('region',{name:'B4 inventaire physique'});await inventory.getByLabel('B4 inventaire article').selectOption(item.aggregate_id);await inventory.getByRole('button',{name:'Relever stock B4'}).click();await inventory.locator('[data-b4-inventory-quantity="15"]').waitFor();await inventory.getByLabel('B4 inventaire comptage').fill('14');await inventory.getByLabel('B4 inventaire motif').fill('Comptage physique de recette');const countEvent=await apply('inventory_movement.created',()=>inventory.getByRole('button',{name:'Valider inventaire B4'}).click());assert.equal(countEvent.payload.expected_quantity,15);const [after]=await success(base+'/rest/v1/ns_inventory_items?id=eq.'+item.aggregate_id+'&select=quantity',undefined,admin,admin,'GET');assert.equal(Number(after.quantity),14);
               });
               await scenario('B4 real browser transfer from request to destination reception',async()=>{
                 const network=await fixture('B4-WEB-TRANSFER','multi_site_network');
@@ -627,6 +629,15 @@ jobs:
                   await apply(action,()=>page.locator('.module-main-card .activity-transition-buttons').first().getByRole('button',{name:label,exact:true}).click());
                 }
                 await page.locator('.module-main-card .activity-transition-buttons').first().getByRole('button',{name:'Pointer mon arrivée',exact:true}).waitFor();
+              });
+              await scenario('B4 real browser variable compensation review',async()=>{
+                await nav('Équipe & commissions');const panel=page.getByRole('region',{name:'B4 rémunérations variables'});
+                await panel.getByLabel('B4 rémunération collaborateur').fill('Collaborateur synthétique');await panel.getByLabel('B4 rémunération prestation').fill('Commission recette B4');await panel.getByLabel('B4 rémunération montant').fill('1200');
+                const created=await apply('staff_commission.created',()=>panel.getByRole('button',{name:'Enregistrer rémunération B4'}).click());
+                const row=panel.locator('[data-b4-payroll="'+created.aggregate_id+'"]');await row.getByLabel('B4 rémunération décision').fill('Validation recette');
+                await apply('staff_commission.status_changed',()=>row.getByRole('button',{name:'Approuver rémunération B4'}).click());
+                await row.getByText(/approved.*Confirmé/).waitFor();
+                const [p]=await success(base+'/rest/v1/ns_management_records?id=eq.'+created.aggregate_id+'&select=status,amount_xaf,revision',undefined,admin,admin,'GET');assert.equal(p.status,'approved');assert.equal(p.amount_xaf,1200);assert.equal(p.revision,2);
               });
               await scenario('real offline customer creation and exactly-one durable row after reconnection',async()=>{
                 await nav('Clients & fidélité');

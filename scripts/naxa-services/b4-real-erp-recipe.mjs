@@ -99,6 +99,24 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  assert.equal(items.length,2);assert.equal(Number(items.find(r=>r.site_id===site).quantity),6);assert.equal(Number(items.find(r=>r.site_id===dest.id).quantity),4);
  const [tr]=await rows('ns_inventory_transfers','id=eq.'+transfer+'&select=status,revision');assert.equal(tr.status,'received');assert.equal(tr.revision,3);
  pass('B4 stock transfer: reservation prevents excess, approved reception at destination, conserved quantities and exact retry');
+ const counted=(session,expected,delta)=>{const id=randomUUID();return event(session,'inventory_movement.created',id,{movement_id:id,inventory_item_id:stock,movement_type:'adjustment',expected_quantity:expected,quantity_delta:delta,reason:'Comptage B4 physique'});};
+ const correction=counted(a,6,-1);await applied(a,correction);assert.equal((await applied(a,correction)).idempotent,true);
+ await denied(b,counted(b,6,-2));const [countedItem]=await rows('ns_inventory_items','id=eq.'+stock+'&select=quantity');assert.equal(Number(countedItem.quantity),5);
+ pass('B4 inventory count: atomic comparison, exact retry and stale second-device count denied');
+ for(const kind of ['staff_commission','staff_advance','staff_bonus']){
+  const id=randomUUID();await applied(a,event(a,kind+'.created',id,document(id,kind,1200,0,'pending_review')));
+  await denied(a,event(a,kind+'.status_changed',id,transition(id,kind,'pending_review','paid',1)));
+  const approve=event(b,kind+'.status_changed',id,transition(id,kind,'pending_review','approved',1));await applied(b,approve);assert.equal((await applied(b,approve)).idempotent,true);
+  await denied(a,event(a,kind+'.status_changed',id,transition(id,kind,'pending_review','rejected',1)));
+  await applied(a,event(a,kind+'.status_changed',id,transition(id,kind,'approved','paid',2)));
+  const [p]=await rows('ns_management_records','id=eq.'+id+'&select=status,paid_xaf,revision');assert.equal(p.status,'paid');assert.equal(Number(p.paid_xaf),1200);assert.equal(p.revision,3);
+ }
+ pass('B4 variable compensation: commission, advance and bonus review, stale decision denied, declared settlement');
+ const goal=randomUUID();await applied(a,event(a,'business_goal.created',goal,{...document(goal,'business_goal',25000),counterparty:'daily',metadata_json:{period:'daily',period_start:'2026-11-27',period_end:'2026-11-27',baseline:'approved_at_creation'}}));
+ await denied(b,event(b,'business_goal.status_changed',goal,transition(goal,'business_goal','open','approved',1,{period_start:'2026-11-28'})));
+ const [baseGoal]=await rows('ns_management_records','id=eq.'+goal+'&select=amount_xaf,metadata_json,revision');assert.equal(baseGoal.amount_xaf,25000);assert.equal(baseGoal.metadata_json.period_start,'2026-11-27');assert.equal(baseGoal.revision,1);
+ pass('B4 objective: confirmed baseline immutable under attempted mutation');
+
 
  const peer=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:a.device_id,p_after_cursor:0,p_limit:200},a.access_token,anon);
  assert.ok(Array.isArray(peer.changes));assert.ok(peer.changes.some(x=>x.aggregate_id===invoice&&x.action_code==='invoice.status_changed'));

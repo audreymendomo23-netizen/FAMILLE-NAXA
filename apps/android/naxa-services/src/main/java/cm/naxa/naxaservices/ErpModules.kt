@@ -1173,8 +1173,8 @@ fun StockContent(
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(localizedLabel("Enregistrer les coûts et la marge brute unitaire","Save costs and unit margin","Danndu njoɓdi e ceede heddiiɗe gootal")) }
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf("in", "consumption", "loss", "adjustment").forEach { type ->
-                                OutlinedButton(onClick = { movementType = type }) { Text(if (movementType == type) "✓ " + type else type) }
+                            (listOf("in", "consumption", "loss", "adjustment") + if (BuildConfig.BILLING_SETTLEMENT_ENABLED && session.account.roleCode in setOf("promoter","network_manager","site_manager")) listOf("count") else emptyList()).forEach { type ->
+                                OutlinedButton(onClick = { movementType = type }) { Text((if (movementType == type) "✓ " else "") + (if (type == "count") localizedLabel("Inventaire","Count","Limtagol") else type)) }
                             }
                         }
                         OutlinedTextField(quantity, { quantity = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Quantité","Quantity","Keewal")) }, singleLine = true)
@@ -1194,7 +1194,7 @@ fun StockContent(
                                     busy = false
                                 }
                             },
-                            enabled = !busy && (quantity.replace(",", ".").toDoubleOrNull()?.let { it != 0.0 && (movementType == "adjustment" || it > 0.0) } == true) && reason.trim().length >= 3,
+                            enabled = !busy && (quantity.replace(",", ".").toDoubleOrNull()?.let { if (movementType == "count") it >= 0.0 && it != selected.quantity else it != 0.0 && (movementType == "adjustment" || it > 0.0) } == true) && reason.trim().length >= 3,
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(localizedLabel("Valider le mouvement","Confirm movement","Tabbitin dirtugol")) }
                     }

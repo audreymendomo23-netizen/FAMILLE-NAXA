@@ -1,11 +1,11 @@
 import React,{useState} from "react";
-import {objectivePeriod} from "./b4-planning";
+import {objectivePeriod,confirmedGoalProgress,type B4RevenueReport} from "./b4-planning";
 import {useTranslation} from "../locale";
 type Row={id:string;title:string;state:string;data?:Record<string,unknown>;aggregateType?:string};
 type Submit=(action:string,id:string,payload:Record<string,unknown>,title:string,detail:string)=>Promise<void>;
 const confirmed=(r:Row)=>r.state==="Confirmé"||r.state==="Confirmé · autre appareil";
 const positive=(v:string)=>{const n=Number(v);if(!Number.isSafeInteger(n)||n<=0)throw Error("Montant positif entier requis.");return n;};
-export function B4PlanningPanel({entries,canManage,busy,onSubmit}:{entries:Row[];canManage:boolean;busy:boolean;onSubmit:Submit}){
+export function B4PlanningPanel({entries,canManage,busy,onSubmit,site,report,reportFrom}:{entries:Row[];canManage:boolean;busy:boolean;onSubmit:Submit;site:string;report:B4RevenueReport|null;reportFrom:string}){
  const t=useTranslation();
  const [name,setName]=useState(""),[category,setCategory]=useState(""),[amount,setAmount]=useState(""),[due,setDue]=useState(""),[recurrence,setRecurrence]=useState("monthly"),[goal,setGoal]=useState(""),[target,setTarget]=useState(""),[period,setPeriod]=useState("daily"),[payments,setPayments]=useState<Record<string,string>>({}),[working,setWorking]=useState(false),[notice,setNotice]=useState("");
  async function run(fn:()=>Promise<void>){if(working||busy)return;setWorking(true);setNotice("");try{await fn();setNotice("Opération mise en file ; la confirmation du serveur fait foi.");}catch(e){setNotice(e instanceof Error?e.message:"Opération impossible.");}finally{setWorking(false);}}
@@ -26,5 +26,5 @@ export function B4PlanningPanel({entries,canManage,busy,onSubmit}:{entries:Row[]
  <label>{t("Objectif")}<input aria-label="B4 objectif nom" required maxLength={180} value={goal} onChange={e=>setGoal(e.target.value)}/></label>
  <label>{t("Cible FCFA")}<input aria-label="B4 objectif montant" required type="number" min="1" step="1" value={target} onChange={e=>setTarget(e.target.value)}/></label>
  <label>{t("Période")}<select aria-label="B4 objectif période" value={period} onChange={e=>setPeriod(e.target.value)}>{[["daily","Jour"],["monthly","Mois"],["annual","Année"]].map(([v,l])=><option key={v} value={v}>{t(l)}</option>)}</select></label><button className="btn primary" disabled={busy||working}>{t("Enregistrer objectif B4")}</button></form>}
- {goals.map(g=><article key={g.id} data-b4-goal={g.id}><h3>{g.title}</h3><p>{String(g.data?.counterparty??"")} · {String(g.data?.amount_xaf??"—")} FCFA · {g.state}</p></article>)}{notice&&<p role="status">{t(notice)}</p>}</section>;
+ {goals.map(g=>{const progress=confirmed(g)?confirmedGoalProgress(g.data,site,report,reportFrom):null;return <article key={g.id} data-b4-goal={g.id}><h3>{g.title}</h3><p>{String(g.data?.counterparty??"")} · {String(g.data?.amount_xaf??"—")} FCFA · {g.state}</p>{progress?<><p data-b4-goal-revenue={progress.revenue}>{t("CA confirmé")} : {progress.revenue} FCFA · {t("Atteinte")} : {progress.percentage.toFixed(1)} % · {t("Reste")} : {progress.remaining} FCFA</p><progress aria-label={t("Atteinte de l’objectif")} max={100} value={Math.min(100,progress.percentage)}/></>:<p>{t("Chargez un rapport couvrant ce site et cette période pour calculer l’atteinte.")}</p>}</article>;})}{notice&&<p role="status">{t(notice)}</p>}</section>;
 }

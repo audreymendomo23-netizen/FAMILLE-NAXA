@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {mergeB4Data,staleChargeReceipt,objectivePeriod,chargeReceiptCursor} from "./b4-planning";
+import {mergeB4Data,staleChargeReceipt,objectivePeriod,chargeReceiptCursor,confirmedGoalProgress} from "./b4-planning";
 describe("B4 recurring charge projection and objective calendar",()=>{
  const due="2027-01-10T00:00:00Z",next="2027-02-10T00:00:00Z",initial={amount_xaf:1000,next_due_at:due,active:true};
  it("does not overwrite the contractual charge amount with the pending payment",()=>{
@@ -22,4 +22,11 @@ describe("B4 recurring charge projection and objective calendar",()=>{
   expect(objectivePeriod("monthly",new Date("2028-02-29T12:00:00Z"))).toEqual({period_start:"2028-02-01",period_end:"2028-02-29",due_at:"2028-02-29T22:59:59.999Z"});
   expect(objectivePeriod("daily",new Date("2026-12-31T23:30:00Z")).period_start).toBe("2027-01-01");
  });
+});
+
+it("matches confirmed goal revenue by site and date, refusing incomplete periods",()=>{
+ const goal={amount_xaf:25000,metadata_json:{period:"daily",period_start:"2026-11-27"}};
+ const report={daily:[{site_id:"a",performance_day:"2026-11-27",revenue_xaf:3500},{site_id:"b",performance_day:"2026-11-27",revenue_xaf:999999}],monthly:[],annual:[]};
+ expect(confirmedGoalProgress(goal,"a",report,"2026-11-01")).toEqual({revenue:3500,target:25000,percentage:14,remaining:21500});
+ expect(confirmedGoalProgress(goal,"a",report,"2026-11-28")).toBeNull();expect(confirmedGoalProgress(goal,"c",report,"2026-11-01")).toBeNull();expect(confirmedGoalProgress(goal,"a",null,"2026-11-01")).toBeNull();
 });
