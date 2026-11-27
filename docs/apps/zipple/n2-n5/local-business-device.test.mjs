@@ -67,6 +67,10 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  assert.equal(Number(await scalar("select count(*) from zp_work_items where site_id=$1 and title='Ticket ERP natif' and state='done'",[site])),1);
  assert.equal(Number(await scalar("select count(*) from zp_delivery_zones where site_id=$1 and label='Zone ERP native' and fee_xaf=500",[site])),1);
  assert.equal(Number(await scalar("select count(*) from zp_hr_requests r join zp_hr_decisions d on d.request_id=r.id where r.site_id=$1 and r.reason='Congé ERP natif' and d.decision='approved'",[site])),1);
+ const nativeCustomer=await scalar("select id from zp_customers where org_id=$1 and display_name='Client QR natif'",[org]);assert.ok(nativeCustomer);
+ const card=await scalar("select id from zp_loyalty_cards where customer_id=$1 and org_id=$2 and revoked_at is null",[nativeCustomer,org]);
+ const referral=await scalar("select id from zp_loyalty_codes where customer_id=$1 and org_id=$2 and revoked_at is null",[nativeCustomer,org]);
+ assert.ok(card&&referral);assert.notEqual(card,referral);console.log("ZIPPLE_NATIVE_LOYALTY_QR_PERSISTENCE_PASS");
  console.log("ZIPPLE_BULK45_NATIVE_WORKSPACE_PERSISTENCE_PASS");
  console.log("ZIPPLE_BULK3_ANDROID_REAL_ERP_LEDGER_EVIDENCE_OFFLINE_REVIEW_PASS");
  const closed=await ok("cash_close",{cash_id:cash,counted_xaf:4900});assert.equal(closed.variance_xaf,0);

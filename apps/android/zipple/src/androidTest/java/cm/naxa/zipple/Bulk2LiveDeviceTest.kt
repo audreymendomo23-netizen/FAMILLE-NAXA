@@ -128,7 +128,22 @@ class Bulk2LiveDeviceTest {
   click("Feedback interne");awaitText("Historique")
   click("Absences et rémunérations");input("Début AAAA-MM-JJ","2027-02-01");input("Fin AAAA-MM-JJ","2027-02-02");input("Motif professionnel","Congé ERP natif");click("Soumettre la demande");awaitText("Absence · Profil ERP natif · À valider");input("Motif de décision","Planning natif contrôlé");click("Approuvé");awaitText("Absence · Profil ERP natif · Approuvé")
   click("ZIPPLE Intelligence");awaitText("Analyse explicable, sans assistant génératif connecté.")
+  step("create native loyalty fixture through Edge"){runBlocking{
+   business.call(session,site,"customer_add",body("name" to "Client QR natif","phone" to ""))
+  }}
   click("Fidélité et parrainage");awaitText("Points non monétaires ; avantages sur commande ultérieure réglée.")
+  click("Client : —");click("Client QR natif")
+  click("Générer la carte de fidélité");awaitText("Opération enregistrée")
+  step("native loyalty card QR displayed"){val matcher=hasContentDescription("QR de carte de fidélité",substring=false);compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1};compose.onNode(matcher).performScrollTo().assertIsDisplayed()}
+  click("Générer le code personnel");awaitText("Opération enregistrée")
+  step("native referral QR displayed"){val matcher=hasContentDescription("QR de parrainage",substring=false);compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1};compose.onNode(matcher).performScrollTo().assertIsDisplayed()}
+  step("distinct persisted opaque card and referral"){runBlocking{
+   val snap=business.call(session,site,"loyalty_snapshot") as JSONObject
+   val client=snap.rows("customers").single{it.optString("label")=="Client QR natif"}
+   val card=client.getString("card");val code=client.getString("code")
+   assertNotEquals(card,code);assertEquals(card,UUID.fromString(card).toString());assertEquals(code,UUID.fromString(code).toString())
+  }}
+  android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_LOYALTY_QR_DISPLAY_PASS")
   click("Livraison Restaurant");awaitText("Préparation des zones et livreurs ; commande externe non activée.")
   input("Nom de zone","Zone ERP native");input("Périmètre et consignes","Secteur test");input("Frais FCFA","500");click("Enregistrer la zone");awaitText("Opération enregistrée")
   click("NAXA SECURITY et partenaires");awaitText("Demande enregistrée localement ; aucun flux vidéo ou accès externe ouvert.")
