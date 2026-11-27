@@ -9,14 +9,21 @@ import org.json.JSONObject
 @Composable internal fun ZippleNativeOfflineReview(api:ZippleBusiness,session:Session,site:String,en:Boolean){
  val tr:(String,String)->String={f,e->if(en)e else f};val context=LocalContext.current;val scope=rememberCoroutineScope();val dao=remember(context){OfflineQueueDb.get(context).events()}
  var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var blocked by remember{mutableStateOf<List<OfflineEvent>>(emptyList())};var reasons by remember{mutableStateOf<Map<String,String>>(emptyMap())};var busy by remember{mutableStateOf(false)};var msg by remember{mutableStateOf("")}
+ var filter by remember(session.member,site){mutableStateOf("pending")};var action by remember(session.member,site){mutableStateOf("all")}
  suspend fun load(){blocked=dao.blockedEvents(session.organization,session.member,site);rows=(api.call(session,site,"erp_review_snapshot") as JSONObject).rows("events")}
  fun run(block:suspend()->Unit){if(busy||!session.permits(site))return;busy=true;msg="";scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){msg=tr("Vérification non confirmée.","Review not confirmed.")}finally{busy=false}}}
  LaunchedEffect(session.token,site){run{load()}}
  Text(tr("Revue des opérations hors connexion","Offline operation review"))
  Text(tr("Une opération refusée reste dans l’historique. Vérifiez les données avant de recréer une opération.","Rejected operations remain in history. Verify data before creating a replacement."))
  OutlinedButton(enabled=!busy,onClick={run{load()}}){Text(tr("Actualiser les conflits","Refresh conflicts"))}
- rows.forEach{row->val id=row.getString("event_id");val reviewed=!row.isNull("reviewed_at");val event=blocked.find{it.eventId==id};val why=reasons[id].orEmpty()
+ Text(blocked.size.toString()+" "+tr("conflits locaux","local conflicts")+" · "+rows.count{it.isNull("reviewed_at")}+" "+tr("revues serveur en attente","pending server reviews"))
+ Text(tr("État de revue","Review status"));listOf("pending" to tr("À traiter","Pending"),"reviewed" to tr("Traitées","Reviewed"),"all" to tr("Toutes","All")).forEach{(k,label)->OutlinedButton(onClick={filter=k},enabled=filter!=k){Text(label)}}
+ Text(tr("Type d’opération","Operation type"));listOf("all" to tr("Tous","All"),"produce" to tr("Production","Production"),"count_lot" to tr("Comptage de stock","Stock count"),"lot_receive" to tr("Réception de lot","Batch receipt"),"expense_record" to tr("Dépense","Expense")).forEach{(k,label)->OutlinedButton(onClick={action=k},enabled=action!=k){Text(label)}}
+ val visible=rows.filter{r->(filter=="all"||(if(filter=="reviewed")!r.isNull("reviewed_at") else r.isNull("reviewed_at")||blocked.any{it.eventId==r.optString("event_id")}))&&(action=="all"||r.optString("action")==action)}
+ if(visible.isEmpty())Text(tr("Aucune opération correspondante.","No matching operation."))
+ visible.forEach{row->val id=row.getString("event_id");val reviewed=!row.isNull("reviewed_at");val event=blocked.find{it.eventId==id};val why=reasons[id].orEmpty()
   key(id){Text(when(row.optString("action")){"count_lot"->tr("Comptage de stock","Stock count");"produce"->tr("Production","Production");"lot_receive"->tr("Réception de lot","Batch receipt");else->tr("Dépense","Expense")}+" · "+row.optString("created_at"))
+  val code=row.optJSONObject("outcome")?.optString("code").orEmpty();if(code.isNotBlank())Text(when(code){"STALE_INVENTORY_COUNT"->tr("Stock modifié depuis le comptage","Stock changed since count");"STALE_RECIPE_VERSION"->tr("Recette modifiée","Recipe changed");"INGREDIENT_SHORTAGE"->tr("Stock insuffisant","Insufficient stock");"LEDGER_PERIOD_CLOSED"->tr("Période clôturée","Closed period");else->tr("Opération à vérifier","Operation requires review")})
   val p=row.optJSONObject("payload");if(p!=null)Text(p.keys().asSequence().filter{!it.endsWith("_id")}.map{p.optString(it)}.joinToString(" · "))
   if(reviewed)Text(tr("Revue enregistrée","Review recorded")+" : "+row.optString("review_reason"))else OutlinedTextField(why,{v->reasons=reasons+(id to v.take(500))},label={Text(tr("Motif de l’abandon","Discard reason"))})
   if(!reviewed||event!=null)Button(enabled=!busy&&(reviewed||why.trim().length>=5),onClick={run{
