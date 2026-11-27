@@ -5,6 +5,12 @@ on:
     branches: [work/naxa-services-completion-20261120]
     paths:
       - '.github/workflows/naxa-services-cloudflare-preflight.yml'
+      - 'apps/web/naxa-services/**'
+      - 'scripts/naxa-services/cloudflare-pages-build.mjs'
+      - 'packages/core-web/**'
+      - 'packages/contracts/**'
+      - 'packages/offline-web/**'
+      - 'packages/design-system/**'
 permissions:
   contents: read
   checks: read
@@ -12,8 +18,8 @@ jobs:
   production-web-build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - name: Install workspace dependencies
@@ -35,7 +41,7 @@ jobs:
           test -d media
           grep -rlF 'https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/naxa-services-auth' assets/ >/dev/null
           echo 'Dedicated static artifact with production Auth URL: validated.'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: naxa-services-cloudflare-candidate
           path: apps/web/naxa-services/dist/
@@ -44,7 +50,7 @@ jobs:
     needs: production-web-build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: naxa-services-cloudflare-candidate
           path: candidate

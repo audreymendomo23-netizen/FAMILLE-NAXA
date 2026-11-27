@@ -93,7 +93,7 @@ jobs:
     name: Auth scope and business-mode contract tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Deno
         uses: denoland/setup-deno@v2
         with:
@@ -109,9 +109,9 @@ jobs:
     # to the supported 24.04 image. Other native/contract jobs keep ubuntu-latest.
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
       - name: Install workspace dependencies
@@ -128,7 +128,7 @@ jobs:
         run: npx playwright test --config apps/web/naxa-services/playwright.config.ts
       - name: Upload NAXA SERVICES browser traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: naxa-services-web-browser-e2e
           path: apps/web/naxa-services/test-results/
@@ -138,9 +138,9 @@ jobs:
     name: Cross-application offline synchronization contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
       - name: Install workspace dependencies
@@ -153,7 +153,7 @@ jobs:
         run: node scripts/naxa-services/verify-outbox-registry.mjs
       - name: Inventory commercial UI interactions and copy
         run: node scripts/naxa-services/audit-commercial-interactions.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: naxa-services-commercial-interaction-inventory
           path: artifacts/naxa-services-commercial/
@@ -163,9 +163,9 @@ jobs:
     name: NAXA FAMILY launch and maturity tariff tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
       - name: Test effective-dated family tariff catalogue
@@ -176,9 +176,9 @@ jobs:
     name: NAXA SERVICES payment, commission and fiscal policy tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
       - name: Install workspace dependencies
@@ -192,7 +192,7 @@ jobs:
     name: NAXA SERVICES referral API contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Deno
         uses: denoland/setup-deno@v2
         with:
@@ -206,7 +206,7 @@ jobs:
     name: NAXA SERVICES remote notifications and FCM contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Deno
         uses: denoland/setup-deno@v2
         with:
@@ -220,7 +220,7 @@ jobs:
     name: NAXA SERVICES customer referral and promotion contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Deno
         uses: denoland/setup-deno@v2
         with:
@@ -234,7 +234,7 @@ jobs:
     name: NAXA SERVICES supplier accounting and forecast contracts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Deno
         uses: denoland/setup-deno@v2
         with:
@@ -248,7 +248,7 @@ jobs:
     name: NAXA SERVICES draft SQL security boundary checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Deno
         uses: denoland/setup-deno@v2
         with:
@@ -260,7 +260,7 @@ jobs:
     name: NAXA SERVICES media token security contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
@@ -291,7 +291,7 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install PostgreSQL client
         run: |
           set -euo pipefail
@@ -343,7 +343,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Enable KVM hardware acceleration for Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -360,16 +360,16 @@ jobs:
             test -s "assets/naxa-services/legal/$document"
           done
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
       - name: Set up Gradle compatible with Android Gradle Plugin 8.6.1
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: "8.7"
       - name: Install Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
       - name: Install Android 35 platform and build tools
@@ -396,7 +396,7 @@ jobs:
           script: gradle --no-daemon :naxa-services:connectedDebugAndroidTest
       - name: Upload debug APK for technical review
         if: ${{ always() && steps.assemble_debug_apk.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: naxa-services-debug-apk
           path: apps/android/naxa-services/build/outputs/apk/debug/*.apk
@@ -405,7 +405,7 @@ jobs:
 
       - name: Upload isolated beneficiary debug APK for technical review
         if: ${{ always() && steps.assemble_debug_apk.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: naxa-services-beneficiary-debug-apk
           path: apps/android/naxa-services-beneficiary/build/outputs/apk/debug/*.apk
