@@ -38,7 +38,7 @@ private fun scopeKey(s:Session)=s.memberId+":"+s.activeWorkspaceId
 private fun permission(context:Context)=Build.VERSION.SDK_INT<33||ContextCompat.checkSelfPermission(context,Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED
 private fun configured()=BuildConfig.WIDEMEET_PUSH_ENABLED&&BuildConfig.WM_FIREBASE_PROJECT_ID=="naxameet"&&BuildConfig.WM_FIREBASE_SENDER_ID=="404923635551"&&BuildConfig.WM_FIREBASE_APP_ID=="1:404923635551:android:6d8d1bc318ef1c72ab88ea"&&BuildConfig.WM_FIREBASE_API_KEY.isNotBlank()
 private fun channel(context:Context){context.getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(Channel,"WideMeet",NotificationManager.IMPORTANCE_DEFAULT))}
-private fun messaging(context:Context):FirebaseMessaging{
+internal fun messaging(context:Context):FirebaseMessaging{
  require(configured())
  val app=FirebaseApp.getApps(context).firstOrNull{it.name==FirebaseApp.DEFAULT_APP_NAME}?:FirebaseApp.initializeApp(context,FirebaseOptions.Builder().setApiKey(BuildConfig.WM_FIREBASE_API_KEY).setApplicationId(BuildConfig.WM_FIREBASE_APP_ID).setProjectId(BuildConfig.WM_FIREBASE_PROJECT_ID).setGcmSenderId(BuildConfig.WM_FIREBASE_SENDER_ID).build())
  require(app.options.projectId==BuildConfig.WM_FIREBASE_PROJECT_ID&&app.options.applicationId==BuildConfig.WM_FIREBASE_APP_ID)

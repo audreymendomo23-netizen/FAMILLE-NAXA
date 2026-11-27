@@ -9,6 +9,12 @@ async function sdk(){
  if(firebase.options.projectId!==config.projectId||firebase.options.appId!==config.appId)throw Error("project");
  return {m,messaging:m.getMessaging(firebase)};
 }
+export async function getFirebasePushToken(){
+  const {m,messaging}=await sdk();if(Notification.permission!=="granted")throw Error("permission");
+  const registration=await Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>setTimeout(()=>reject(Error("worker")),10000))]);
+  const token=await m.getToken(messaging,{vapidKey:vapid,serviceWorkerRegistration:registration});
+ return {m,messaging,token};
+}
 export function PushPreferences({base,session,locale,onNotice}){
  const tr=(fr,en)=>locale==="en"?en:fr,storageKey="wm.push.optin."+session.member_id+"."+session.active_workspace_id;
  const [enabled,E]=useState(false),[busy,B]=useState(false),[error,X]=useState(false);const live=useRef(true),working=useRef(false);
@@ -16,9 +22,7 @@ export function PushPreferences({base,session,locale,onNotice}){
  const opted=()=>{try{return localStorage.getItem(storageKey)==="yes"}catch{return false}};
  const consent=v=>{try{v?localStorage.setItem(storageKey,"yes"):localStorage.removeItem(storageKey)}catch{}};
  async function bind(){
-  const {m,messaging}=await sdk();if(Notification.permission!=="granted")throw Error("permission");
-  const registration=await Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>setTimeout(()=>reject(Error("worker")),10000))]);
-  const token=await m.getToken(messaging,{vapidKey:vapid,serviceWorkerRegistration:registration});
+  const {token}=await getFirebasePushToken();
   const result=await req("register",{platform:"web",token});if(result.enabled!==true)throw Error("unconfirmed");
   if(live.current){consent(true);E(true)}
  }

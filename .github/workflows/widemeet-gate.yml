@@ -191,4 +191,4 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno check supabase/functions/widemeet-auth/index.ts supabase/functions/widemeet-room/index.ts supabase/functions/widemeet-push-scheduler/index.ts
+      - run: deno check supabase/functions/widemeet-auth/index.ts supabase/functions/widemeet-room/index.ts supabase/functions/widemeet-push-scheduler/index.ts supabase/functions/widemeet-push-ci/index.ts
