@@ -1,0 +1,4 @@
+import assert from "node:assert/strict";import{createMinutesPdf}from"../../apps/web/widemeet/src/minutes-pdf.mjs";
+const data={version_id:"fixture-version",verification_id:"fixture-version",version:2,approved_at:"2026-11-27T01:00:00Z",published_at:"2026-11-27T01:01:00Z",recipient_name:"Collaborateur Élodie",snapshot:{title:"Réunion de qualification"},body:Array(80).fill("Décision approuvée. Échéance et responsabilité explicites.").join("\n")};
+await assert.rejects(()=>createMinutesPdf({...data,published_at:null}));
+const blob=await createMinutesPdf(data,"fr"),bytes=Buffer.from(await blob.arrayBuffer());assert.equal(bytes.subarray(0,5).toString(),"%PDF-");assert.ok(bytes.length>3000);assert.ok((bytes.toString("latin1").match(/\/Type \/Page\b/g)??[]).length>=2);console.log("PASS actual multipage PDF generation from approved synthetic French minutes");

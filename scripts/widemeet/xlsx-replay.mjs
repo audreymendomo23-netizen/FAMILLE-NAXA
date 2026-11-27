@@ -1,0 +1,3 @@
+import{buildReportXlsx}from"../../packages/widemeet-domain/report-xlsx.mjs";import{writeFile}from"node:fs/promises";import assert from"node:assert/strict";
+const data={title:"=1+1 & ré\uFFFEun\uFFFFion",recipient:"Élodie",room_id:"fixture",closed_at:"2026-11-27",presence:{samples:2,coverage_ms:1000,rows:[{display_name:"Élodie",attendance:"observed",samples_seen:2,estimated_ms:1000}]},tasks:[{title:"=HYPERLINK(\"x\")",assignee:"Élodie",due_at:"2026-11-28",state:"assigned"}],polls:[{question:"Choix",options:[{label:"Oui",count:2}]}]};
+const b=buildReportXlsx(data);assert.equal(b[0],80);assert.equal(b[1],75);await writeFile(process.argv[2],b);console.log("PASS actual OOXML workbook written");

@@ -12,7 +12,10 @@
     "@famille/contracts": "file:../../../packages/contracts",
     "@famille/design-system": "file:../../../packages/design-system",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "livekit-client": "2.25.0",
+    "qrcode.react": "4.2.0",
+    "pdfmake": "0.2.22"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.3",
