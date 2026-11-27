@@ -15,8 +15,10 @@ import java.util.UUID
  var identifier by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var show by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var recoveryError by remember{mutableStateOf(false)};var recoveryNotice by remember{mutableStateOf(false)}
  var keep by remember{mutableStateOf(false)};var pin by remember{mutableStateOf("")};var pinConfirm by remember{mutableStateOf("")}
  var signup by remember{mutableStateOf(false)};var enterprise by remember{mutableStateOf(false)};var display by remember{mutableStateOf("")};var workspace by remember{mutableStateOf("")};var confirm by remember{mutableStateOf("")};var accepted by remember{mutableStateOf(false)};var registered by remember{mutableStateOf("")};var requestId by remember{mutableStateOf(UUID.randomUUID().toString())}
+ var keyRecovery by remember{mutableStateOf(false)};var recovered by remember{mutableStateOf(false)}
  val scope=rememberCoroutineScope()
  fun tr(fr:String,en:String)=if(english)en else fr
+ if(keyRecovery){RecoveryForm(english,gateway,identifier,{keyRecovery=false},{identifier=it;password="";keyRecovery=false;recovered=true});return}
  if(signup){
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
  Text(tr("Créer un compte","Create an account"),style=MaterialTheme.typography.headlineMedium)
@@ -51,6 +53,8 @@ import java.util.UUID
  if(!configured)Text(tr("Connexion momentanément indisponible.","Sign-in temporarily unavailable."))
  if(error)Text(tr("Connexion impossible. Vérifiez vos identifiants ou réessayez plus tard.","Unable to sign in. Check your credentials or try again later."),color=MaterialTheme.colorScheme.error)
  TextButton(enabled=configured&&!busy&&identifier.isNotBlank(),onClick={busy=true;error=false;recoveryError=false;recoveryNotice=false;scope.launch{try{gateway.requestRecovery(identifier);recoveryNotice=true}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){recoveryError=true}finally{busy=false}}}){Text(tr("Mot de passe oublié ?","Forgot password?"))}
+ if(BuildConfig.WIDEMEET_RECOVERY_ENABLED)TextButton(enabled=configured&&!busy,onClick={keyRecovery=true;password=""}){Text(tr("Récupérer avec ma clé","Recover with my key"))}
+ if(recovered)Text(tr("Compte récupéré. Connectez-vous.","Account recovered. Sign in."))
  if(recoveryNotice)Text(tr("Demande reçue. Un contrôle d’identité est nécessaire avant toute récupération.","Request received. Identity verification is required before recovery."))
  if(recoveryError)Text(tr("Demande non confirmée. Vérifiez votre identifiant ou réessayez plus tard.","Request not confirmed. Check your ID or try again later."),color=MaterialTheme.colorScheme.error)
  if(BuildConfig.WIDEMEET_SIGNUP_TEST)TextButton(enabled=configured&&!busy,onClick={signup=true;error=false;password=""}){Text(tr("Créer un compte","Create an account"))}
