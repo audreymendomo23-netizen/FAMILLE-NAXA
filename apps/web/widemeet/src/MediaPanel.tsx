@@ -1,7 +1,8 @@
 import React,{useEffect,useRef,useState}from"react";
 import{Room,RoomEvent,Track}from"livekit-client";
 import{roomRequest}from"./room-api.mjs";
-export function MediaPanel({base,session,roomId,locale,watermark,micAllowed,screenAllowed}){
+import{ConnectSource}from"./Connect";
+export function MediaPanel({base,session,roomId,locale,watermark,micAllowed,screenAllowed,isHost=false}){
  const tr=(fr,en)=>locale==="en"?en:fr;
  const current=useRef(null),generation=useRef(0),tiles=useRef(null);
  const [status,setStatus]=useState("idle"),[mic,setMic]=useState(false),[camera,setCamera]=useState(false),[screen,setScreen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(false);
@@ -56,6 +57,7 @@ export function MediaPanel({base,session,roomId,locale,watermark,micAllowed,scre
  <button onClick={()=>current.current?.startAudio().catch(()=>setError(true))}>{tr("Activer le son","Enable sound")}</button>
  <button onClick={leave}>{tr("Quitter l’appel","Leave call")}</button>
  </div>:status==="reconnecting"||status==="connecting"?<button onClick={leave}>{tr("Annuler la connexion","Cancel connection")}</button>:<button disabled={busy} onClick={join}>{tr("Rejoindre l’appel","Join call")}</button>}
+ {status==="connected"&&import.meta.env.VITE_WIDEMEET_CONNECT_ENABLED==="true"&&<ConnectSource base={base} session={session} locale={locale} roomId={roomId} isHost={isHost}/>}
  {error&&<p role="alert">{tr("Connexion ou périphérique indisponible. Réessayez.","Connection or device unavailable. Try again.")}</p>}
  </section>
 }

@@ -183,6 +183,19 @@ try{
  assert.equal((await groupReq(b2gcs.access_token,"thread",{group_id:chatGroupId})).status,403);
  assert.equal((await groupReq(b2gcs.access_token,"send",{...groupMessage,message_id:randomUUID()})).status,403);
  assert.equal((await groupOk(b2ghs.access_token,"members",{group_id:chatGroupId})).items.length,2);
+ assert.equal((await groupReq(b2gas.access_token,"rename",{group_id:chatGroupId,name:"Denied"})).status,403);
+ assert.equal((await groupReq(b2gas.access_token,"add",{group_id:chatGroupId,member_id:b2gd.id})).status,403);
+ assert.equal((await groupReq(b2ghs.access_token,"add",{group_id:chatGroupId,member_id:o.id})).status,403);
+ await groupOk(b2ghs.access_token,"rename",{group_id:chatGroupId,name:"B2 renamed"});
+ assert.ok((await groupOk(b2ghs.access_token,"list")).items.some(x=>x.id===chatGroupId&&x.name==="B2 renamed"));
+ await groupOk(b2ghs.access_token,"create",groupPayload); // exact original request after rename must not overwrite it
+ await groupOk(b2ghs.access_token,"add",{group_id:chatGroupId,member_id:b2gc.id});
+ await groupOk(b2ghs.access_token,"add",{group_id:chatGroupId,member_id:b2gd.id});
+ for(const x of [b2gcs,b2gds]){assert.equal((await groupOk(x.access_token,"thread",{group_id:chatGroupId})).items.length,0);assert.equal((await groupReq(x.access_token,"seen",groupMessage)).status,403)}
+ const newMessage={group_id:chatGroupId,message_id:randomUUID(),body:"B2 new after admission"};
+ await groupOk(b2ghs.access_token,"send",newMessage);
+ for(const x of [b2gcs,b2gds])assert.deepEqual((await groupOk(x.access_token,"thread",{group_id:chatGroupId})).items.map(m=>m.id),[newMessage.message_id]);
+ pass("B2 group rename, add/rejoin, exact original retry and pre-admission history isolation");
  pass("B2 collective group: three accounts, exact retry, explicit read, nonmember/tenant denial and removal");
 
  // Dedicated support agents, no implicit rights for a tenant promoter.

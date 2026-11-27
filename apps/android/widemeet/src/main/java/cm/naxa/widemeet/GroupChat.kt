@@ -17,7 +17,7 @@ private fun groupRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items
  val scope=rememberCoroutineScope()
  var groups by remember{mutableStateOf<List<JSONObject>>(emptyList())};var contacts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var members by remember{mutableStateOf<List<JSONObject>>(emptyList())};var messages by remember{mutableStateOf<List<JSONObject>>(emptyList())}
- var group by remember{mutableStateOf<JSONObject?>(null)};var name by remember{mutableStateOf("")};var selected by remember{mutableStateOf<Set<String>>(emptySet())};var query by remember{mutableStateOf("")};var body by remember{mutableStateOf("")}
+ var rename by remember{mutableStateOf("")};var group by remember{mutableStateOf<JSONObject?>(null)};var name by remember{mutableStateOf("")};var selected by remember{mutableStateOf<Set<String>>(emptySet())};var query by remember{mutableStateOf("")};var body by remember{mutableStateOf("")}
  var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<JSONObject?>(null)};var creation by remember{mutableStateOf<JSONObject?>(null)}
  suspend fun req(a:String,d:JSONObject=JSONObject())=gateway.identity(session,"group-chat-"+a,d)
  suspend fun load(){groups=groupRows(req("list"));contacts=groupRows(gateway.identity(session,"center-contacts"))}
@@ -33,7 +33,7 @@ private fun groupRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items
  if(g==null){
  Text(tr("Groupes de discussion","Group chats"),style=MaterialTheme.typography.titleMedium)
  TextButton(enabled=!busy,onClick={work{load()}}){Text(tr("Actualiser","Refresh"))}
- for(x in groups)TextButton(enabled=!busy,onClick={work{thread(x.getString("id"));group=x;query=""}}){Text(x.getString("name")+" · "+x.optInt("member_count"))}
+ for(x in groups)TextButton(enabled=!busy,onClick={work{thread(x.getString("id"));group=x;query="";rename=x.getString("name")}}){Text(x.getString("name")+" · "+x.optInt("member_count"))}
  OutlinedTextField(name,{name=it.take(80)},enabled=!busy&&creation==null,label={Text(tr("Nom du groupe de discussion","Group chat name"))})
  Text(tr("Participants (2 à 49 contacts)","Participants (2 to 49 contacts)"))
  for(c in contacts){val id=c.getString("member_id");Row{Checkbox(checked=id in selected,enabled=!busy&&creation==null,onCheckedChange={checked->selected=if(checked)selected+id else selected-id});Text(c.getString("display_name"))}}
@@ -42,6 +42,12 @@ private fun groupRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items
  val id=g.getString("id")
  TextButton(enabled=!busy,onClick={work{close();load()}}){Text(tr("Retour aux groupes","Back to groups"))}
  Text(g.getString("name"),style=MaterialTheme.typography.titleMedium)
+ if(g.optString("creator_id")==session.memberId){
+ OutlinedTextField(rename,{rename=it.take(80)},enabled=!busy,label={Text(tr("Nouveau nom","New name"))})
+ TextButton(enabled=!busy&&rename.isNotBlank(),onClick={work{val v=req("rename",JSONObject().put("group_id",id).put("name",rename.trim()));group=JSONObject(g.toString()).put("name",v.getString("name"));load()}}){Text(tr("Renommer","Rename"))}
+ Text(tr("Ajouter un participant","Add participant"))
+ for(c in contacts.filter{x->members.none{it.optString("member_id")==x.optString("member_id")}})TextButton(enabled=!busy,onClick={work{req("add",JSONObject().put("group_id",id).put("member_id",c.getString("member_id")));thread(id,query)}}){Text(tr("Ajouter ","Add ")+c.getString("display_name"))}
+ }
  Text(tr("Participants actifs","Active participants"))
  var removeTarget by remember(id){mutableStateOf<String?>(null)}
  for(m in members){Text(m.getString("display_name"));if(g.optString("creator_id")==session.memberId&&m.getString("member_id")!=session.memberId)TextButton(enabled=!busy,onClick={removeTarget=m.getString("member_id")}){Text(tr("Retirer","Remove"))}}

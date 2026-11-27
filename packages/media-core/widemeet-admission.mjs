@@ -11,7 +11,7 @@ export function createWideMeetAdmission({supabaseUrl,serviceKey,fetcher=fetch,so
  }
  const receiver=createReceiverAdmission({readLease:async id=>{
   const v=await rpc("wm_display_context",{p_id:id});
-  if(!v||!await sourceActive("wm-"+v.ctx.meeting.id,v.ctx.actor.memberId,v.source_hash))return null;
+  if(!v||!await sourceActive("wm-"+v.ctx.meeting.id,v.ctx.actor.memberId,v.source_hash)){await rpc("wm_display_transport_revoke",{p_id:id});return null;}
   return v;
  }});
  return async grant=>{

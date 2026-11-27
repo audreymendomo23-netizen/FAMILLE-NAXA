@@ -35,7 +35,7 @@ import java.net.URI
  AndroidView(factory={renderer},modifier=Modifier.fillMaxWidth().height(200.dp))
 }
 
-@Composable fun NativeMediaPanel(english:Boolean,gateway:RoomGateway,session:Session,roomId:String,micAllowed:Boolean,screenAllowed:Boolean){
+@Composable fun NativeMediaPanel(english:Boolean,gateway:RoomGateway,session:Session,roomId:String,micAllowed:Boolean,screenAllowed:Boolean,isHost:Boolean=false){
  fun tr(fr:String,en:String)=if(english)en else fr
  val context=LocalContext.current;val scope=rememberCoroutineScope()
  var room by remember{mutableStateOf<Room?>(null)}
@@ -113,7 +113,8 @@ import java.net.URI
  Button(enabled=!busy&&micAllowed,onClick={if(mic||ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)toggle("mic")else micPermission.launch(Manifest.permission.RECORD_AUDIO)}){Text(if(mic)tr("Couper mon micro","Mute my microphone")else tr("Activer mon micro","Enable my microphone"))}
  Button(enabled=!busy,onClick={if(camera||ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)toggle("camera")else cameraPermission.launch(Manifest.permission.CAMERA)}){Text(if(camera)tr("Couper ma caméra","Disable my camera")else tr("Activer ma caméra","Enable my camera"))}
  Button(enabled=!busy&&(screen||screenAllowed),onClick={if(screen)share(null)else{screenRequestGeneration=generation;val manager=context.getSystemService(MediaProjectionManager::class.java);if(manager==null){error=true;screenRequestGeneration=-1}else screenPermission.launch(manager.createScreenCaptureIntent())}}){Text(if(screen)tr("Arrêter le partage","Stop sharing")else tr("Partager mon écran","Share my screen"))}
- TextButton(onClick={leave()}){Text(tr("Quitter l’appel","Leave call"))}
+ if(BuildConfig.WIDEMEET_CONNECT_ENABLED)ConnectSource(english,gateway,session,roomId,isHost)
+ TextButton(onClick={if(BuildConfig.WIDEMEET_CONNECT_ENABLED)scope.launch{runCatching{gateway.request("connect",JSONObject().put("action","source-stop").put("data",JSONObject().put("room_id",roomId)),session)}};leave()}){Text(tr("Quitter l’appel","Leave call"))}
  }else if(status in setOf("connecting","reconnecting"))TextButton(onClick={leave()}){Text(tr("Annuler la connexion","Cancel connection"))}
  else Button(enabled=!busy,onClick={join()}){Text(tr("Rejoindre l’appel","Join call"))}
  if(error)Text(tr("Connexion ou périphérique indisponible. Réessayez.","Connection or device unavailable. Try again."),color=MaterialTheme.colorScheme.error)

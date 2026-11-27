@@ -94,11 +94,11 @@ grant execute on function public.wm_workspace_center(text,text,jsonb) to service
 create table public.wm_chat_groups(
  id uuid primary key, workspace_id uuid not null references public.wm_workspaces(id),
  creator_id uuid not null references public.wm_accounts(id), name text not null check(length(name) between 1 and 80),
- initial_members uuid[] not null, created_at timestamptz not null default clock_timestamp()
+ original_name text not null, initial_members uuid[] not null, created_at timestamptz not null default clock_timestamp()
 );
 create table public.wm_chat_group_members(
  group_id uuid not null references public.wm_chat_groups(id), account_id uuid not null references public.wm_accounts(id),
- removed_at timestamptz, primary key(group_id,account_id)
+ joined_at timestamptz not null default clock_timestamp(), removed_at timestamptz, primary key(group_id,account_id)
 );
 create table public.wm_chat_group_messages(
  id uuid primary key, group_id uuid not null references public.wm_chat_groups(id), sender_id uuid not null references public.wm_accounts(id),
@@ -119,7 +119,7 @@ grant select,insert,update on public.wm_chat_groups,public.wm_chat_group_members
 
 create function public.wm_group_chat(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; gid uuid; mid uuid; target uuid; group_name text; b text; q text; members uuid[]; v jsonb; g public.wm_chat_groups%rowtype; m public.wm_chat_group_messages%rowtype;
+declare a record; gid uuid; mid uuid; target uuid; group_name text; b text; q text; members uuid[]; v jsonb; g public.wm_chat_groups%rowtype; m public.wm_chat_group_messages%rowtype; joined timestamptz;
 begin
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
  select * into a from public.wm_lock_room_actor_for(p_hash,null);
@@ -139,16 +139,35 @@ begin
   if cardinality(members)<>jsonb_array_length(p_data->'member_ids') or a.account_id=any(members) or array_position(members,null) is not null then return null;end if;
   select * into g from public.wm_chat_groups where id=gid;
   if found then
-   if g.workspace_id=a.workspace_id and g.creator_id=a.account_id and g.name=group_name and g.initial_members=members and exists(select 1 from public.wm_chat_group_members gm where gm.group_id=gid and gm.account_id=a.account_id and gm.removed_at is null) then return jsonb_build_object('created',true,'id',gid);end if;return null;
+   if g.workspace_id=a.workspace_id and g.creator_id=a.account_id and g.initial_members=members and g.original_name=group_name and exists(select 1 from public.wm_chat_group_members gm where gm.group_id=gid and gm.account_id=a.account_id and gm.removed_at is null) then return jsonb_build_object('created',true,'id',gid);end if;return null;
   end if;
   if (select count(*) from public.wm_memberships mb join public.wm_accounts ac on ac.id=mb.account_id and ac.enabled and not ac.password_change_required where mb.workspace_id=a.workspace_id and mb.enabled and mb.account_id=any(members))<>cardinality(members) then return null;end if;
   if (select count(*) from public.wm_chat_groups where creator_id=a.account_id and created_at>clock_timestamp()-interval '1 minute')>=5 then return null;end if;
-  insert into public.wm_chat_groups(id,workspace_id,creator_id,name,initial_members) values(gid,a.workspace_id,a.account_id,group_name,members);
+  insert into public.wm_chat_groups(id,workspace_id,creator_id,name,original_name,initial_members) values(gid,a.workspace_id,a.account_id,group_name,group_name,members);
   insert into public.wm_chat_group_members(group_id,account_id) select gid,unnest(array_append(members,a.account_id));
   return jsonb_build_object('created',true,'id',gid);
  end if;
  select * into g from public.wm_chat_groups where id=gid and workspace_id=a.workspace_id;
- if not found or not exists(select 1 from public.wm_chat_group_members gm where gm.group_id=gid and gm.account_id=a.account_id and gm.removed_at is null) then return null;end if;
+ if not found then return null;end if;
+ select gm.joined_at into joined from public.wm_chat_group_members gm where gm.group_id=gid and gm.account_id=a.account_id and gm.removed_at is null;
+ if not found then return null;end if;
+ if p_action='group-chat-rename' then
+  group_name:=btrim(p_data->>'name');
+  if a.account_id<>g.creator_id or group_name is null or length(group_name) not between 1 and 80 then return null;end if;
+  update public.wm_chat_groups set name=group_name where id=gid;
+  return jsonb_build_object('renamed',true,'name',group_name);
+ end if;
+ if p_action='group-chat-add' then
+  if a.account_id<>g.creator_id then return null;end if;
+  target:=(p_data->>'member_id')::uuid;
+  if target is null or not exists(select 1 from public.wm_memberships mb join public.wm_accounts ac on ac.id=mb.account_id and ac.enabled and not ac.password_change_required where mb.workspace_id=a.workspace_id and mb.enabled and mb.account_id=target) then return null;end if;
+  if exists(select 1 from public.wm_chat_group_members gm where gm.group_id=gid and gm.account_id=target and gm.removed_at is null) then return jsonb_build_object('added',true);end if;
+  if (select count(*) from public.wm_chat_group_members gm where gm.group_id=gid and gm.removed_at is null)>=50 then return null;end if;
+  -- Readmission resets the history boundary; old messages and read receipts stay inaccessible.
+  insert into public.wm_chat_group_members(group_id,account_id) values(gid,target)
+  on conflict(group_id,account_id) do update set joined_at=clock_timestamp(),removed_at=null;
+  return jsonb_build_object('added',true);
+ end if;
  if p_action='group-chat-members' then
   select coalesce(jsonb_agg(to_jsonb(c) order by c.display_name,c.member_id),'[]'::jsonb) into v from (
    select ac.id member_id,ac.display_name from public.wm_chat_group_members gm join public.wm_memberships mb on mb.account_id=gm.account_id and mb.workspace_id=a.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=gm.account_id and ac.enabled and not ac.password_change_required where gm.group_id=gid and gm.removed_at is null
@@ -163,12 +182,12 @@ begin
   q:=coalesce(p_data->>'query','');if length(q)>100 then return null;end if;
   select coalesce(jsonb_agg(to_jsonb(c) order by c.created_at,c.id),'[]'::jsonb) into v from (
    select x.id,x.sender_id,ac.display_name,x.body,x.created_at,(select r.read_at from public.wm_chat_group_reads r where r.message_id=x.id and r.account_id=a.account_id) read_at
-   from public.wm_chat_group_messages x join public.wm_accounts ac on ac.id=x.sender_id where x.group_id=gid and (q='' or strpos(lower(x.body),lower(q))>0) order by x.created_at desc,x.id desc limit 200
+   from public.wm_chat_group_messages x join public.wm_accounts ac on ac.id=x.sender_id where x.group_id=gid and x.created_at>=joined and (q='' or strpos(lower(x.body),lower(q))>0) order by x.created_at desc,x.id desc limit 200
   ) c;return jsonb_build_object('items',v);
  end if;
  mid:=(p_data->>'message_id')::uuid;if mid is null then return null;end if;
  if p_action='group-chat-seen' then
-  if not exists(select 1 from public.wm_chat_group_messages x where x.id=mid and x.group_id=gid and x.sender_id<>a.account_id) then return null;end if;
+  if not exists(select 1 from public.wm_chat_group_messages x where x.id=mid and x.group_id=gid and x.created_at>=joined and x.sender_id<>a.account_id) then return null;end if;
   insert into public.wm_chat_group_reads(message_id,account_id) values(mid,a.account_id) on conflict do nothing;return jsonb_build_object('seen',true);
  end if;
  if p_action='group-chat-send' then

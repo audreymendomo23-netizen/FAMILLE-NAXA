@@ -313,6 +313,15 @@ begin
  return jsonb_build_object('confirmed',true,'receiver_name',o.receiver_name,'lease_id',lid);
 exception when invalid_text_representation or unique_violation then return null;
 end $wm$;
+-- Trusted SFU fencing is persistent: loss of the source must not permit automatic reactivation.
+create function public.wm_display_transport_revoke(p_id uuid) returns boolean
+language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+begin
+ update public.wm_display_leases set revoked_at=coalesce(revoked_at,clock_timestamp()) where id=p_id;
+ return found;
+end $wm$;
+revoke all on function public.wm_display_transport_revoke(uuid) from public,anon,authenticated;
+grant execute on function public.wm_display_transport_revoke(uuid) to service_role;
 revoke all on function public.wm_display_action(text,text,jsonb) from public,anon,authenticated;
 grant execute on function public.wm_display_action(text,text,jsonb) to service_role;
 commit;
