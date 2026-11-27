@@ -9,11 +9,13 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
 import java.util.UUID
+import javax.crypto.Cipher
 
 class AuthGateway(private val context:Context,private val base:String){
  private val lifecycle=Mutex()
  private val vault=SessionVault(context)
  private val unlock=LocalUnlock(context)
+ private val biometric=BiometricUnlock(context)
  private var refreshSecret:String?=null
  private var remembered=false
  fun hasRememberedSession()=unlock.configured()
@@ -69,10 +71,13 @@ class AuthGateway(private val context:Context,private val base:String){
   require(unlock.verify(pin)){"unlock_failed"}
   try{remembered=true;rotate(vault.loadRefreshToken()?:error("no saved session"))}catch(e:Exception){clearLocalSession();throw e}
  }}
- // Caller must be the local system BiometricPrompt success callback.
- suspend fun restoreAfterBiometric():Session=withContext(Dispatchers.IO){lifecycle.withLock{
+ internal fun biometricAvailable()=unlock.configured()&&biometric.available()
+ internal fun prepareBiometric()=if(unlock.configured())biometric.prepare() else null
+ internal suspend fun restoreAfterBiometric(attempt:BiometricUnlock.Attempt,authenticated:Cipher?):Session=withContext(Dispatchers.IO){lifecycle.withLock{
   require(unlock.configured())
-  try{remembered=true;rotate(vault.loadRefreshToken()?:error("no saved session"))}catch(e:Exception){clearLocalSession();throw e}
+  val secret=biometric.complete(attempt,authenticated)
+  require(secret==vault.loadRefreshToken()){ "biometric_session_changed" }
+  try{remembered=true;rotate(secret)}catch(e:Exception){clearLocalSession();throw e}
  }}
  suspend fun requestRecovery(identifier:String):Unit=withContext(Dispatchers.IO){
   val normalized=identifier.trim().uppercase(java.util.Locale.ROOT)

@@ -21,28 +21,27 @@ import kotlinx.coroutines.CancellationException
  var signal by remember{mutableStateOf<CancellationSignal?>(null)}
  DisposableEffect(Unit){onDispose{signal?.cancel();signal=null}}
  fun finishFailure(){busy=false;error=true;if(!gateway.hasRememberedSession())onForget()}
- fun restore(biometric:Boolean){
+ fun restore(attempt:BiometricUnlock.Attempt?=null,authenticated:javax.crypto.Cipher?=null){
   busy=true;error=false
-  scope.launch{try{val s=if(biometric)gateway.restoreAfterBiometric() else gateway.restoreWithPin(pin);onSession(s)}
+  scope.launch{try{val s=if(attempt!=null)gateway.restoreAfterBiometric(attempt,authenticated) else gateway.restoreWithPin(pin);onSession(s)}
   catch(e:CancellationException){throw e}catch(e:Exception){finishFailure()}finally{pin="";busy=false}}
  }
- val biometricAvailable=if(Build.VERSION.SDK_INT>=30){
-  context.getSystemService(BiometricManager::class.java)?.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)==BiometricManager.BIOMETRIC_SUCCESS
- }else false
+ val biometricAvailable=gateway.biometricAvailable()
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
  Text(tr("Déverrouiller WideMeet","Unlock WideMeet"),style=MaterialTheme.typography.headlineMedium)
  Text(tr("Saisissez votre code local pour restaurer votre session.","Enter your local PIN to restore your session."))
  OutlinedTextField(pin,{pin=it.filter{c->c in '0'..'9'}.take(4)},enabled=!busy,label={Text(tr("Code à 4 chiffres","4-digit PIN"))},singleLine=true,visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
- Button(enabled=!busy&&pin.length==4,onClick={restore(false)}){Text(tr("Déverrouiller","Unlock"))}
+ Button(enabled=!busy&&pin.length==4,onClick={restore()}){Text(tr("Déverrouiller","Unlock"))}
  if(biometricAvailable&&Build.VERSION.SDK_INT>=30)TextButton(enabled=!busy,onClick={
   busy=true;error=false
   val cancel=CancellationSignal();signal=cancel
   try{
+   val attempt=gateway.prepareBiometric()?:error("biometric_unavailable")
    val prompt=BiometricPrompt.Builder(context).setTitle(tr("Déverrouiller WideMeet","Unlock WideMeet"))
     .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
     .setNegativeButton(tr("Utiliser le code","Use PIN"),context.mainExecutor){_,_->busy=false}.build()
-   prompt.authenticate(cancel,context.mainExecutor,object:BiometricPrompt.AuthenticationCallback(){
-    override fun onAuthenticationSucceeded(result:BiometricPrompt.AuthenticationResult){if(!cancel.isCanceled)restore(true)}
+   prompt.authenticate(BiometricPrompt.CryptoObject(attempt.cipher),cancel,context.mainExecutor,object:BiometricPrompt.AuthenticationCallback(){
+    override fun onAuthenticationSucceeded(result:BiometricPrompt.AuthenticationResult){if(!cancel.isCanceled)restore(attempt,result.cryptoObject?.cipher)}
     override fun onAuthenticationError(errorCode:Int,errString:CharSequence){if(!cancel.isCanceled)busy=false}
    })
   }catch(e:Exception){busy=false;error=true}

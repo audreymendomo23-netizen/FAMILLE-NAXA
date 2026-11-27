@@ -15,17 +15,18 @@ import javax.crypto.spec.GCMParameterSpec
  * "Rester connecté". The AES key is non-exportable and lives in Android Keystore.
  * Passwords are never persisted.
  */
-class SessionVault(context: Context) {
+class SessionVault(private val context: Context) {
     private val preferences = context.getSharedPreferences("widemeet_secure_session", Context.MODE_PRIVATE)
 
     fun save(session: VaultSession, rememberMe: Boolean) {
         if (!rememberMe) { clear(); return }
         require(session.accessToken.isNotBlank() && session.refreshToken.isNotBlank() && session.deviceId.isNotBlank())
-        preferences.edit()
+        check(preferences.edit()
             .putString("access", encrypt(session.accessToken))
             .putString("refresh", encrypt(session.refreshToken))
             .putString("device_id", encrypt(session.deviceId))
-            .apply()
+            .commit())
+        BiometricUnlock(context).save(session.refreshToken)
     }
 
     fun loadRefreshToken(): String? = preferences.getString("refresh", null)?.let(::decrypt)
@@ -35,7 +36,10 @@ class SessionVault(context: Context) {
     fun loadDeviceId(): String? = preferences.getString("device_id", null)?.let(::decrypt)
 
     fun clear() {
-        preferences.edit().clear().apply()
+        BiometricUnlock(context).clear()
+        if (!preferences.edit().clear().commit()) {
+            runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry(KEY_ALIAS) } }
+        }
     }
 
     private fun encrypt(value: String): String {

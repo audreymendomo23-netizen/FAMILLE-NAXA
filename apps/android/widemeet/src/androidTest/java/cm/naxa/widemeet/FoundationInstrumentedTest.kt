@@ -73,4 +73,11 @@ class FoundationInstrumentedTest {
   }finally{gate.clear()}
  }
 
+ @Test fun clearedVaultDisablesBiometricEnvelope(){
+  val context=ApplicationProvider.getApplicationContext<Context>()
+  val gate=LocalUnlock(context); val gateway=cm.naxa.widemeet.auth.AuthGateway(context,"")
+  gate.clear()
+  assertFalse(gateway.biometricAvailable())
+  assertNull(gateway.prepareBiometric())
+ }
 }

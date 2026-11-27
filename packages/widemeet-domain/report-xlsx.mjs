@@ -1,6 +1,6 @@
 // Minimal real OOXML workbook (stored ZIP, no external dependency or formulas).
 const enc=new TextEncoder();
-const esc=v=>String(v??"").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const esc=v=>String(v??"").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const xml=s=>enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+s);
 const ns="http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 function sheet(rows){
