@@ -1,11 +1,12 @@
 name: WideMeet — N0–N4 isolated gate
 on:
   push:
-    branches: [work/widemeet-n0-20261126]
+    branches: [work/widemeet-n0-20261126, work/widemeet-b1-20261127]
     paths:
       - 'apps/android/widemeet/**'
       - 'apps/web/widemeet/**'
       - 'packages/widemeet-domain/**'
+      - 'packages/media-core/**'
       - 'packages/billing-core/**'
       - 'settings.gradle.kts'
       - 'scripts/widemeet/**'
@@ -14,6 +15,7 @@ on:
       - 'supabase/functions/widemeet-auth/**'
       - 'supabase/functions/widemeet-room/**'
       - '.github/workflows/widemeet-gate.yml'
+      - '.github/workflows/family-audio-replay.yml'
   pull_request:
     branches: [test/widemeet-qualification-20261126]
     types: [opened, synchronize, reopened]
