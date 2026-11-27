@@ -96,7 +96,7 @@ Deno.serve(async request=>{
   if(Deno.env.get("WM_LIVE_CAPTIONS_QUALIFIED")!=="true"||!b.data||typeof b.data.room_id!=="string"||typeof b.data.language!=="string")return send(403,{error:"forbidden"});
   const result=await rpc("wm_live_caption_read",{p_hash,p_room:b.data.room_id,p_language:b.data.language});return result?send(200,result):send(403,{error:"forbidden"});
  }
- if(Deno.env.get("WM_TRANSCRIPTION_QUALIFIED")!=="true"||!["list","request","read","retry","search","draft-review"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(403,{error:"forbidden"});
+ if(Deno.env.get("WM_TRANSCRIPTION_QUALIFIED")!=="true"||!["list","request","read","retry","search","draft-review","speaker-review"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(403,{error:"forbidden"});
  const result=await rpc("wm_transcription_action",{p_hash,p_action:b.action,p_data:b.data});return result?send(200,result):send(403,{error:"forbidden"});
  }
  if(action==="tasks"){

@@ -9,6 +9,7 @@ create table public.wm_transcription_jobs(
  lease uuid,
  lease_until timestamptz,
  result jsonb,
+ speaker_annotations jsonb not null default '[]'::jsonb check(jsonb_typeof(speaker_annotations)='array' and jsonb_array_length(speaker_annotations)<=1000),
  created_at timestamptz not null default clock_timestamp(),
  updated_at timestamptz not null default clock_timestamp(),
  check((status='running')=(lease is not null and lease_until is not null)),
@@ -81,7 +82,7 @@ revoke all on function public.wm_transcription_search(jsonb,uuid,text) from publ
 grant execute on function public.wm_transcription_search(jsonb,uuid,text) to service_role;
 create function public.wm_transcription_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare s record; rid uuid; recid uuid; j public.wm_transcription_jobs%rowtype; v jsonb; src jsonb; selection jsonb; review jsonb; selected_items jsonb;
+declare s record; rid uuid; recid uuid; j public.wm_transcription_jobs%rowtype; v jsonb; src jsonb; selection jsonb; review jsonb; selected_items jsonb; segment_no integer; speaker_no integer; expected_rev integer; current_rev integer; event_id uuid; previous_event jsonb; annotation jsonb;
 begin
  select * into s from public.wm_session_context(p_hash);
  if not found or s.password_change_required then return null;end if;
@@ -116,6 +117,24 @@ begin
  elsif p_action='retry' then
   if not found or j.status<>'failed' or j.attempts>=3 then return null;end if;
   update public.wm_transcription_jobs set status='queued',updated_at=clock_timestamp() where recording_id=recid returning * into j;
+ elsif p_action='speaker-review' then
+  if not found or j.status<>'complete' then return null;end if;
+  if jsonb_typeof(p_data->'segment_index') is distinct from 'number' or coalesce(p_data->>'segment_index','') !~ '^(0|[1-9][0-9]{0,2})$'
+   or jsonb_typeof(p_data->'speaker_number') is distinct from 'number' or coalesce(p_data->>'speaker_number','') !~ '^(0|[1-9]|10)$'
+   or jsonb_typeof(p_data->'expected_revision') is distinct from 'number' or coalesce(p_data->>'expected_revision','') !~ '^(0|[1-9][0-9]{0,3})$'
+   or jsonb_typeof(p_data->'event_id') is distinct from 'string' then return null;end if;
+  segment_no:=(p_data->>'segment_index')::integer;speaker_no:=(p_data->>'speaker_number')::integer;expected_rev:=(p_data->>'expected_revision')::integer;event_id:=(p_data->>'event_id')::uuid;
+  if event_id is null or segment_no>=jsonb_array_length(j.result->'segments') or expected_rev>1000 then return null;end if;
+  select x into previous_event from jsonb_array_elements(j.speaker_annotations) x where x->>'event_id'=event_id::text;
+  if found then
+   if (previous_event->>'segment_index')::integer=segment_no and (previous_event->>'speaker_number')::integer=speaker_no and (previous_event->>'revision')::integer=expected_rev+1 then return jsonb_build_object('saved',true,'event',previous_event);end if;
+   return null;
+  end if;
+  select coalesce(max((x->>'revision')::integer),0) into current_rev from jsonb_array_elements(j.speaker_annotations) x where (x->>'segment_index')::integer=segment_no;
+  if current_rev<>expected_rev or jsonb_array_length(j.speaker_annotations)>=1000 then return null;end if;
+  annotation:=jsonb_build_object('event_id',event_id,'segment_index',segment_no,'speaker_number',speaker_no,'revision',current_rev+1,'method','human-anonymous-v1','created_at',clock_timestamp());
+  update public.wm_transcription_jobs set speaker_annotations=speaker_annotations||jsonb_build_array(annotation),updated_at=clock_timestamp() where recording_id=recid;
+  return jsonb_build_object('saved',true,'event',annotation);
  elsif p_action='draft-review' then
   if not found or j.status<>'complete' or jsonb_typeof(p_data->'indices') is distinct from 'array' then return null;end if;
   selection:=p_data->'indices';
@@ -129,14 +148,14 @@ begin
    select value as x from jsonb_array_elements(review->'decision_candidates')
   ) q where selection @> jsonb_build_array((x->>'segment_index')::integer);
   if jsonb_array_length(selected_items)<>jsonb_array_length(selection) then return null;end if;
-  return jsonb_build_object('method','selected-source-review-v1','recording_id',recid,'items',selected_items,'approved',false);
+  return jsonb_build_object('method','selected-source-review-v1','recording_id',recid,'items',selected_items,'approved',false,'speaker_annotations',coalesce((select jsonb_agg(z.x order by (z.x->>'segment_index')::integer) from (select distinct on ((x->>'segment_index')::integer) x from jsonb_array_elements(j.speaker_annotations) x where selection @> jsonb_build_array((x->>'segment_index')::integer) order by (x->>'segment_index')::integer,(x->>'revision')::integer desc) z),'[]'::jsonb));
  elsif p_action='search' then
   if not found or j.status<>'complete' or jsonb_typeof(p_data->'query') is distinct from 'string' or length(btrim(p_data->>'query')) not between 2 and 120 then return null;end if;
   return public.wm_transcription_search(j.result,recid,p_data->>'query');
  elsif p_action='read' then
   if not found then return jsonb_build_object('status','not_requested','attempts',0);end if;
  else return null;end if;
- return jsonb_build_object('recording_id',recid,'status',j.status,'attempts',j.attempts,'result',case when j.status='complete' then j.result||jsonb_build_object('review',public.wm_transcription_review(j.result,recid),'captions',public.wm_transcription_cues(j.result,recid)) else null end);
+ return jsonb_build_object('recording_id',recid,'status',j.status,'attempts',j.attempts,'result',case when j.status='complete' then j.result||jsonb_build_object('review',public.wm_transcription_review(j.result,recid),'captions',public.wm_transcription_cues(j.result,recid),'speaker_annotations',j.speaker_annotations) else null end);
 exception when invalid_text_representation or unique_violation then return null;
 end $wm$;
 revoke all on function public.wm_transcription_action(text,text,jsonb) from public,anon,authenticated;
