@@ -150,18 +150,18 @@ end $$;
 -- Read only own site; seller gets no costs, expenses, manager totals, or other sellers' sales.
 create function grillad_private.snapshot(p_org uuid,p_site uuid,p_from date,p_to date)
 returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
-declare r text;u uuid:=auth.uid();items jsonb;sales jsonb;finance jsonb;cash jsonb;
+declare r text;u uuid:=auth.uid();v_items jsonb;v_sales jsonb;v_finance jsonb;v_cash jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
  if p_from is null or p_to is null or p_to<p_from or p_to-p_from>366 then raise exception 'GRILLAD_PERIOD' using errcode='22023';end if;
- select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'family',i.family,'price',i.price,'prepared',i.prepared,'sold',i.sold,'remaining',i.prepared-i.sold)||case when r='seller' then '{}'::jsonb else jsonb_build_object('cost',i.cost) end order by i.name),'[]'::jsonb) into items from grillad_private.items i where org=p_org and site=p_site and active;
- select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'item',s.item,'qty',s.qty,'total',s.total,'actor',s.actor,'at',s.created_at,'cancelled',s.cancelled_at is not null) order by s.created_at desc),'[]'::jsonb) into sales from (select * from grillad_private.sales where org=p_org and site=p_site and (r<>'seller' or actor=u) and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) s;
+ select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'family',i.family,'price',i.price,'prepared',i.prepared,'sold',i.sold,'remaining',i.prepared-i.sold)||case when r='seller' then '{}'::jsonb else jsonb_build_object('cost',i.cost) end order by i.name),'[]'::jsonb) into v_items from grillad_private.items i where org=p_org and site=p_site and active;
+ select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'item',s.item,'qty',s.qty,'total',s.total,'actor',s.actor,'at',s.created_at,'cancelled',s.cancelled_at is not null) order by s.created_at desc),'[]'::jsonb) into v_sales from (select * from grillad_private.sales where org=p_org and site=p_site and (r<>'seller' or actor=u) and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) s;
  if r<>'seller' then
- select jsonb_build_object('ca',coalesce(sum(total),0),'sales_count',count(*),'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,'charges',(select coalesce(sum(value),0) from grillad_private.expenses where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to)) into finance from grillad_private.sales where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to;
- select jsonb_build_object('id',c.id,'opening',c.opening,'expected',c.opening+coalesce((select sum(total) from grillad_private.sales where cash=c.id and cancelled_at is null),0)-coalesce((select sum(value) from grillad_private.expenses where cash=c.id),0)) into cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
- else select jsonb_build_object('id',c.id) into cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
+ select jsonb_build_object('ca',coalesce(sum(total),0),'sales_count',count(*),'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,'charges',(select coalesce(sum(value),0) from grillad_private.expenses where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to)) into v_finance from grillad_private.sales where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to;
+ select jsonb_build_object('id',c.id,'opening',c.opening,'expected',c.opening+coalesce((select sum(total) from grillad_private.sales where cash=c.id and cancelled_at is null),0)-coalesce((select sum(value) from grillad_private.expenses where cash=c.id),0)) into v_cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
+ else select jsonb_build_object('id',c.id) into v_cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
  end if;
- return jsonb_build_object('role',r,'items',items,'sales',sales,'finance',finance,'cash',cash,'from',p_from,'to',p_to,'generated_at',now());
+ return jsonb_build_object('role',r,'items',v_items,'sales',v_sales,'finance',v_finance,'cash',v_cash,'from',p_from,'to',p_to,'generated_at',now());
 end $$;
 -- Explicit narrow public RPCs are invoker wrappers. All authorization lives inside private functions.
 create function public.grillad_action(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb)
