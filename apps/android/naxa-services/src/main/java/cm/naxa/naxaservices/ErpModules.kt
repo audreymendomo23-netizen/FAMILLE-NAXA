@@ -1339,19 +1339,48 @@ fun ReportsContent(
     session: AuthSession
 ) {
     val scope = rememberCoroutineScope()
-    var rows by remember { mutableStateOf<List<SiteDailyReport>>(emptyList()) }
+    val context = LocalContext.current
+    val scopeKey=session.account.organizationId+":"+session.account.memberId+":"+session.account.activeSiteIds.sorted().joinToString(",")
+    val liveScope=androidx.compose.runtime.rememberUpdatedState(scopeKey)
+    var rows by remember(scopeKey) { mutableStateOf<List<SiteDailyReport>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var generatedAt by remember { mutableStateOf<String?>(null) }
+    var generatedAt by remember(scopeKey) { mutableStateOf<String?>(null) }
+    var exportNotice by remember(scopeKey) { mutableStateOf<String?>(null) }
+    var pendingExport by remember(scopeKey) { mutableStateOf<Pair<String,List<List<Any?>>>?>(null) }
+    var period by remember(scopeKey) { mutableStateOf("day") }
 
+    fun reportRows(): List<List<Any?>> {
+        val header=listOf<Any?>("Point de vente","CA confirmé FCFA","Coûts connus FCFA","Charges FCFA","Marge brute FCFA","Résultat indicatif FCFA","Règlements fournisseurs FCFA","Ventes non chiffrées","Rendez-vous","Tickets pressing")
+        return listOf(listOf<Any?>("NAXA SERVICES — rapport local",session.account.organizationName,period,generatedAt.orEmpty()),header)+rows.map { r ->
+            listOf<Any?>(session.account.activeSites.firstOrNull { it.id==r.siteId }?.name?:r.siteId,r.salesXaf,r.costOfGoodsXaf,r.expensesXaf,r.grossProfitXaf,r.operatingResultXaf,r.supplierPaymentsXaf,r.uncostedSalesCount,r.appointments,r.pressingTickets)
+        }
+    }
+    val xlsx=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) { uri ->
+        val export=pendingExport;pendingExport=null
+        if(uri!=null&&export!=null&&export.first==liveScope.value) runCatching {
+            context.contentResolver.openOutputStream(uri,"w")?.use { NativeReportExport.writeXlsx(it,export.second) }?:error("Destination indisponible")
+        }.onSuccess { exportNotice="Classeur XLSX enregistré." }.onFailure { error=it.message }
+    }
+    val pdf=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        val export=pendingExport;pendingExport=null
+        if(uri!=null&&export!=null&&export.first==liveScope.value) runCatching {
+            context.contentResolver.openOutputStream(uri,"w")?.use { NativeReportExport.writePdf(it,export.second) }?:error("Destination indisponible")
+        }.onSuccess { exportNotice="Rapport PDF enregistré." }.onFailure { error=it.message }
+    }
     fun refresh() {
         scope.launch {
-            busy = true; error = null
+            if(busy)return@launch
+            busy = true; error = null; rows=emptyList();generatedAt=null;exportNotice=null
+            val requestedScope=scopeKey
+            val requestedPeriod=period
             runCatching {
                 val start = Calendar.getInstance(java.util.TimeZone.getTimeZone("Africa/Douala")).apply {
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                    if(requestedPeriod=="month")set(Calendar.DAY_OF_MONTH,1)
+                    if(requestedPeriod=="year")set(Calendar.DAY_OF_YEAR,1)
                 }.timeInMillis
-                val end = start + 24L * 60L * 60L * 1000L - 1L
+                val end = System.currentTimeMillis()
                 session.account.activeSiteIds.map { siteId ->
                     SiteDailyReport(
                         siteId = siteId,
@@ -1366,14 +1395,14 @@ fun ReportsContent(
                     )
                 }
             }.onSuccess {
-                rows = it
-                generatedAt = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+                if(requestedScope==liveScope.value){rows = it
+                generatedAt = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}
             }.onFailure { error = it.message ?: "Calcul du rapport impossible." }
             busy = false
         }
     }
 
-    LaunchedEffect(session.account.memberId) { refresh() }
+    LaunchedEffect(scopeKey,period) { refresh() }
     val totalSales = rows.sumOf { it.salesXaf }
     val totalExpenses = rows.sumOf { it.expensesXaf }
     val totalSupplierPayments = rows.sumOf { it.supplierPaymentsXaf }
@@ -1385,11 +1414,19 @@ fun ReportsContent(
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            ModulePageTitle("Rapports et pilotage", "Indicateurs de la journée, ventilés par point de vente autorisé.")
+            ModulePageTitle("Rapports et pilotage", "Indicateurs par période, ventilés par point de vente autorisé.")
             LocalOnlyNotice("Rapport fondé sur les données disponibles sur cet appareil. Il ne constitue ni une clôture comptable ni un rapport complet du réseau.")
-            Button(onClick = { refresh() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                Text(if (busy) "Calcul…" else "Actualiser le rapport du jour")
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                listOf("day" to "Jour","month" to "Mois","year" to "Année").forEach { (value,label) -> OutlinedButton(enabled=!busy&&period!=value,onClick={period=value;rows=emptyList();generatedAt=null}) { Text(label) } }
             }
+            Button(onClick = { refresh() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Text(if (busy) "Calcul…" else "Actualiser le rapport")
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled=!busy&&rows.isNotEmpty()&&generatedAt!=null,onClick={pendingExport=scopeKey to reportRows();xlsx.launch("NAXA-Rapport.xlsx")}) { Text("XLSX") }
+                OutlinedButton(enabled=!busy&&rows.isNotEmpty()&&generatedAt!=null,onClick={pendingExport=scopeKey to reportRows();pdf.launch("NAXA-Rapport.pdf")}) { Text("PDF") }
+            }
+            if(exportNotice!=null)Text(exportNotice!!)
             if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
             if (!generatedAt.isNullOrBlank()) Text(localizedLabel("Calculé le ","Calculated on ","Limtaama ñalnde ") + generatedAt!!, style = MaterialTheme.typography.labelSmall)
         }
