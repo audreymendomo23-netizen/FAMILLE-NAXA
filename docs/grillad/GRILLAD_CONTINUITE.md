@@ -375,3 +375,8 @@ Baseline cccb107 ; les 12 campagnes de la section 20 sont terminées : 11/12 ent
 - [46084895784](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46084895784) : 13/14 SUCCESS ; échecs : aucun observé ; en cours : android.
 - [46085071575](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46085071575) : 10/14 SUCCESS ; échecs : aucun observé ; en cours : web (business-connected), web (demo), android, web (connected).
 - Cloudflare/Firebase toujours différés ; aucun déploiement Edge Function, aucune fusion main, aucun changement des autres applications. Reste provisionnement réel, intégrations externes, arbitrages métier et recette appareil/API hébergée. Ne pas confondre baseline SQL installée et application certifiée.
+
+### 26.1. Qualification et seconde migration
+- 46084895784 (728f877) terminé **14/14 SUCCESS**, correction Kotlin qualifiée.
+- 46085071575 (a307c1c) : 11/14 SUCCESS ; échecs : aucun observé ; en cours : web (business-connected), android, web (connected). Quatre suites SQL vertes avant application hébergée.
+- Migration appliquée **20261127235540 grillad_personal_profile_a307c1c**, source supabase/drafts/grillad_profile_v1.sql au SHA a307c1cc75275a58db606fad1f0494e501ca066c ; transactions externes retirées, garde finale RLS/refus droits directs et refus anon. Historique Supabase confirmé. Après : 36 tables GRILLAD (36 RLS), 33 RPC publics (0 anon), aucun profil créé. Le code client n'est pas déployé ; application planned. Aucune modification des applications voisines.
