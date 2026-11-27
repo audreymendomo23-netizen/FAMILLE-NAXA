@@ -21,6 +21,9 @@ do $$
 declare o uuid:='92000000-0000-0000-0000-000000000001';a uuid:='93000000-0000-0000-0000-000000000001';b uuid:='93000000-0000-0000-0000-000000000002';i uuid:='94000000-0000-0000-0000-000000000001';e uuid:='94000000-0000-0000-0000-000000000002';s uuid:='94000000-0000-0000-0000-000000000003';v jsonb;basket uuid:=gen_random_uuid();j uuid:=gen_random_uuid();payload jsonb;adj uuid:=gen_random_uuid();ex uuid:=gen_random_uuid();ce uuid:=gen_random_uuid();day date:=(now() at time zone 'Africa/Douala')::date;
 begin
  if jsonb_array_length(public.grillad_workspace())<>2 then raise exception 'workspace owner';end if;
+ v:=public.grillad_action(o,a,e,'create_site','{"name":"C","reason":"Extension réseau"}');
+ if v->>'id'<>e::text or public.grillad_action(o,a,e,'create_site','{"name":"C","reason":"Extension réseau"}')<>v or jsonb_array_length(public.grillad_workspace())<>3 then raise exception 'create site or replay';end if;
+ e:=gen_random_uuid();
  begin perform public.grillad_snapshot(o,'93000000-0000-0000-0000-000000000003',day,day);raise exception 'expected non GRILLAD site denial';exception when insufficient_privilege then null;end;
  perform public.grillad_action(o,a,i,'add_item','{"name":"Poulet","family":"Poulet","price":1000,"cost":400}');
  perform public.grillad_action(o,a,e,'prepare',jsonb_build_object('item',i,'qty',5));
@@ -62,6 +65,13 @@ begin
  v:=public.grillad_snapshot(o,a,day,day);if jsonb_array_length(v->'cash_history')<>1 or (v->'cash_history'->0->>'counted')::int<>1900 then raise exception 'cash history';end if;
  v:=public.grillad_action(o,a,gen_random_uuid(),'change_cost',jsonb_build_object('item',i,'cost',450,'reason','New unit cost'));if (v->>'old_cost')::int<>400 or (v->>'new_cost')::int<>450 then raise exception 'cost edit';end if;
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,cost}')::int<>800 then raise exception 'historical cost must not change';end if;
+ v:=public.grillad_action(o,a,gen_random_uuid(),'set_cost_composition',jsonb_build_object('item',i,'reason','Estimation','components',jsonb_build_array(jsonb_build_object('label','Viande','amount',400),jsonb_build_object('label','Charbon','amount',50))));
+ if (v->>'new_cost')::int<>450 or v->>'quality'<>'estimated' then raise exception 'complete composition';end if;
+ v:=public.grillad_action(o,a,gen_random_uuid(),'set_cost_composition',jsonb_build_object('item',i,'reason','Estimation','components',jsonb_build_array(jsonb_build_object('label','Viande','amount',400),jsonb_build_object('label','Charbon','amount',null))));
+ if v->'new_cost'<>'null'::jsonb or v->>'quality'<>'incomplete' then raise exception 'incomplete composition';end if;
+ v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,cost}')::int<>800 then raise exception 'composition rewrote history';end if;
+ begin perform public.grillad_action(o,a,gen_random_uuid(),'set_cost_composition',jsonb_build_object('item',i,'reason','Test','components',jsonb_build_array(jsonb_build_object('label','Viande','amount',-1))));raise exception 'negative component';exception when invalid_parameter_value then null;end;
+
  begin perform public.grillad_action(o,a,gen_random_uuid(),'set_item_active',jsonb_build_object('item',i,'active',false,'reason','Test'));raise exception 'deactivation with stock';exception when invalid_parameter_value then null;end;
  j:=gen_random_uuid();perform public.grillad_action(o,a,j,'add_item','{"name":"Archive","family":"Omelettes","price":500}');perform public.grillad_action(o,a,gen_random_uuid(),'set_item_active',jsonb_build_object('item',j,'active',false,'reason','Test'));v:=public.grillad_snapshot(o,a,day,day);if jsonb_array_length(v->'inactive_items')<>1 then raise exception 'inactive item history';end if;
  perform public.grillad_action(o,a,gen_random_uuid(),'set_item_active',jsonb_build_object('item',j,'active',true,'reason','Test'));v:=public.grillad_snapshot(o,a,day,day);if jsonb_array_length(v->'inactive_items')<>0 then raise exception 'reactivation';end if;
@@ -91,9 +101,11 @@ select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000001'
 select set_config('request.jwt.claims',jsonb_build_object('session_id','91000000-0000-0000-0000-000000000011','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.app')))::text,true);
 do $$begin if jsonb_array_length(public.grillad_workspace())<>0 then raise exception 'ACCESS must reject two enabled sites';end if;end $$;
 reset role;
-update grillad_private.enabled_sites set enabled=false where site='93000000-0000-0000-0000-000000000002';
+update grillad_private.enabled_sites set enabled=false where org='92000000-0000-0000-0000-000000000001' and site<>'93000000-0000-0000-0000-000000000001';
 set role authenticated;
-do $$begin if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'ACCESS must allow only explicit site';end if;end $$;
+do $$begin if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'ACCESS must allow only explicit site';end if;
+ begin perform public.grillad_action('92000000-0000-0000-0000-000000000001','93000000-0000-0000-0000-000000000001',gen_random_uuid(),'create_site','{"name":"D","reason":"Test"}');raise exception 'ACCESS second site';exception when insufficient_privilege then null;end;
+end $$;
 reset role;
 delete from auth.sessions where id='91000000-0000-0000-0000-000000000012';
 set role authenticated;
