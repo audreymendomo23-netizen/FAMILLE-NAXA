@@ -184,6 +184,15 @@ begin
  if public.wm_identity_action(repeat('6',64),'profile-update',jsonb_build_object('display_name','Updated name','locale','en','account_id',b)) is null then raise exception 'profile update failed';end if;
  if (select display_name from public.wm_accounts where id=b)<>'Fixture Two' then raise exception 'foreign profile changed';end if;
  if public.wm_identity_action(repeat('6',64),'onboarding-step','{"step":5}') is not null then raise exception 'onboarding skipped';end if;
+ -- SQL tests the storage boundary independently of the Edge JPEG decoder.
+ if public.wm_profile_photo(repeat('6',64),'photo-save','{"jpeg":"bm90IGFuIGltYWdl"}') is not null then raise exception 'non-JPEG stored';end if;
+ if public.wm_profile_photo(repeat('6',64),'photo-save',jsonb_build_object('jpeg','/9j/2Q==','account_id',b)) is not null then raise exception 'foreign photo target accepted';end if;
+ if public.wm_profile_photo(repeat('6',64),'photo-save','{"jpeg":"/9j/2Q=="}') is null then raise exception 'photo storage failed';end if;
+ if public.wm_profile_photo(repeat('6',64),'photo-read','{}')->>'jpeg' is distinct from '/9j/2Q==' then raise exception 'private photo read failed';end if;
+ if public.wm_profile_photo(repeat('7',64),'photo-read','{}')->>'jpeg' is not null then raise exception 'private photo cross-account leak';end if;
+ if public.wm_profile_photo(repeat('7',64),'photo-delete',jsonb_build_object('account_id',a)) is not null then raise exception 'foreign photo deletion accepted';end if;
+ if public.wm_profile_photo(repeat('6',64),'photo-delete','{}') is null or public.wm_profile_photo(repeat('6',64),'photo-read','{}')->>'jpeg' is not null then raise exception 'photo deletion failed';end if;
+
  for k in 1..5 loop
   j:=public.wm_identity_action(repeat('6',64),'onboarding-step',jsonb_build_object('step',k));
   if (j->>'step')::integer is distinct from k then raise exception 'onboarding failed';end if;
@@ -217,7 +226,7 @@ begin
 end $wm$;
 reset role;
 do $wm$ begin
- if has_function_privilege('anon','public.wm_identity_action(text,text,jsonb)','EXECUTE') or has_table_privilege('authenticated','public.wm_membership_invites','SELECT') or has_table_privilege('anon','public.wm_favorites','SELECT') or has_table_privilege('authenticated','public.wm_contact_groups','SELECT') then raise exception 'identity ACL leak';end if;
+ if has_function_privilege('anon','public.wm_identity_action(text,text,jsonb)','EXECUTE') or has_table_privilege('authenticated','public.wm_membership_invites','SELECT') or has_table_privilege('anon','public.wm_favorites','SELECT') or has_table_privilege('authenticated','public.wm_contact_groups','SELECT') or has_table_privilege('authenticated','public.wm_profile_photos','SELECT') or has_function_privilege('anon','public.wm_profile_photo(text,text,jsonb)','EXECUTE') then raise exception 'identity ACL leak';end if;
 end $wm$;
 
 
