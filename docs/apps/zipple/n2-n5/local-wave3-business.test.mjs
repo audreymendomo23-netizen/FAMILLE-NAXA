@@ -73,3 +73,36 @@ test("B5-007 variable compensation submission and owner approval, not payroll",a
  assert.ok(snapshot.rows.every(x=>x.state==="approved"));assert.equal(snapshot.can_approve_pay,false);
  console.log("ZIPPLE_QA_CASE_PARTIAL B5-007 VARIABLE_PAY_APPROVAL_PASS");
 });
+
+test("B5-003 concurrent shift overlap, replay and authorized cancellation",async()=>{
+ const {org,site,ok,b}=await fixture();const staff=await actor(org,site,"staff"),manager=await actor(org,site,"manager");
+ const write=(operation,payload,request_id=id())=>({operation,payload,request_id});
+ const shift={kind:"shift",title:"QA planning",detail:"Service prévu",category:"service",priority:"normal",assignee_id:staff.member,starts_at:"2027-05-01T07:00:00Z",due_at:"2027-05-01T11:00:00Z"};
+ const a=write("work_create",shift),other=write("work_create",{...shift,title:"Chevauchement"});
+ assert.equal((await staff.b("workspace_write",a)).status,403);
+ const replies=await Promise.all([b("workspace_write",a),manager.b("workspace_write",other)]);assert.deepEqual(replies.map(x=>x.status).sort(),[200,409]);
+ const winner=replies.findIndex(x=>x.status===200);assert.equal(replies[1-winner].body.error,"SHIFT_OVERLAP");
+ const chosen=winner===0?a:other,owner=winner===0?ok:manager.ok,record=replies[winner].body.data.id;
+ assert.equal((await owner("workspace_write",chosen)).id,record);
+ assert.equal((await staff.ok("workspace_snapshot",{page:"planning"})).rows.length,1);
+ assert.equal((await staff.b("workspace_write",write("work_state",{work_id:record,expected_state:"open",state:"cancelled"}))).status,403);
+ await ok("workspace_write",write("work_state",{work_id:record,expected_state:"open",state:"cancelled"}));
+ const next=await ok("workspace_write",write("work_create",shift));assert.notEqual(next.id,record);
+ assert.equal(Number(await scalar("select count(*) from zp_work_items where site_id=$1 and kind='shift' and state<>'cancelled'",[site])),1);
+ console.log("ZIPPLE_QA_CASE_PARTIAL B5-003 SHIFT_SCOPE_OVERLAP_REPLAY_PASS");
+});
+test("B5-009 assigned incident dialogue, manager state and immutable closed history",async()=>{
+ const {org,site,ok}=await fixture();const staff=await actor(org,site,"staff"),other=await actor(org,site,"staff");
+ const write=(operation,payload,request_id=id())=>({operation,payload,request_id});
+ const record=await ok("workspace_write",write("work_create",{kind:"incident",title:"Incident QA",detail:"Correction service",category:"quality",priority:"urgent",assignee_id:staff.member,due_at:"2027-05-03T12:00:00Z"}));
+ assert.equal((await other.ok("workspace_snapshot",{page:"incidents"})).rows.length,0);
+ const reply=write("work_reply",{work_id:record.id,body:"Correction proposée"});
+ assert.equal((await other.b("workspace_write",reply)).status,403);
+ const message=await staff.ok("workspace_write",reply);assert.equal((await staff.ok("workspace_write",reply)).id,message.id);
+ await ok("workspace_write",write("work_state",{work_id:record.id,expected_state:"open",state:"in_progress"}));
+ await ok("workspace_write",write("work_state",{work_id:record.id,expected_state:"in_progress",state:"done"}));
+ await denied(staff.b,"workspace_write",write("work_reply",{work_id:record.id,body:"Message tardif"}),"INVALID_TRANSITION");
+ const saved=(await staff.ok("workspace_snapshot",{page:"incidents"})).rows.find(x=>x.id===record.id);
+ assert.equal(saved.state,"done");assert.equal(saved.messages.length,1);assert.equal(saved.messages[0].body,"Correction proposée");
+ console.log("ZIPPLE_QA_CASE_PARTIAL B5-009 INCIDENT_SCOPE_AND_CLOSURE_PASS");
+});

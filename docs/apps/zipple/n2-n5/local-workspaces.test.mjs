@@ -57,7 +57,12 @@ test("ZIPPLE professional workspace pages on real GoTrue, Edge, PostgreSQL and b
    if(pid==="incidents")await root.getByLabel("Catégorie",{exact:true}).selectOption("service");else await root.getByLabel("Thème",{exact:true}).fill("Service");
    await root.getByLabel("Employé affecté",{exact:true}).selectOption(member);
    if(pid==="planning")await root.getByLabel("Début (heure Douala)",{exact:true}).fill("2027-01-01T08:00");
-   await root.getByLabel("Échéance (heure Douala)",{exact:true}).fill("2027-01-01T12:00");await root.getByRole("button",{name:"Créer",exact:true}).click();await root.getByText(title+" · Ouvert",{exact:true}).waitFor();await shot("workspace-"+pid);
+   await root.getByLabel("Échéance (heure Douala)",{exact:true}).fill("2027-01-01T12:00");await root.getByRole("button",{name:"Créer",exact:true}).click();await root.getByText(title+" · Ouvert",{exact:true}).waitFor();
+   await root.getByLabel("Statut du dossier",{exact:true}).selectOption("done");await root.getByText("Aucun dossier correspondant.",{exact:true}).waitFor();
+   await root.getByRole("button",{name:"Réinitialiser la recherche"}).click();await root.getByText(title+" · Ouvert",{exact:true}).waitFor();
+   await root.getByLabel("Rechercher un dossier",{exact:true}).fill("sans-correspondance");await root.getByText("Aucun dossier correspondant.",{exact:true}).waitFor();await root.getByRole("button",{name:"Réinitialiser la recherche"}).click();
+   if(pid==="planning"){await root.getByText(/Début : /).waitFor();await root.getByLabel("Intitulé",{exact:true}).fill("Créneau invalide");await root.getByLabel("Description",{exact:true}).fill("Test garde interface");await root.getByLabel("Thème",{exact:true}).fill("Service");await root.getByLabel("Employé affecté",{exact:true}).selectOption(member);await root.getByLabel("Début (heure Douala)",{exact:true}).fill("2027-01-02T12:00");await root.getByLabel("Échéance (heure Douala)",{exact:true}).fill("2027-01-02T08:00");assert.equal(await root.getByRole("button",{name:"Créer",exact:true}).isDisabled(),true);await root.getByText("Le créneau doit durer de 1 minute à 24 heures.").waitFor();}
+   console.log("ZIPPLE_QA_PORTAL_FILTER_PASS "+pid);await shot("workspace-"+pid);
   }
   const hrPage=await openPortal("Absences et rémunérations","hr");
   await hrPage.getByLabel("Début",{exact:true}).fill("2027-02-01");await hrPage.getByLabel("Fin",{exact:true}).fill("2027-02-02");await hrPage.getByLabel("Motif professionnel",{exact:true}).fill("Demande congé navigateur");
