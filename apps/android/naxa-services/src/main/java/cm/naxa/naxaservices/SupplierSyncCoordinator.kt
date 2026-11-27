@@ -220,16 +220,19 @@ object SupplierSyncCoordinator {
     suspend fun syncPending(
         repository: NaxaServicesLocalRepository,
         api: AuthApi,
-        session: AuthSession
+        session: AuthSession,
+        isCurrent: () -> Boolean = { true }
     ): SupplierSyncSummary = withSyncLock {
-        syncPendingLocked(repository, api, session)
+        syncPendingLocked(repository, api, session, isCurrent)
     }
 
     private suspend fun syncPendingLocked(
         repository: NaxaServicesLocalRepository,
         api: AuthApi,
-        session: AuthSession
+        session: AuthSession,
+        isCurrent: () -> Boolean
     ): SupplierSyncSummary {
+        if(!isCurrent())throw cm.naxa.naxaservices.auth.RememberedSessionChanged()
         require(session.account.organizationId.isNotBlank()) { "Organisation active manquante." }
         check(isConfigured()) {
             "Synchronisation bloquée : configure une passerelle Famille NAXA dédiée, différente du projet NAXA historique."
@@ -245,6 +248,7 @@ object SupplierSyncCoordinator {
         var rejected = 0
 
         for (event in events) {
+            if(!isCurrent())throw cm.naxa.naxaservices.auth.RememberedSessionChanged()
             if (isRetryDelayPending(event, System.currentTimeMillis())) {
                 retried++
                 break
@@ -322,6 +326,7 @@ object SupplierSyncCoordinator {
                 .put("payload", payload)
 
             try {
+                if(!isCurrent())throw cm.naxa.naxaservices.auth.RememberedSessionChanged()
                 val response = api.accountingRequest(
                     session.accessToken,
                     JSONObject()
@@ -345,6 +350,7 @@ object SupplierSyncCoordinator {
                 ) {
                     throw IllegalStateException("SYNC_RECEIPT_MISMATCH")
                 }
+                if(!isCurrent())throw cm.naxa.naxaservices.auth.RememberedSessionChanged()
                 val result = receipt.optJSONObject("result") ?: JSONObject()
                 if (!repository.applyCanonicalServerEffects(event, payload, result)) {
                     throw IllegalStateException("SERVER_SIDE_EFFECT_RECONCILIATION_FAILED")
@@ -369,6 +375,7 @@ object SupplierSyncCoordinator {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
+                if(failure is cm.naxa.naxaservices.auth.RememberedSessionChanged || !isCurrent())throw cm.naxa.naxaservices.auth.RememberedSessionChanged()
                 val status = (failure as? AuthApiException)?.statusCode
                 val policy = classifySyncFailure(status, failure.message.orEmpty())
                 val attempts = event.attemptCount + 1

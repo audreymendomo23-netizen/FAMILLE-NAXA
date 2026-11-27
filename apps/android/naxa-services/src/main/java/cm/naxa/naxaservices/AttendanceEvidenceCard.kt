@@ -178,6 +178,21 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
    }
    withContext(Dispatchers.IO){journal.remove(id)};pending=null;clear();queued=true
   }
+  // Retry only the already captured immutable proof. Never reacquire GPS or change its timestamp.
+  // Expired proofs remain pending for explicit review/abandonment, not accepted retroactively.
+  LaunchedEffect(pending?.optString("id"),session.accessToken){
+   while(true){
+    kotlinx.coroutines.delay(5000)
+    val value=pending?:break
+    if(!journal.replayable(value))break
+    if(busy)continue
+    val network=context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+    val caps=network.getNetworkCapabilities(network.activeNetwork)
+    if(caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)!=true)continue
+    busy=true;error=false
+    try{submitPending(value);break}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}
+   }
+  }
   val gpsPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){granted->if(granted[Manifest.permission.ACCESS_FINE_LOCATION]==true)gps()else error=true}
   val cameraPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(granted)camera=true else error=true}
   Card(Modifier.fillMaxWidth()){

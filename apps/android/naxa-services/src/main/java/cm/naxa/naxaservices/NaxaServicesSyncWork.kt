@@ -87,9 +87,11 @@ data class NaxaServicesSyncCycleSummary(
 internal suspend fun runNaxaServicesSyncCycle(
     repository: NaxaServicesLocalRepository,
     api: AuthApi,
-    session: AuthSession
+    session: AuthSession,
+    isCurrent: () -> Boolean = { true }
 ): NaxaServicesSyncCycleSummary {
-    val outgoing = SupplierSyncCoordinator.syncPending(repository, api, session)
+    if(!isCurrent())throw RememberedSessionChanged()
+    val outgoing = SupplierSyncCoordinator.syncPending(repository, api, session, isCurrent)
     var cursor = repository.dao.findSyncCheckpoint(
         session.account.organizationId, session.deviceId
     )?.cursor ?: 0L
@@ -97,6 +99,7 @@ internal suspend fun runNaxaServicesSyncCycle(
     var pageCount = 0
     var incomingApplied = 0
     while (hasMore && pageCount < MAX_PULL_PAGES_PER_RUN) {
+        if(!isCurrent())throw RememberedSessionChanged()
         val response = api.accountingRequest(
             session.accessToken,
             JSONObject()
@@ -112,6 +115,7 @@ internal suspend fun runNaxaServicesSyncCycle(
             ?: throw IllegalStateException("SYNC_PULL_PAGE_MISSING")
         val nextCursor = page.optLong("next_cursor", -1L)
         if (nextCursor < cursor) throw IllegalStateException("SYNC_PULL_CURSOR_REGRESSION")
+        if(!isCurrent())throw RememberedSessionChanged()
         incomingApplied += repository.persistRemoteSyncPage(
             session.account.organizationId, session.deviceId, page
         )
@@ -167,10 +171,12 @@ class NaxaServicesSyncWorker(
         return try {
             if(vault.binding()!=binding)return Result.success()
             val repository = NaxaServicesLocalRepository(database)
-            val summary = runNaxaServicesSyncCycle(repository, api, session)
+            val summary = runNaxaServicesSyncCycle(repository, api, session){vault.binding()==binding}
             if (shouldRetrySyncWorker(summary.outgoing.retried, summary.hasMore)) Result.retry() else Result.success()
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (_: RememberedSessionChanged) {
+            Result.success()
         } catch (_: Exception) {
             Result.retry()
         } finally {

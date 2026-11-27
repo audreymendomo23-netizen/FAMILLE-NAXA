@@ -100,7 +100,7 @@ function App() {
   // A generation belongs to a login, not just an organization or a device.
   // Late responses may persist in their own tenant partition but must never repaint a new login.
   const sessionFence = useRef<{generation:number; scope:string}>({generation:0,scope:""});
-  const syncFlight=useRef<{generation:number;promise:Promise<WebSyncSummary>}|null>(null);
+  const syncFlight=useRef<{generation:number;promise:Promise<WebSyncSummary>;requested:boolean}|null>(null);
   function scopeOf(session:WebAuthSession) {
     return [session.account.organization_id,session.account.member_id,session.deviceId].join(":");
   }
@@ -622,12 +622,24 @@ function App() {
 
 
   function syncWebOutbox(activeSession: WebAuthSession):Promise<WebSyncSummary> {
-    captureSession(activeSession);
+    const isCurrent=captureSession(activeSession);
     const generation=sessionFence.current.generation;
-    if(syncFlight.current?.generation===generation)return syncFlight.current.promise;
-    const promise=syncWebOutboxOnce(activeSession).finally(()=>{if(syncFlight.current?.promise===promise)syncFlight.current=null;});
-    syncFlight.current={generation,promise};
-    return promise;
+    const existing=syncFlight.current;
+    if(existing?.generation===generation){existing.requested=true;return existing.promise;}
+    // A submission arriving after a batch was leased must get its own drain.
+    // Keep one writer per login, and coalesce wakeups without losing the last one.
+    const flight={generation,requested:true,promise:undefined as unknown as Promise<WebSyncSummary>};
+    syncFlight.current=flight;
+    flight.promise=(async()=>{
+      let total:WebSyncSummary={acknowledged:0,retrying:0,rejected:0,remaining:0};
+      do{
+        flight.requested=false;
+        const next=await syncWebOutboxOnce(activeSession);
+        total={acknowledged:total.acknowledged+next.acknowledged,retrying:total.retrying+next.retrying,rejected:total.rejected+next.rejected,remaining:next.remaining};
+      }while(flight.requested&&isCurrent()&&navigator.onLine);
+      return total;
+    })().finally(()=>{if(syncFlight.current===flight)syncFlight.current=null;});
+    return flight.promise;
   }
 
   async function syncWebOutboxOnce(activeSession: WebAuthSession):Promise<WebSyncSummary> {
@@ -643,7 +655,7 @@ function App() {
       let status:number|null=null,errorCode="NETWORK_UNAVAILABLE",command:Record<string,unknown>={};
       try {
         command=JSON.parse(queued.payload) as Record<string,unknown>;
-        if(queued.deviceId!==freshSession.deviceId||!Number.isSafeInteger(queued.deviceSequence)||(queued.deviceSequence??0)<=0){status=422;errorCode="LEGACY_QUEUE_EVENT_REQUIRES_REENQUEUE";throw new Error(errorCode);}
+        if(queued.memberId!==freshSession.account.member_id||queued.deviceId!==freshSession.deviceId||!Number.isSafeInteger(queued.deviceSequence)||(queued.deviceSequence??0)<=0){status=422;errorCode="LEGACY_QUEUE_EVENT_REQUIRES_REENQUEUE";throw new Error(errorCode);}
         const payload=command.payload;
         if(!payload||typeof payload!=="object"||Array.isArray(payload)||command.org_id!==freshSession.account.organization_id||typeof command.aggregate_type!=="string"||typeof command.aggregate_id!=="string"||typeof command.action_code!=="string"){status=422;errorCode="INVALID_QUEUED_DOMAIN_EVENT";throw new Error(errorCode);}
         const event={event_id:queued.eventId,device_id:freshSession.deviceId,device_sequence:queued.deviceSequence,org_id:command.org_id,site_id:typeof command.site_id==="string"?command.site_id:null,workstation_id:typeof command.workstation_id==="string"?command.workstation_id:null,aggregate_type:command.aggregate_type,aggregate_id:command.aggregate_id,action_code:command.action_code,payload};

@@ -459,6 +459,13 @@ private fun NaxaServicesRoot(
                                 if(rememberSession)recoveryAttempt++
                             }
                             return@LaunchedEffect
+                        }else if(!isTemporarySessionFailure(error)){
+                            // An authoritative or malformed answer is not a network outage.
+                            binding?.let{vault.invalidateOfflineSnapshot(it)}
+                            offlineRestored=false;session=null;localPinUnlockedMemberId=null
+                            route=AppRoute.LOGIN.name
+                            message="Connexion requise pour reprendre."
+                            return@LaunchedEffect
                         }else{
                             retry += 1
                             delay(30_000L)

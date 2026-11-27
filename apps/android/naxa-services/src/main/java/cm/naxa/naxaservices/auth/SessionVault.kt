@@ -98,10 +98,10 @@ class SessionVault(private val context: Context) {
         if(expected==null||binding()!=expected||expected.memberId!=session.account.memberId||expected.deviceId!=session.deviceId||expected.organizationId!=session.account.organizationId)return
         if(loadRefreshToken()!=session.refreshToken||loadAccessToken()!=session.accessToken)return
         val wall=System.currentTimeMillis();val boot=bootCount()
-        if(boot<0)return
-        val claims=runCatching{JSONObject(String(Base64.decode(session.accessToken.split(".")[1],Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING),Charsets.UTF_8))}.getOrNull()?:return
+        if(boot<0){clearOfflineSnapshot();return}
+        val claims=runCatching{JSONObject(String(Base64.decode(session.accessToken.split(".")[1],Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING),Charsets.UTF_8))}.getOrNull()?:run{clearOfflineSnapshot();return}
         val iat=claims.optLong("iat",0)*1000L;val exp=claims.optLong("exp",0)*1000L
-        if(iat<=0||iat>wall+120000||wall-iat>OfflineSessionPolicy.MAX_MS)return
+        if(iat<=0||iat>wall+120000||wall-iat>OfflineSessionPolicy.MAX_MS){clearOfflineSnapshot();return}
         val until=OfflineSessionPolicy.expiresAt(session,access,exp,wall,claims.optString("session_id"))?:run{clearOfflineSnapshot();return}
         val a=session.account;val sites=JSONArray()
         a.activeSites.forEach{s->sites.put(JSONObject().put("id",s.id).put("code",s.code).put("name",s.name).put("address",s.addressLabel).put("phone",s.phoneContact))}
