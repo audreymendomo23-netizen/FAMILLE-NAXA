@@ -42,7 +42,9 @@ jobs:
       - run: npm run build --workspace @famille/widemeet-web
       - run: |
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
-          npx playwright install --with-deps chromium
+          # Hosted Ubuntu runner already supplies Chromium libraries; verify by launching.
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch(); await b.close();'
       - run: npx playwright test --config apps/web/widemeet/playwright.config.mjs
       - run: |
           test -s apps/web/widemeet/dist/index.html
