@@ -52,7 +52,7 @@ begin
   from public.wm_minutes_recipients x join public.wm_minutes_versions v on v.id=x.version_id and v.revoked_at is null and v.published_at is not null join public.wm_minutes_eligibility e on e.room_id=v.room_id and e.retain_until>t join public.wm_rooms r on r.id=v.room_id
   where x.account_id=s.account_id and x.revoked_at is null and r.workspace_id=s.workspace_id
   union all
-  select 'task:'||k.id||':'||k.revision,case when k.state='done' then 'task_done' when k.state='submitted' then 'task_review' when k.due_at<t then 'task_overdue' else 'task_assigned' end,k.id,k.title,k.due_at
+  select 'task:'||k.id||':'||k.revision||case when k.state='assigned' and k.due_at<=t then ':overdue' else '' end,case when k.state='done' then 'task_done' when k.state='submitted' then 'task_review' when k.due_at<=t then 'task_overdue' else 'task_assigned' end,k.id,k.title,k.due_at
   from public.wm_tasks k join public.wm_rooms r on r.id=k.room_id and r.workspace_id=s.workspace_id join public.wm_minutes_eligibility e on e.room_id=k.room_id and e.retain_until>t join public.wm_minutes_versions v on v.id=k.version_id and v.revoked_at is null
   where k.state<>'cancelled' and ((k.assignee_id=s.account_id and exists(select 1 from public.wm_minutes_recipients x where x.version_id=k.version_id and x.account_id=s.account_id and x.revoked_at is null)) or (r.host_id=s.account_id and role_name in ('owner','promoteur','manager') and k.state='submitted'))
   union all
