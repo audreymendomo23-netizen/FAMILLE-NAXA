@@ -87,15 +87,21 @@ class AuthGateway(private val context:Context,private val base:String){
   val j=request("request-recovery",JSONObject().put("app_id","WIDEMEET").put("identifier",normalized).put("installation_id",installation()).put("platform","android"))
   require(j.optBoolean("accepted",false))
  }
- suspend fun enrollRecoveryKey(s:Session,password:String):String=withContext(Dispatchers.IO){
+ suspend fun enrollRecoveryKey(s:Session,password:String,supervised:Boolean=false):String=withContext(Dispatchers.IO){
   require(activeWorkspace(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())!=null&&password.isNotEmpty()&&password.length<=256)
-  val response=request("recovery-enroll",JSONObject().put("app_id","WIDEMEET").put("current_password",password),s.accessToken)
+  val response=request("recovery-enroll",JSONObject().put("app_id","WIDEMEET").put("current_password",password).put("supervised",supervised),s.accessToken)
   response.getString("recovery_key").also{require(Regex("^[a-f0-9]{64}$").matches(it))}
  }
- suspend fun recoverWithKey(identifier:String,key:String,password:String,requestId:String):Unit=withContext(Dispatchers.IO){lifecycle.withLock{
+ suspend fun requestSupervisedRecovery(identifier:String,key:String):String=withContext(Dispatchers.IO){
+  val id=identifier.trim().uppercase(java.util.Locale.ROOT);val code=key.trim().lowercase(java.util.Locale.ROOT)
+  require(Regex("^WM-[A-Z0-9]{8,24}$").matches(id)&&Regex("^[a-f0-9]{64}$").matches(code))
+  val j=request("request-recovery",JSONObject().put("app_id","WIDEMEET").put("identifier",id).put("recovery_key",code).put("supervised",true).put("installation_id",installation()).put("platform","android"))
+  j.getString("case_id").also{require(UUID.fromString(it).toString()==it)}
+ }
+ suspend fun recoverWithKey(identifier:String,key:String,password:String,requestId:String,supervised:Boolean=false):Unit=withContext(Dispatchers.IO){lifecycle.withLock{
   val id=identifier.trim().uppercase(java.util.Locale.ROOT);val recovery=key.trim().lowercase(java.util.Locale.ROOT)
   require(Regex("^WM-[A-Z0-9]{8,24}$").matches(id)&&Regex("^[a-f0-9]{64}$").matches(recovery)&&password.length in 12..256&&UUID.fromString(requestId).toString()==requestId)
-  val result=request("recover-key",JSONObject().put("app_id","WIDEMEET").put("identifier",id).put("recovery_key",recovery).put("new_password",password).put("request_id",requestId).put("installation_id",installation()).put("platform","android"))
+  val result=request("recover-key",JSONObject().put("app_id","WIDEMEET").put("identifier",id).put("recovery_key",recovery).put("new_password",password).put("request_id",requestId).put("installation_id",installation()).put("platform","android").put("supervised",supervised))
   require(result.optBoolean("recovered")&&result.optBoolean("reconnect"));clearLocalSession()
  }}
  suspend fun changePassword(s:Session,current:String,next:String,requestId:String):Unit=withContext(Dispatchers.IO){

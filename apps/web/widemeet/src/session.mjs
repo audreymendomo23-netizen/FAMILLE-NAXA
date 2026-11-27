@@ -84,16 +84,23 @@ export async function refreshSession(base,fetcher=fetch,device=installationId){
  return parseSession(raw);
 }
 
-export async function enrollRecoveryKey(base,session,password,fetcher=fetch){
+export async function enrollRecoveryKey(base,session,password,fetcher=fetch,supervised=false){
  if(!workspaceAccess(session,session.active_workspace_id)||typeof password!=="string"||!password||password.length>256)throw Error("INVALID_REQUEST");
- const data=await authorizedRequest(base,"recovery-enroll",{current_password:password},session.access_token,fetcher);
+ const data=await authorizedRequest(base,"recovery-enroll",{current_password:password,...(supervised?{supervised:true}:{})},session.access_token,fetcher);
  if(!/^[a-f0-9]{64}$/.test(data?.recovery_key??""))throw Error("RECOVERY_UNCONFIRMED");
  return data.recovery_key;
 }
-export async function recoverWithKey(base,{identifier,key,password,requestId},fetcher=fetch,device=installationId){
+export async function recoverWithKey(base,{identifier,key,password,requestId,supervised=false},fetcher=fetch,device=installationId){
  if(!/^WM-[A-Z0-9]{8,24}$/.test(identifier.trim().toUpperCase())||! /^[a-f0-9]{64}$/.test(key.trim().toLowerCase())||typeof password!=="string"||password.length<12||password.length>256||!UUID.test(requestId))throw Error("INVALID_REQUEST");
- const r=await fetcher(endpoint(base,"recover-key"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"WIDEMEET",identifier:identifier.trim().toUpperCase(),recovery_key:key.trim().toLowerCase(),new_password:password,request_id:requestId,installation_id:device(),platform:"web"}),cache:"no-store",redirect:"error",credentials:"include"});
+ const r=await fetcher(endpoint(base,"recover-key"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"WIDEMEET",identifier:identifier.trim().toUpperCase(),recovery_key:key.trim().toLowerCase(),new_password:password,request_id:requestId,installation_id:device(),platform:"web",...(supervised?{supervised:true}:{})}),cache:"no-store",redirect:"error",credentials:"include"});
  if(!r.ok)throw Error("RECOVERY_REJECTED");
  const j=await r.json();if(j?.recovered!==true||j.reconnect!==true)throw Error("RECOVERY_UNCONFIRMED");
  setRememberPreference(false);return true;
+}
+
+export async function requestSupervisedRecovery(base,identifier,key,fetcher=fetch,device=installationId){
+ const id=identifier.trim().toUpperCase(),code=key.trim().toLowerCase();
+ if(!/^WM-[A-Z0-9]{8,24}$/.test(id)||!/^[a-f0-9]{64}$/.test(code))throw Error("INVALID_REQUEST");
+ const r=await fetcher(endpoint(base,"request-recovery"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"WIDEMEET",identifier:id,recovery_key:code,supervised:true,installation_id:device(),platform:"web"}),cache:"no-store",redirect:"error",credentials:"omit"});
+ if(!r.ok)throw Error("RECOVERY_REJECTED");const j=await r.json();if(!UUID.test(j?.case_id??""))throw Error("RECOVERY_UNCONFIRMED");return j.case_id;
 }
