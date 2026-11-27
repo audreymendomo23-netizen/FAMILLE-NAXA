@@ -97,8 +97,8 @@ Deno.serve(async request=>{
  if(action==="command"){
  const command={roomId:p_room,requestId:b.request_id,expectedRevision:b.expected_revision,action:b.action,target:b.target,value:b.value};
  if(command.action==="invite_member"&&!uuid.test(command.target??""))return send(400,{error:"invalid_invitees"});
- if(command.action==="record"&&command.value===true&&Deno.env.get("WM_RECORDING_QUALIFIED")==="true"){const status=await rpc("wm_recording_status",{p_hash,p_room});if(["starting","active","stopping"].includes(status?.phase))return send(409,{error:"recording_busy"});}
  const next=applyRoom(room,actor,command,now);
+ if(!next.replayed&&command.action==="record"&&command.value===true&&Deno.env.get("WM_RECORDING_QUALIFIED")==="true"){const status=await rpc("wm_recording_status",{p_hash,p_room});if(["starting","active","stopping"].includes(status?.phase))return send(409,{error:"recording_busy"});}
  if(!next.replayed&&await rpc("wm_room_write",{p_hash,p_room,p_expected:room.revision,p_role:actor.role,p_plan:actor.plan,p_state:next.room})!==true)return send(409,{error:"revision_or_scope_changed"});
  return send(200,await project(next.room,actor,p_hash));
  }
