@@ -37,7 +37,7 @@ private fun minuteRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() e
  }else{
  TextButton(enabled=!busy,onClick={selected=null;version=null;prep=null;body="";pending=null;work{refresh()}}){Text(tr("Retour aux archives","Back to archives"))}
  Text(current.optString("title"),style=MaterialTheme.typography.titleMedium)
- Text(tr("Présence réelle inconnue sans preuve média qualifiée.","Actual attendance unknown without qualified media evidence."))
+ key(current.getString("room_id")){ArchiveEvidence(english,gateway,session,current.getString("room_id"),current.optBoolean("can_manage"))}
  val v=version;val p=prep
  if(v!=null)Text(tr("Version","Version")+" "+v.optInt("version")+" · "+when{!v.isNull("published_at")->tr("Publiée","Published");!v.isNull("approved_at")->tr("Validée","Approved");else->tr("Brouillon","Draft")})
  if(current.optBoolean("can_manage")&&p?.optBoolean("premium")==true){

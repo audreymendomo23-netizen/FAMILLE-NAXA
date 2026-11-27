@@ -57,7 +57,7 @@ jobs:
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
           npx playwright install chromium
           node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch(); await b.close();'
-          VITE_WIDEMEET_AUTH_URL=https://127.0.0.1:8443/functions/v1/widemeet-auth VITE_WIDEMEET_SIGNUP_TEST=true VITE_WIDEMEET_RECOVERY_ENABLED=true VITE_WIDEMEET_MINUTES_ENABLED=true VITE_WIDEMEET_SERIES_ENABLED=true npm run build --workspace @famille/widemeet-web
+          VITE_WIDEMEET_AUTH_URL=https://127.0.0.1:8443/functions/v1/widemeet-auth VITE_WIDEMEET_SIGNUP_TEST=true VITE_WIDEMEET_RECOVERY_ENABLED=true VITE_WIDEMEET_MINUTES_ENABLED=true VITE_WIDEMEET_SERIES_ENABLED=true VITE_WIDEMEET_PRESENCE_ENABLED=true npm run build --workspace @famille/widemeet-web
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=127.0.0.1' -addext 'subjectAltName=IP:127.0.0.1' -keyout "$RUNNER_TEMP/wm-replay.key" -out "$RUNNER_TEMP/wm-replay.crt" 2>/dev/null
           chmod 600 "$RUNNER_TEMP/wm-replay.key"
       - name: Execute real two-account Edge and Chromium Replay
