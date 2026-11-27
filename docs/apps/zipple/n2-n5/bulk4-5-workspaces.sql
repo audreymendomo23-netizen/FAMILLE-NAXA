@@ -109,6 +109,12 @@ declare m public.zp_members;manage boolean;old public.zp_workspace_requests;w pu
  if exists(select 1 from public.zp_work_items x where x.org_id=m.org_id and x.assignee_id=target and x.kind='shift' and x.state<>'cancelled' and x.starts_at<due and x.due_at>st) then raise exception 'SHIFT_OVERLAP';end if;
  elsif st is not null or (k<>'ticket' and due is null) then raise exception 'INVALID_INPUT';end if;
  insert into public.zp_work_items(org_id,site_id,author_id,assignee_id,kind,title,detail,category,priority,starts_at,due_at) values(m.org_id,p_site,m.id,target,k,title,detail,category,priority,st,due) returning id into rid;
+ elsif p_action='work_claim' then
+ if not manage then raise exception 'DENIED';end if;
+ target:=(p_payload->>'work_id')::uuid;select * into w from public.zp_work_items wi where wi.id=target and wi.org_id=m.org_id and wi.site_id=p_site and wi.kind='ticket' for update;
+ if w.id is null then raise exception 'DENIED';end if;
+ if w.state not in ('open','in_progress') or w.assignee_id is not null then raise exception 'INVALID_TRANSITION';end if;
+ update public.zp_work_items set assignee_id=m.id,state='in_progress',updated_at=clock_timestamp() where id=w.id;rid:=w.id;
  elsif p_action in ('work_reply','work_state') then
  target:=(p_payload->>'work_id')::uuid;select * into w from public.zp_work_items where id=target and org_id=m.org_id and site_id=p_site for update;
  if w.id is null or (not manage and m.id<>w.author_id and m.id is distinct from w.assignee_id) then raise exception 'DENIED';end if;

@@ -1,0 +1,15 @@
+import React,{useState} from "react";
+const faq=[
+{category:"account",fr:"Connexion et accès",en:"Sign-in and access",frHelp:"Vérifiez votre identifiant professionnel et l'établissement sélectionné. Utilisez la récupération de compte si nécessaire. Ne transmettez jamais votre mot de passe.",enHelp:"Check your work identifier and selected site. Use account recovery if needed. Never share your password."},
+{category:"payment",fr:"Paiement ou reçu",en:"Payment or receipt",frHelp:"Vérifiez le reçu et la référence de l'opération confirmée. Ne relancez pas un débit dont le résultat est incertain.",enHelp:"Check the receipt and confirmed transaction reference. Do not retry an uncertain charge."},
+{category:"technical",fr:"Synchronisation et stock",en:"Sync and stock",frHelp:"Actualisez l'espace concerné. Une opération hors connexion reste en attente tant que le serveur n'a pas confirmé. Conservez son identifiant.",enHelp:"Refresh the relevant workspace. An offline operation stays pending until server confirmation. Keep its identifier."},
+{category:"other",fr:"Livraison et suivi",en:"Delivery and tracking",frHelp:"Le pilote de livraison ne déclenche ni paiement ni transport réel. En cas de difficulté, indiquez la référence de la demande.",enHelp:"The delivery pilot does not trigger payment or transport. Provide the request reference if assistance is needed."}
+];
+export function SupportGuide({en,locked,prepare}:{en:boolean;locked:boolean;prepare:(v:Record<string,string>)=>void}){
+ const t=(fr:string,eng:string)=>en?eng:fr;const [search,S]=useState(""),[chosen,C]=useState(""),[detail,D]=useState("");
+ const rows=faq.filter(f=>(en?f.en+" "+f.enHelp:f.fr+" "+f.frHelp).toLowerCase().includes(search.trim().toLowerCase()));
+ const current=faq.find(f=>f.category===chosen);
+ return <section data-testid="support-guide"><h4>{t("Assistant d’aide — FAQ et transfert humain","Help assistant — FAQ and human handoff")}</h4><label>{t("Rechercher une solution","Search help")}<input value={search} onChange={e=>S(e.target.value)}/></label>{rows.map(f=><details key={f.category}><summary>{en?f.en:f.fr}</summary><p>{en?f.enHelp:f.frHelp}</p><button disabled={locked} onClick={()=>C(f.category)}>{t("Mon problème persiste","I still need help")}</button></details>)}
+ {current&&<><p>{t("Sujet retenu","Selected topic")} : {en?current.en:current.fr}</p><label>{t("Contexte à transmettre au responsable","Context for the human agent")}<textarea value={detail} maxLength={650} onChange={e=>D(e.target.value)}/></label><button disabled={locked||!detail.trim()} onClick={()=>prepare({title:en?current.en:current.fr,category:current.category,detail:(t("Guide consulté : ","Guide reviewed: ")+(en?current.en:current.fr)+"\n"+detail.trim()).slice(0,1000),priority:"normal"})}>{t("Préparer le transfert humain","Prepare human handoff")}</button><p>{t("Vérifiez le ticket prérempli puis cliquez sur Créer. Le responsable de votre établissement peut le prendre en charge. Aucun transfert externe automatique.","Review the prefilled ticket, then click Create. Your site manager can claim it. No automatic external transfer.")}</p></>}
+ </section>
+}

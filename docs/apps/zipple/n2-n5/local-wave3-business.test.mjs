@@ -152,3 +152,19 @@ test("B5-004 absence request approval persists exactly once",async()=>{
  assert.equal(Number(await scalar("select count(*) from zp_hr_decisions where request_id=$1 and decision='approved'",[row.id])),1);
  console.log("ZIPPLE_QA_CASE_PARTIAL B5-004 HR_APPROVAL_PERSISTENCE_PASS");
 });
+
+
+test("B4-032 guided ticket human claim, scope and thread closure",async()=>{
+ const {org,site,ok}=await fixture();const staff=await actor(org,site,"staff"),other=await actor(org,site,"staff"),manager=await actor(org,site,"manager");
+ const write=(operation,payload,request_id=id())=>({operation,payload,request_id});
+ const req=write("work_create",{kind:"ticket",title:"Synchronisation",detail:"Guide consulté : Synchronisation — erreur de confirmation",category:"technical",priority:"normal"});
+ const ticket=await staff.ok("workspace_write",req);assert.equal((await staff.ok("workspace_write",req)).id,ticket.id);
+ const claim=write("work_claim",{work_id:ticket.id});assert.equal((await other.b("workspace_write",claim)).status,403);
+ assert.equal((await manager.ok("workspace_write",claim)).id,ticket.id);assert.equal((await manager.ok("workspace_write",claim)).id,ticket.id);
+ assert.notEqual((await ok("workspace_snapshot",{page:"tickets"})).rows.find(x=>x.id===ticket.id).assignee_id,null);
+ await manager.ok("workspace_write",write("work_reply",{work_id:ticket.id,body:"Demande prise en charge"}));
+ await staff.ok("workspace_write",write("work_reply",{work_id:ticket.id,body:"Confirmation reçue"}));
+ await manager.ok("workspace_write",write("work_state",{work_id:ticket.id,expected_state:"in_progress",state:"done"}));
+ const row=(await staff.ok("workspace_snapshot",{page:"tickets"})).rows.find(x=>x.id===ticket.id);assert.equal(row.state,"done");assert.equal(row.assignee_id,manager.member);assert.equal(row.messages.length,2);assert.equal((await other.ok("workspace_snapshot",{page:"tickets"})).rows.some(x=>x.id===ticket.id),false);
+ console.log("ZIPPLE_QA_CASE_PARTIAL B4-032 SITE_HUMAN_HANDOFF_PASS");
+});
