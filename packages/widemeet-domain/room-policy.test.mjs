@@ -73,3 +73,15 @@ test("recording pause does not pause the room; only host may restart after conse
  r=run(r,guest,"consent",false);assert.throws(()=>run(r,host,"record",true),/consent_required/);
  r=run(r,guest,"consent",true);r=run(r,host,"record",true);assert.equal(r.recordingPaused,false);
 });
+
+test("N2 lobby separates RSVP from admission and fences all live collaboration",()=>{
+ let r=base();r=run(r,host,"lobby_config",true);r=run(r,guest,"respond","accepted");r=run(r,host,"start");
+ assert.equal(mediaPermission(r,guest,1000),null);assert.throws(()=>run(r,guest,"chat","not admitted"),/room_unavailable/);
+ r=run(r,guest,"lobby_request");assert.equal(r.participants[1].lobbyStatus,"waiting");
+ assert.throws(()=>run(r,guest,"lobby_admit",null,guest.memberId),/forbidden/);
+ r=run(r,host,"lock_admission",true);assert.throws(()=>run(r,host,"lobby_admit",null,guest.memberId),/invalid_state/);
+ r=run(r,host,"lock_admission",false);r=run(r,host,"lobby_reject",null,guest.memberId);assert.equal(mediaPermission(r,guest,1000),null);
+ r=run(r,guest,"lobby_request");r=run(r,host,"lobby_admit",null,guest.memberId);
+ assert.ok(mediaPermission(r,guest,1000));r=run(r,guest,"chat","admitted");assert.equal(r.events.at(-1).action,"chat");
+ r=run(r,guest,"respond","declined");assert.equal(mediaPermission(r,guest,1000),null);
+});
