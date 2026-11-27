@@ -56,6 +56,7 @@ internal class RequestKeys{
  var selected by remember{mutableStateOf("")};var lot by remember{mutableStateOf("")};var supplier by remember{mutableStateOf("")};var quantity by remember{mutableStateOf("")};var cost by remember{mutableStateOf("")};var expiry by remember{mutableStateOf("")}
  var category by remember{mutableStateOf("rent")};var method by remember{mutableStateOf("cash")};var reference by remember{mutableStateOf("")};var date by remember{mutableStateOf(LocalDate.now(ZoneId.of("Africa/Douala")).toString())}
  var customerSearch by remember{mutableStateOf("")};var followFilter by remember{mutableStateOf("pending")};var attachOrder by remember(selected){mutableStateOf("")};var crmOrders by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+ var historyFilter by remember(selected){mutableStateOf("all")};var contactText by remember(selected){mutableStateOf("")}
  var consent by remember{mutableStateOf(false)};var contactConsent by remember(selected){mutableStateOf(false)};var title by remember{mutableStateOf("")};var channel by remember{mutableStateOf("telephone")};var due by remember{mutableStateOf("")}
  val canWrite=session.role in setOf("promoteur","manager")&&!busy&&session.permits(site)
  suspend fun call(action:String,body:JSONObject=JSONObject())=api.call(session,site,action,body)
@@ -94,7 +95,12 @@ internal class RequestKeys{
    Choice(tr("Commande à rattacher","Order to link"),eligible.map{it.optString("id") to (it.optString("id").take(8)+" · "+it.optLong("total_xaf")+" FCFA · "+it.optString("status"))},attachOrder,{attachOrder=it},canWrite)
    Button(enabled=canWrite&&eligible.any{it.optString("id")==attachOrder},onClick={run{require(call("customer_attach",JSONObject().put("customer_id",selected).put("order_id",attachOrder))==true);attachOrder="";load();message=tr("Commande rattachée","Order linked")}}){Text(tr("Rattacher la commande","Link order"))}
    Text(tr("Historique du site","Site history"))
-   data?.rows("history")?.filter{it.optString("customer_id")==selected}?.forEach{Text(it.optLong("total_xaf").toString()+" FCFA · "+if(it.optString("payment_status")=="credit_due")tr("À crédit","On credit")else if(it.optBoolean("paid"))tr("Réglée","Paid")else tr("Non réglée","Unpaid"))}
+   val history=data?.rows("history").orEmpty().filter{it.optString("customer_id")==selected}
+   Text(history.size.toString()+" "+tr("commandes reçues","received orders"))
+   Choice(tr("État du règlement","Payment status"),listOf("all" to tr("Tous","All"),"paid" to tr("Réglées","Paid"),"credit" to tr("À crédit","On credit"),"unpaid" to tr("Non réglées","Unpaid")),historyFilter,{historyFilter=it},!busy)
+   val visibleHistory=history.filter{val credit=it.optString("payment_status")=="credit_due";when(historyFilter){"paid"->!credit&&it.optBoolean("paid");"credit"->credit;"unpaid"->!credit&&!it.optBoolean("paid");else->true}}
+   if(visibleHistory.isEmpty())Text(tr("Aucune commande correspondante.","No matching order."))
+   visibleHistory.forEach{Text(it.optString("order_id").take(8)+" · "+it.optLong("total_xaf")+" FCFA · "+if(it.optString("payment_status")=="credit_due")tr("À crédit","On credit")else if(it.optBoolean("paid"))tr("Réglée","Paid")else tr("Non réglée","Unpaid"))}
    Field(tr("Objet du suivi","Follow-up subject"),title,{title=it.take(160)})
    Choice(tr("Canal","Channel"),listOf("telephone" to tr("Téléphone","Phone"),"whatsapp" to "WhatsApp","in_person" to tr("Sur place","In person")),channel,{channel=it},canWrite)
    Field(tr("Échéance AAAA-MM-JJ","Due YYYY-MM-DD"),due,{due=it.take(10)})
@@ -104,7 +110,8 @@ internal class RequestKeys{
    val rawPhone=customers.firstOrNull{it.optString("id")==selected}?.optString("phone").orEmpty()
    val waPhone=when{Regex("[67][0-9]{8}").matches(rawPhone)->"237"+rawPhone;Regex("237[67][0-9]{8}").matches(rawPhone)->rawPhone;else->null}
    if(waPhone!=null){Row{Checkbox(checked=contactConsent,onCheckedChange={contactConsent=it});Text(tr("Je confirme être autorisé à contacter ce client.","I confirm permission to contact this customer."))}
-   OutlinedButton(enabled=canWrite&&contactConsent,onClick={try{val link="https://wa.me/"+waPhone+"?text="+android.net.Uri.encode(tr("Bonjour, nous vous contactons au sujet de votre demande auprès de notre établissement. Merci.","Hello, we are contacting you about your request with our establishment. Thank you."));context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(link)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))}catch(_:Exception){message=tr("WhatsApp indisponible","WhatsApp unavailable")}}){Text(tr("Ouvrir WhatsApp — vérifier avant envoi","Open WhatsApp — review before sending"))}}
+   if(contactConsent)OutlinedTextField(contactText,{contactText=it.take(500)},label={Text(tr("Message personnalisé (facultatif)","Custom message (optional)"))},modifier=Modifier.fillMaxWidth(),enabled=canWrite)
+   OutlinedButton(enabled=canWrite&&contactConsent,onClick={try{val link="https://wa.me/"+waPhone+"?text="+android.net.Uri.encode(contactText.trim().ifBlank{tr("Bonjour, nous vous contactons au sujet de votre demande auprès de notre établissement. Merci.","Hello, we are contacting you about your request with our establishment. Thank you.")});context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(link)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))}catch(_:Exception){message=tr("WhatsApp indisponible","WhatsApp unavailable")}}){Text(tr("Ouvrir WhatsApp — vérifier avant envoi","Open WhatsApp — review before sending"))}}
    data?.rows("followups")?.filter{it.optString("customer_id")==selected}?.forEach{x->
     Text(x.optString("title")+" · "+x.optString("due_on"))
     if(x.isNull("completed_at"))OutlinedButton(enabled=canWrite,onClick={run{call("followup_complete",JSONObject().put("followup_id",x.optString("id")));load()}}){Text(tr("Clôturer le suivi","Complete follow-up"))}

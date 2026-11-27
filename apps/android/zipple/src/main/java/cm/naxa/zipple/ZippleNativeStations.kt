@@ -28,6 +28,7 @@ import java.time.Instant
  val manager=session.role in setOf("promoteur","manager")
  var data by remember{mutableStateOf<JSONObject?>(null)};var config by remember{mutableStateOf<JSONObject?>(null)}
  var busy by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")}
+ var filter by remember(session.member,site){mutableStateOf("active")};var search by remember(session.member,site){mutableStateOf("")};var postFilter by remember(session.member,site){mutableStateOf("all")}
  var label by remember{mutableStateOf("")};var post by remember{mutableStateOf("kitchen")};var slots by remember{mutableStateOf("1")};var configuration by remember{mutableStateOf(false)}
  suspend fun load(){data=api.call(session,site,"station_snapshot") as? JSONObject}
  suspend fun loadConfig(){config=api.call(session,site,"substation_snapshot") as? JSONObject}
@@ -36,10 +37,21 @@ import java.time.Instant
  Text(tr("Postes de préparation","Preparation stations"),style=MaterialTheme.typography.titleLarge)
  if(message.isNotBlank())Text(message)
  OutlinedButton(enabled=!busy,onClick={run{load();if(configuration)loadConfig()}}){Text(tr("Actualiser les postes","Refresh stations"))}
- data?.rows("lines")?.forEach{l->
+ val lines=data?.rows("lines").orEmpty();fun station(l:JSONObject)=l.optString("substation_label").takeUnless{it.isBlank()||it=="null"}?:l.optString("post")
+ if(data!=null){
+ Text(tr("Reçues","Received")+" · "+lines.count{it.optString("state")=="received"}+" / "+tr("En préparation","Preparing")+" · "+lines.count{it.optString("state")=="preparing"}+" / "+tr("Prêtes","Ready")+" · "+lines.count{it.optString("state")=="ready"})
+ OutlinedTextField(search,{search=it.take(100)},label={Text(tr("Rechercher une préparation","Search preparation"))},modifier=Modifier.fillMaxWidth())
+ Text(tr("État de préparation","Preparation status"));listOf("active" to tr("Actives","Active"),"all" to tr("Toutes","All"),"received" to tr("Reçues","Received"),"preparing" to tr("En préparation","Preparing"),"ready" to tr("Prêtes","Ready"),"served" to tr("Servies","Served")).forEach{(k,label)->OutlinedButton(onClick={filter=k},enabled=filter!=k){Text(label)}}
+ Text(tr("Poste de préparation","Preparation station"));(listOf("all" to tr("Tous","All"))+lines.map{station(it)}.filter{it.isNotBlank()}.distinct().map{it to it}).forEach{(k,label)->OutlinedButton(onClick={postFilter=k},enabled=postFilter!=k){Text(label)}}
+ OutlinedButton(onClick={search="";filter="active";postFilter="all"}){Text(tr("Réinitialiser les filtres","Reset filters"))}
+ }
+ val visible=lines.filter{l->val state=l.optString("state");(filter=="all"||(if(filter=="active")state in listOf("received","preparing","ready") else state==filter))&&(postFilter=="all"||station(l)==postFilter)&&listOf("number","name").any{l.optString(it).contains(search.trim(),ignoreCase=true)}}
+ if(data!=null&&visible.isEmpty())Text(tr("Aucune préparation correspondante.","No matching preparation."))
+ visible.forEach{l->
   val state=l.optString("state");val next=mapOf("received" to "preparing","preparing" to "ready","ready" to "served")[state]
   Text("#"+l.optString("number")+" · "+l.optString("name")+" × "+l.optInt("qty")+" · "+l.optString("substation_label").takeUnless{it.isBlank()||it=="null"}.orEmpty().ifBlank{l.optString("post")}+" · "+state)
   ZippleServerClock(l,data?.optString("server_now").orEmpty(),en)
+  l.rows("instructions").forEach{n->Text(n.optString("qty")+" × "+n.optString("note"))}
   if(next=="served"&&!l.optBoolean("handoff_allowed",true))Text(tr("Prête — remise par le personnel de salle","Ready — handoff by service staff"))
   else if(next!=null)Button(enabled=!busy,onClick={run{api.call(session,site,"line_advance",JSONObject().put("order_id",l.optString("order_id")).put("item_id",l.optString("item_id")).put("next",next));load()}}){Text(tr("Étape suivante","Next step"))}
   HorizontalDivider()

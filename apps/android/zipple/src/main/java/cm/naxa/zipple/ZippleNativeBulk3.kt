@@ -168,13 +168,13 @@ internal fun bulk3Body(form:NA,data:ND,values:Map<String,String>,repeated:List<M
  var open by remember{mutableStateOf(false)}
  Box{OutlinedButton(enabled=enabled&&options.isNotEmpty(),onClick={open=true}){Text(label+" : "+(options.firstOrNull{it.first==value}?.second?:"—"))};DropdownMenu(expanded=open,onDismissRequest={open=false}){options.forEach{(id,name)->DropdownMenuItem(text={Text(name)},onClick={change(id);open=false})}}}
 }
-@Composable internal fun ZippleNativeBulk3(api:ZippleBusiness,session:Session,site:String,en:Boolean){
- Bulk3Screen(session.role,session.permits(site),en,{action,body->api.call(session,site,action,body)})
+@Composable internal fun ZippleNativeBulk3(api:ZippleBusiness,session:Session,site:String,en:Boolean,initialGroup:String="purchases"){
+ Bulk3Screen(session.role,session.permits(site),en,{action,body->api.call(session,site,action,body)},initialGroup)
 }
-@Composable internal fun Bulk3Screen(role:String,allowed:Boolean,en:Boolean,call:suspend(String,JSONObject)->Any?){
+@Composable internal fun Bulk3Screen(role:String,allowed:Boolean,en:Boolean,call:suspend(String,JSONObject)->Any?,initialGroup:String="purchases"){
  val tr:(String,String)->String={fr,eng->if(en)eng else fr}
  val scope=rememberCoroutineScope();val groups=bulk3Groups.filter{!it.owner||role=="promoteur"}
- var groupId by remember{mutableStateOf("purchases")};var formIndex by remember{mutableStateOf(0)}
+ var groupId by remember(initialGroup){mutableStateOf(initialGroup)};var formIndex by remember{mutableStateOf(0)}
  var data by remember{mutableStateOf(ND(emptyMap()))};var values by remember{mutableStateOf<Map<String,String>>(emptyMap())};var busy by remember{mutableStateOf(false)};var loaded by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")};var result by remember{mutableStateOf<JSONObject?>(null)}
  val group=groups.firstOrNull{it.id==groupId}?:groups.first()
  val forms=group.forms.filter{!it.owner||role=="promoteur"};val form=forms.getOrNull(formIndex)?:forms.first()
@@ -234,7 +234,7 @@ internal fun bulk3Body(form:NA,data:ND,values:Map<String,String>,repeated:List<M
  if(group.id=="purchases"&&loaded)NativePurchaseDocuments(data,allowed&&!busy,en)
  if(group.id=="credit"&&loaded){
   val accounts=data.rows("credit_snapshot","accounts");val sales=data.rows("credit_snapshot","sales");val today=LocalDate.now(java.time.ZoneId.of("Africa/Douala")).toString();val outstanding=sales.filter{it.optLong("balance_xaf")>0};val overdue=outstanding.filter{it.optString("due_on")<today}
-  var search by remember{mutableStateOf("")};var status by remember{mutableStateOf("open")}
+  var search by remember{mutableStateOf("")};var status by remember{mutableStateOf("open")};var paymentFilter by remember{mutableStateOf("all")}
   Text(tr("Tableau de recouvrement","Collections dashboard"),style=MaterialTheme.typography.titleMedium)
   Text(tr("Créances ouvertes","Open receivables")+" : "+outstanding.sumOf{it.optLong("balance_xaf")}+" FCFA · "+outstanding.size)
   Text(tr("Créances en retard","Overdue receivables")+" : "+overdue.sumOf{it.optLong("balance_xaf")}+" FCFA · "+overdue.size)
@@ -244,6 +244,12 @@ internal fun bulk3Body(form:NA,data:ND,values:Map<String,String>,repeated:List<M
   val matches=sales.filter{x->val n=accounts.find{it.optString("id")==x.optString("account_id")}?.optString("name").orEmpty();(status=="all"||(if(status=="settled")x.optLong("balance_xaf")==0L else x.optLong("balance_xaf")>0&&(status!="late"||x.optString("due_on")<today)))&&(n.contains(search.trim(),ignoreCase=true)||x.optString("due_on").contains(search.trim()))}
   if(matches.isEmpty())Text(tr("Aucune créance correspondante.","No matching receivable."))
   matches.forEach{x->Text((accounts.find{it.optString("id")==x.optString("account_id")}?.optString("name")?: "—")+" · "+x.optString("due_on")+" · "+x.optLong("balance_xaf")+" FCFA");if(x.optLong("balance_xaf")>0)OutlinedButton(enabled=allowed&&!busy,onClick={val idx=forms.indexOfFirst{it.action=="credit_collect"};if(idx>=0){formIndex=idx;values=mapOf("sale_id" to x.optString("id"));result=null}}){Text(tr("Sélectionner pour recouvrement","Select for collection"))}}
+  Text(tr("Journal des encaissements de créances","Credit collection journal"),style=MaterialTheme.typography.titleMedium)
+  BulkChoice(tr("Filtrer par moyen de règlement","Filter payment method"),listOf("all" to tr("Tous","All"),"cash" to tr("Espèces","Cash"),"bank" to tr("Banque","Bank"),"mtn_momo" to "MTN MoMo","orange_money" to "Orange Money","card" to tr("Carte","Card")),paymentFilter,{paymentFilter=it},!busy)
+  val payments=data.rows("credit_snapshot","payments").filter{paymentFilter=="all"||it.optString("method")==paymentFilter}
+  Text(tr("Total brut des règlements affichés","Gross total of displayed payments")+" : "+payments.sumOf{it.optLong("amount_xaf")}+" FCFA")
+  if(payments.isEmpty())Text(tr("Aucun règlement correspondant.","No matching payment."))
+  payments.forEach{Text(it.optLong("amount_xaf").toString()+" FCFA · "+it.optString("method")+" · "+it.optString("created_at")+" · "+it.optString("reference").takeUnless{v->v=="null"}.orEmpty())}
  }
- for((ds,arr,label) in group.summaries){val rows=data.rows(ds,arr);if(rows.isNotEmpty()){HorizontalDivider(Modifier.padding(vertical=6.dp));rows.take(40).forEach{x->Text(display(x,label)+" · "+x.optString("state").takeUnless{it=="null"}.orEmpty())}}}
+ for((ds,arr,label) in group.summaries){if(group.id=="credit"&&arr=="payments")continue;val rows=data.rows(ds,arr);if(rows.isNotEmpty()){HorizontalDivider(Modifier.padding(vertical=6.dp));rows.take(40).forEach{x->Text(display(x,label)+" · "+x.optString("state").takeUnless{it=="null"}.orEmpty())}}}
 }

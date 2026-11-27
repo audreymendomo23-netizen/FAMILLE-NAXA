@@ -76,7 +76,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     if(canTable||canCash)OutlinedButton(onClick={tab="table_bill"}){Text(tr("Additions de table","Table bills"))}
     OutlinedButton(onClick={tab="stations"}){Text(tr("Postes de préparation","Preparation stations"))}
     if(canCash)OutlinedButton(onClick={tab="split"}){Text(tr("Addition fractionnée","Split bill"))}
-    if(canManage)OutlinedButton(onClick={tab="bulk3"}){Text(tr("ERP 360° — gestion complète","ERP 360° — management"))}
+    if(canManage){OutlinedButton(onClick={tab="bulk3"}){Text(tr("ERP 360° — gestion complète","ERP 360° — management"))};OutlinedButton(onClick={tab="credit"}){Text(tr("Ardoises et recouvrement","Credit and collections"))}}
     if(canServe)OutlinedButton(onClick={tab="support"}){Text(tr("Assistance commandes","Order assistance"))}
     if(canManage)OutlinedButton(onClick={tab="pilotage"}){Text(tr("Performance service","Service performance"))}
     if(canManage)OutlinedButton(onClick={tab="documents"}){Text(tr("Justificatifs","Documents"))}
@@ -96,8 +96,8 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
         "support"->{key(session.member,site){ZippleNativeOrderSupport(api,session,site,en)}}
         "pilotage"->{key(session.member,site){ZippleNativeServicePerformance(api,session,site,en)}}
         "documents"->{key(session.member,site){ZippleNativeDocuments(api,session,site,en)}}
-        "bulk3"->{key(session.member,site){ZippleNativeBulk3(api,session,site,en)}}
-        "erp_write","crm"->{key(tab){ZippleNativeErp(api,session,site,en,tab)}}
+        "bulk3","credit"->{if(canManage)key(session.member,site,tab){ZippleNativeBulk3(api,session,site,en,if(tab=="credit")"credit" else "purchases")}}
+        "erp_write","crm"->{key(session.member,site,tab){ZippleNativeErp(api,session,site,en,tab)}}
         "tables"->{
             Text(tr("Tables et sessions","Tables and sessions"))
             snapshot?.rows("tables")?.forEach{x->
