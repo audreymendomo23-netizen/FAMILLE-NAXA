@@ -97,6 +97,10 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
     var title by rememberSaveable { mutableStateOf("") }
     var total by rememberSaveable { mutableStateOf("") }
     var paid by rememberSaveable { mutableStateOf("0") }
+    var selectedRecord by remember { mutableStateOf<String?>(null) }
+    var settlement by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf("") }
+    val canSettle=BuildConfig.BILLING_SETTLEMENT_ENABLED && type in setOf("invoice","customer_receivable","refund_due")
     var dueDays by rememberSaveable { mutableStateOf("7") }
     var notice by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -138,13 +142,13 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
                     OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Client / tiers","Customer / third party","Soottotooɗo / goɗɗo")) }, singleLine = true)
                     OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Détail de la prestation ou du remboursement","Service or refund details","Humpito golle walla ruttugol ceede")) }, singleLine = true)
                     OutlinedTextField(total, { total = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Montant total (FCFA)","Total amount (XAF)","Ceede fof (FCFA)")) }, singleLine = true)
-                    OutlinedTextField(paid, { paid = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (type == "customer_receivable") "Déjà encaissé par la PME (FCFA)" else if (type == "refund_due") "Déjà remboursé au client (FCFA)" else "Déjà réglé / encaissé (FCFA)") }, singleLine = true)
+                    if (canSettle) OutlinedTextField(paid, { paid = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (type == "customer_receivable") "Déjà encaissé par la PME (FCFA)" else if (type == "refund_due") "Déjà remboursé au client (FCFA)" else "Déjà réglé / encaissé (FCFA)") }, singleLine = true)
                     OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Échéance dans (jours)","Due in (days)","Yoɓde caggal (balɗe)")) }, singleLine = true)
                     Button(
                         onClick = {
                             val amount = total.toLongOrNull() ?: 0L
-                            val settled = paid.toLongOrNull() ?: 0L
-                            if (customer.isBlank() || title.isBlank() || amount <= 0 || settled > amount) {
+                            val settled = if (canSettle) paid.toLongOrNull() ?: -1L else 0L
+                            if (customer.isBlank() || title.isBlank() || amount <= 0 || settled < 0 || settled > amount || siteId !in siteIds) {
                                 error = "Vérifie le client, le libellé et les montants."
                                 return@Button
                             }
@@ -160,7 +164,7 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
                                         session.account.memberId
                                     )
                                 }.onSuccess {
-                                    notice = labelRecord(type) + " enregistré."
+                                    notice = labelRecord(type) + " enregistré localement — synchronisation requise."
                                     customer = ""; title = ""; total = ""; paid = "0"; error = null
                                 }.onFailure { error = it.message ?: "Enregistrement impossible." }
                             }
@@ -181,6 +185,22 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
                     Text(item.title + " · " + item.counterparty)
                     Text(localizedLabel("Total ","Total ","Fof ") + xaf(item.amountXaf) + " · réglé " + xaf(item.paidXaf) + " · restant " + xaf(item.amountXaf - item.paidXaf))
                     Text(statusRecord(item.status), color = MaterialTheme.colorScheme.secondary)
+                    if (BuildConfig.BILLING_SETTLEMENT_ENABLED && item.status in setOf("draft","open","partial")) {
+                        TextButton(onClick = { selectedRecord = item.id; settlement = ""; reason = "" }) { Text("Traiter la pièce") }
+                        if (selectedRecord == item.id) {
+                            OutlinedTextField(reason,{ reason=it },label={Text("Motif (3 caractères minimum)")},modifier=Modifier.fillMaxWidth())
+                            val payable=item.recordType in setOf("invoice","customer_receivable","refund_due")
+                            if(payable) OutlinedTextField(settlement,{settlement=it.filter(Char::isDigit)},label={Text("Total effectivement réglé (FCFA)")},modifier=Modifier.fillMaxWidth())
+                            val cumulative=settlement.toLongOrNull()
+                            val target=if(payable && cumulative!=null && cumulative==item.amountXaf) "paid" else if(payable) "partial" else "approved"
+                            Button(enabled=reason.trim().length in 3..500 && (!payable || (cumulative!=null && cumulative>item.paidXaf && cumulative<=item.amountXaf)),onClick={
+                                scope.launch { runCatching { repository.transitionManagementRecord(session.account.organizationId,siteId,item.id,target,reason,session.account.memberId,if(payable)cumulative else null) }.onSuccess { selectedRecord=null; notice="Déclaration locale — synchronisation requise." }.onFailure { error=it.message } }
+                            }) { Text(if(payable) "Déclarer le règlement externe" else "Approuver") }
+                            if(item.paidXaf==0L) TextButton(enabled=reason.trim().length in 3..500,onClick={
+                                scope.launch { runCatching { repository.transitionManagementRecord(session.account.organizationId,siteId,item.id,"cancelled",reason,session.account.memberId) }.onSuccess { selectedRecord=null; notice="Annulation locale — synchronisation requise." }.onFailure { error=it.message } }
+                            }) { Text("Annuler") }
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = { receiptToSave = item; pdfLauncher.launch("NAXA-" + item.reference + ".pdf") }) { Text(localizedLabel("Télécharger le reçu PDF","Download PDF receipt","Heɓ kayit njoɓdi PDF")) }
                         TextButton(onClick = { shareRecord(context, item) }) { Text(localizedLabel("Partager WhatsApp","Share on WhatsApp","Lollin e WhatsApp")) }

@@ -3783,6 +3783,11 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation, site et opérateur obligatoires." }
         require(recordType in allowedTypes) { "Type de registre non autorisé." }
         require(title.isNotBlank() && amountXaf >= 0L && paidXaf >= 0L && paidXaf <= amountXaf) { "Montants ou libellé incohérents." }
+        if (recordType in setOf("invoice","customer_receivable","refund_due")) {
+            require(amountXaf > 0 && ((paidXaf == 0L && status in setOf("draft","open")) ||
+                (paidXaf in 1 until amountXaf && status == "partial") || (paidXaf == amountXaf && status == "paid")))
+        }
+        if (recordType in setOf("quote","credit_note")) require(amountXaf > 0 && paidXaf == 0L && status in setOf("draft","open"))
         val normalizedWorkstationId = workstationId?.takeIf { it.isNotBlank() }
         if (normalizedWorkstationId != null) {
             require(dao.findWorkstation(normalizedWorkstationId, orgId, siteId) != null) {
@@ -3915,7 +3920,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
         recordId: String,
         nextStatus: String,
         reason: String,
-        actorMemberId: String
+        actorMemberId: String,
+        settlementTotalXaf: Long? = null
     ): LocalManagementRecord = database.withTransaction {
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) {
             "Organisation, site et opérateur obligatoires."
@@ -3958,11 +3964,11 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
                 "pending_review" -> setOf("approved", "rejected")
                 else -> emptySet()
             }
-            "invoice", "customer_receivable" -> when (current.status) {
-                "open", "partial" -> setOf("partial", "paid", "cancelled")
+            "invoice", "customer_receivable", "refund_due" -> when (current.status) {
+                "draft", "open", "partial" -> setOf("partial", "paid", "cancelled")
                 else -> emptySet()
             }
-            "quote" -> when (current.status) {
+            "quote", "credit_note" -> when (current.status) {
                 "draft", "open" -> setOf("approved", "rejected", "cancelled")
                 else -> emptySet()
             }
@@ -3975,6 +3981,16 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
         }
         require(nextStatus in allowed) {
             "Transition interdite : ${current.status} → $nextStatus pour ${current.recordType}."
+        }
+        val payable = current.recordType in setOf("invoice","customer_receivable","refund_due")
+        val paidAfter = if (payable && nextStatus in setOf("partial","paid")) {
+            require(settlementTotalXaf != null && settlementTotalXaf > current.paidXaf && settlementTotalXaf <= current.amountXaf)
+            require((nextStatus == "paid") == (settlementTotalXaf == current.amountXaf))
+            settlementTotalXaf
+        } else {
+            require(settlementTotalXaf == null)
+            require(!payable || nextStatus != "cancelled" || current.paidXaf == 0L)
+            current.paidXaf
         }
         val now = System.currentTimeMillis()
         // Receiving a purchase order updates the selected site's inventory only
@@ -4129,7 +4145,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
                 .put("received_at", Instant.ofEpochMilli(now).toString())
             enqueue(orgId, "inventory_transfer", current.id, "inventory_transfer.received_at_destination", destinationSiteId, payload.toString())
         }
-        val updated = current.copy(status = nextStatus, metadataJson = updatedMetadataJson)
+        val updated = current.copy(status = nextStatus, paidXaf = paidAfter, metadataJson = updatedMetadataJson)
         dao.updateManagementRecord(updated)
         dao.insertWorkflowEvent(
             LocalWorkflowEvent(
@@ -4153,7 +4169,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
             }
             val priorEvents = dao.countOutboxActions(orgId, current.recordType, current.id, versionActions)
             val peerVersion = dao.lastAppliedPeerVersion(orgId, current.recordType, current.id)
-            val expectedVersion = if (peerVersion != null && current.recordType in setOf("work_order", "service_order", "repair_order")) {
+            val expectedVersion = if (peerVersion != null && current.recordType != "inventory_transfer") {
                 val prior = dao.latestTransitionPayload(orgId, current.recordType, current.id, current.recordType + ".status_changed")
                 val localRevision = prior?.let { JSONObject(it).getLong("expected_version") + 1 } ?: 0L
                 maxOf(peerVersion, localRevision)
@@ -4168,7 +4184,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
                 .put("to_status", nextStatus)
                 .put("reason", reason.trim())
                 .put("expected_version", expectedVersion)
-                .put("metadata_json_delta", runCatching { JSONObject(updatedMetadataJson) }.getOrElse { JSONObject() })
+                .put("metadata_json_delta", runCatching { JSONObject(updatedMetadataJson) }.getOrElse { JSONObject() }.apply { if (settlementTotalXaf != null) put("paid_xaf", settlementTotalXaf) })
                 .put("transitioned_at", Instant.ofEpochMilli(now).toString())
             enqueue(orgId, current.recordType, current.id, current.recordType + ".status_changed", siteId, payload.toString())
         }

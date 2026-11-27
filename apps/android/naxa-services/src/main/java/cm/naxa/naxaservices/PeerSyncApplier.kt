@@ -248,9 +248,12 @@ internal object NaxaServicesPeerSyncApplier {
             "recurring_charge.payment_recorded" -> {
                 if(site==null||actor.isBlank())return false
                 val pid=p.sText("payment_id");val cid=p.sText("charge_id",id);if(pid.isBlank()||cid.isBlank())return false
+                val charge=dao.findRecurringCharge(org,site,cid)?:return false
                 dao.upsertRemoteChargePayment(LocalChargePayment(
                     pid,org,site,cid,p.sMillis("reference_due_at",now),p.sMillis("paid_at",now),p.sLong("amount_xaf"),actor
-                ));return true
+                ))
+                if(result.has("next_due_at") && result.has("active")) dao.upsertRemoteRecurringCharge(charge.copy(nextDueAtMillis=result.sMillis("next_due_at",charge.nextDueAtMillis),active=result.optBoolean("active",charge.active),updatedAtMillis=now,lastReminderAtMillis=null))
+                return true
             }
             "loyalty_program.updated" -> {
                 if(actor.isBlank())return false
@@ -440,8 +443,13 @@ internal object NaxaServicesPeerSyncApplier {
                     if (sectorTransition && old.recordType != change.aggregateType) return false
                     val meta=JSONObject(old.metadataJson);val delta=p.optJSONObject("metadata_json_delta")
                     if(delta!=null){val it=delta.keys();while(it.hasNext()){val k=it.next();meta.put(k,delta.get(k))}}
-                    val next=p.sText("to_status",old.status)
-                    dao.updateManagementRecord(old.copy(status=next,metadataJson=meta.toString()))
+                    val next=result.sText("status",p.sText("to_status",old.status))
+                    val financial=old.recordType in setOf("invoice","customer_receivable","refund_due")
+                    val paid=result.sLong("paid_xaf",old.paidXaf)
+                    if(financial && next in setOf("partial","paid") &&
+                        (!result.has("paid_xaf") || paid < old.paidXaf || paid > old.amountXaf || (next=="paid") != (paid==old.amountXaf))) return false
+                    if(financial) meta.remove("paid_xaf")
+                    dao.updateManagementRecord(old.copy(status=next,paidXaf=paid,metadataJson=meta.toString()))
                     dao.upsertRemoteWorkflowEvent(LocalWorkflowEvent(change.eventId,org,site,p.sText("record_type",old.recordType),rid,p.sText("from_status",old.status),next,p.sText("reason"),actor,now))
                     return true
                 }

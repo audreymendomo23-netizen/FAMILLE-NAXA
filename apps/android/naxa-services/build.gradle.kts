@@ -51,6 +51,7 @@ android {
         buildConfigField("boolean", "MEETINGS_ENABLED", meetingsEnabled.toString())
         val attendanceEnabled = (project.findProperty("NS_ENABLE_ATTENDANCE") as? String ?: "false").equals("true", ignoreCase = true)
         buildConfigField("boolean", "ATTENDANCE_ENABLED", attendanceEnabled.toString())
+        buildConfigField("boolean", "BILLING_SETTLEMENT_ENABLED", ((project.findProperty("NS_ENABLE_BILLING_V23") as? String ?: "false").equals("true", ignoreCase = true)).toString())
         val configuredProjectRef = (project.findProperty("NS_SUPABASE_PROJECT_REF") as? String ?: "").trim()
             .replace("\\", "\\\\").replace("\"", "\\\"")
         val familyProjectRef = (project.findProperty("NS_FAMILY_SUPABASE_PROJECT_REF") as? String ?: "").trim()
