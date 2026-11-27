@@ -1,10 +1,10 @@
+import {resolveFirebasePush} from "./src/firebase-config.mjs";
 import {defineConfig,loadEnv} from "vite";import react from "@vitejs/plugin-react";import {build} from "esbuild";
 // Reuse the existing shell worker; no second competing service worker scope.
 // Firebase initialization is bundled only for a dedicated, explicitly configured WideMeet project.
 export default defineConfig(({mode})=>{
  const env={...loadEnv(mode,process.cwd(),"VITE_"),...process.env};
- const config={apiKey:env.VITE_WIDEMEET_FIREBASE_API_KEY,appId:env.VITE_WIDEMEET_FIREBASE_APP_ID,projectId:env.VITE_WIDEMEET_FIREBASE_PROJECT_ID,messagingSenderId:env.VITE_WIDEMEET_FIREBASE_SENDER_ID};
- const push=env.VITE_WIDEMEET_PUSH_ENABLED==="true"&&Object.values(config).every(Boolean)&&config.projectId==="naxameet"&&config.messagingSenderId==="404923635551"&&/^1:404923635551:web:[a-f0-9]+$/.test(config.appId??"");
+ const {config,configured:push}=resolveFirebasePush(env);
  return {plugins:[react(),{name:"widemeet-shell",async generateBundle(_o,bundle){
  const urls=["/","/manifest.webmanifest","/brand/logo.png","/brand/icon.svg",...Object.keys(bundle).filter(x=>x.startsWith("assets/")).map(x=>"/"+x)];
  const cache="widemeet-shell-"+Object.keys(bundle).filter(x=>x.startsWith("assets/")).sort().join("|");
