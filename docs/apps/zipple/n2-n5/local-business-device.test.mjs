@@ -70,6 +70,10 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  const nativeTableHash=await scalar("select qr_hash from zp_tables where site_id=$1 and org_id=$2 and label='Table QR native'",[site,org]);
  assert.match(nativeTableHash,/^[0-9a-f]{64}$/);
  console.log("ZIPPLE_NATIVE_TABLE_QR_PERSISTENCE_PASS");
+ assert.equal(Number(await scalar("select count(*) from zp_tables t join zp_zones z on z.id=t.zone_id where t.site_id=$1 and t.org_id=$2 and t.label='Table QR native' and t.seats=6 and z.name='Salle native test'",[site,org])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_reservations where site_id=$1 and guest_name='Réservation native' and state='cancelled'",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_waitlist where site_id=$1 and guest_name='Attente native' and state='cancelled'",[site])),1);
+ console.log("ZIPPLE_NATIVE_FLOOR_PERSISTENCE_PASS");
  const nativeCustomer=await scalar("select id from zp_customers where org_id=$1 and display_name='Client QR natif'",[org]);assert.ok(nativeCustomer);
  const card=await scalar("select id from zp_loyalty_cards where customer_id=$1 and org_id=$2 and revoked_at is null",[nativeCustomer,org]);
  const referral=await scalar("select id from zp_loyalty_codes where customer_id=$1 and org_id=$2 and revoked_at is null",[nativeCustomer,org]);

@@ -142,6 +142,25 @@ class Bulk2LiveDeviceTest {
    compose.onNode(matcher).performScrollTo().assertIsDisplayed()
   }
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_TABLE_QR_PASS")
+  click("Salles et réservations")
+  input("Nom de la zone","Salle native test");click("Créer la zone");awaitText("Configuration enregistrée")
+  click("Table à configurer : —");click("Table QR native")
+  click("Zone de la table : —");click("Salle native test")
+  step("native seating capacity input"){val matcher=hasText("Nombre de places",substring=false) and hasSetTextAction();compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1};compose.onNode(matcher).performScrollTo().performTextReplacement("6")}
+  click("Enregistrer la table");awaitText("Table QR native · 6 places")
+  val tomorrow=LocalDate.now(ZoneId.of("Africa/Douala")).plusDays(1).toString()
+  input("Nom de réservation","Réservation native");input("Début AAAA-MM-JJ HH:mm",tomorrow+" 12:00");input("Fin AAAA-MM-JJ HH:mm",tomorrow+" 13:00")
+  click("Réserver la table");awaitText("Réservation native · Réservée");click("Annuler : Réservation native");awaitText("Réservation native · Annulée")
+  input("Nom en attente","Attente native");click("Ajouter à l’attente");awaitText("Attente native · 2");click("Retirer de l’attente : Attente native")
+  step("native room persistence"){runBlocking{
+   val rooms=business.call(session,site,"floor_snapshot") as JSONObject
+   val zone=rooms.rows("zones").single{it.optString("name")=="Salle native test"}
+   val table=rooms.rows("tables").single{it.optString("label")=="Table QR native"}
+   assertEquals(zone.getString("id"),table.getString("zone_id"));assertEquals(6,table.getInt("seats"))
+   assertTrue(rooms.rows("reservations").any{it.optString("guest_name")=="Réservation native"&&it.optString("state")=="cancelled"})
+   assertFalse(rooms.rows("waitlist").any{it.optString("guest_name")=="Attente native"})
+  }}
+  android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_FLOOR_RESERVATIONS_WAITLIST_PASS")
   click("Fidélité et parrainage");awaitText("Points non monétaires ; avantages sur commande ultérieure réglée.")
   click("Client : —");click("Client QR natif")
   click("Générer la carte de fidélité");awaitText("Opération enregistrée")

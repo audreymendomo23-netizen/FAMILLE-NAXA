@@ -70,6 +70,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
         OutlinedButton(onClick={tab="erp_write"}){Text(tr("Opérations stock","Stock operations"))}
         OutlinedButton(onClick={tab="crm"}){Text(tr("Clients","Customers"))}
     }
+    if(canManage)OutlinedButton(onClick={tab="floor"}){Text(tr("Salles et réservations","Rooms and reservations"))}
     OutlinedButton(onClick={tab="stations"}){Text(tr("Postes de préparation","Preparation stations"))}
     if(canCash)OutlinedButton(onClick={tab="split"}){Text(tr("Addition fractionnée","Split bill"))}
     if(canManage)OutlinedButton(onClick={tab="bulk3"}){Text(tr("ERP 360° — gestion complète","ERP 360° — management"))}
@@ -85,6 +86,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
         "hr","profile","tickets","notifications","team","planning","objectives","training","incidents","intelligence"->{key(session.member,site,tab){ZipplePortalWorkspace(api,session,site,en,tab,onLanguage){next->when(next){"station"->tab="stations";"erp"->if(canManage)tab="bulk3";"cash"->if(canCash)tab="cash";"crm","billing"->if(canManage)tab=next;else->if(portalPages.any{it.id==next&&(!it.manager||canManage)})tab=next}}}}
         "split"->{key(session.member,site){ZippleNativeSplitBill(api,session,site,en)}}
         "stations"->{key(session.member,site){ZippleNativeStations(api,session,site,en)}}
+        "floor"->{if(canManage)key(session.member,site){ZippleNativeFloor(api,session,site,en,snapshot?.optJSONObject("mode")?.optString("space")=="restaurant")}}
         "offline_review"->{key(session.member,site){ZippleNativeOfflineReview(api,session,site,en)}}
         "attendance"->{key(session.member,site){ZippleAttendance(api,session,site,en)}}
         "support"->{key(session.member,site){ZippleNativeOrderSupport(api,session,site,en)}}
