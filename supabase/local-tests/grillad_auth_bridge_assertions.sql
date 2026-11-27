@@ -27,11 +27,35 @@ begin
 end $$;
 reset role;
 do $$begin if (select count(*) from famille_private.account_devices where app_code='grillad' and status='active')<>4 then raise exception 'cross seller eviction';end if;end $$;
+-- Service across midnight, using an explicit fixture policy only.
+insert into grillad_private.service_policy values('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',1080,current_date-2,true);
+set role service_role;
+do $$begin
+ if (public.grillad_daily_tick(100)->>'changed')::int<1 then raise exception 'daily first run';end if;
+ if (public.grillad_daily_tick(100)->>'changed')::int<>0 then raise exception 'daily duplicate';end if;
+end $$;
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+do $$
+declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';v jsonb;notice text;
+begin
+ v:=public.grillad_daily_list(o,s);if jsonb_array_length(v)<1 then raise exception 'missing daily';end if;
+ v:=public.grillad_notice_feed(o,s);notice:=v->'items'->0->>'id';
+ if notice is null then raise exception 'missing notice';end if;
+ perform public.grillad_notice_ack(o,s,notice);perform public.grillad_notice_ack(o,s,notice);
+ v:=public.grillad_notice_feed(o,s);if not (v->'items'->0->>'read')::boolean then raise exception 'notice read';end if;
+ perform public.grillad_notice_set(o,s,'daily',false);
+ if jsonb_array_length(public.grillad_notice_feed(o,s)->'items')<>0 then raise exception 'notice preference';end if;
+end $$;
+reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000002',true);
 select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000012","app_metadata":{}}',true);
 do $$begin
  if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'bound session failed';end if;
+ begin perform public.grillad_daily_list('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001');raise exception 'seller daily leak';exception when insufficient_privilege then null;end;
  begin perform public.grillad_auth_begin(repeat('b',64),false);raise exception 'service-only auth bridge leaked';exception when insufficient_privilege then null;end;
 end $$;
 reset role;

@@ -7,6 +7,7 @@ on:
       - 'apps/web/grillad/**'
       - 'scripts/grillad/**'
       - 'supabase/functions/grillad/**'
+      - 'supabase/functions/grillad-daily/**'
       - 'supabase/drafts/grillad*.sql'
       - 'supabase/local-tests/grillad*.sql'
       - '.github/workflows/grillad-foundation.yml'
@@ -110,4 +111,5 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -c 'create role service_role nologin bypassrls'
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0004_prompt_0_4_account_lifecycle.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_auth_bridge_v1.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_daily_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_auth_bridge_assertions.sql

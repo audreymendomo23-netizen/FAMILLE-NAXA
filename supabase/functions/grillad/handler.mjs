@@ -56,6 +56,10 @@ export async function handle(request,env,fetcher=fetch){
   if(body.action==='workspace')return upstream(await post('/rest/v1/rpc/grillad_workspace',{},token));
   if(!uuid.test(body.org)||!uuid.test(body.site))return reply(400,{error:'SCOPE'});
   const scope={p_org:body.org,p_site:body.site};
+  if(body.action==='daily_list')return upstream(await post('/rest/v1/rpc/grillad_daily_list',scope,token));
+  if(body.action==='notice_feed')return upstream(await post('/rest/v1/rpc/grillad_notice_feed',scope,token));
+  if(body.action==='notice_ack'&&typeof body.id==='string'&&body.id.length<=100)return upstream(await post('/rest/v1/rpc/grillad_notice_ack',{...scope,p_id:body.id},token));
+  if(body.action==='notice_set'&&['sales','stock','cash','daily','attendance','connect','security'].includes(body.category)&&typeof body.enabled==='boolean')return upstream(await post('/rest/v1/rpc/grillad_notice_set',{...scope,p_category:body.category,p_enabled:body.enabled},token));
   if(body.action==='attendance_status')return upstream(await post('/rest/v1/rpc/grillad_attendance_status',scope,token));
   if(body.action==='attendance_capture'&&uuid.test(body.event)&&['arrival','departure'].includes(body.kind)&&typeof body.at==='string'&&typeof body.lat==='number'&&typeof body.lon==='number'&&typeof body.accuracy==='number'&&typeof body.photo==='string')return upstream(await post('/rest/v1/rpc/grillad_attendance_capture',{...scope,p_event:body.event,p_kind:body.kind,p_at:body.at,p_lat:body.lat,p_lon:body.lon,p_accuracy:body.accuracy,p_photo:body.photo},token));
   if(body.action==='snapshot'){
