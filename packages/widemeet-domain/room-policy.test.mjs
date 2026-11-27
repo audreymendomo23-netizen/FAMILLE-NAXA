@@ -94,3 +94,12 @@ test("temporary moderator delegation grants only explicit permissions and cannot
  r=run(r,guest,"poll",["Yes","No"],"poll00001");r=run(r,guest,"close_poll",null,"poll00001");
  r=run(r,host,"set_moderator",[],guest.memberId);assert.throws(()=>run(r,guest,"allow_mic",null,third.memberId),/forbidden/);
 });
+
+test("structured agenda respects time and assignment; confidentiality is immutable during meeting and disables screen grants",()=>{
+ let r=base();r=run(r,host,"set_agenda",[{id:"agenda001",title:"Review",minutes:15,owner:guest.memberId}]);assert.equal(r.agenda[0].status,"pending");
+ assert.throws(()=>run(r,host,"set_agenda",[{id:"agenda002",title:"Too long",minutes:31,owner:null}]),/invalid_room/);
+ assert.throws(()=>run(r,guest,"set_agenda",[]),/forbidden/);assert.throws(()=>run(r,host,"confidentiality","strict"),/invalid_state/);
+ r=run(r,host,"confidentiality","confidential");r=run(r,guest,"respond","accepted");r=run(r,host,"start");assert.equal(mediaPermission(r,host,1000).screen,false);
+ assert.throws(()=>run(r,host,"screen",true,guest.memberId),/invalid_screen/);assert.throws(()=>run(r,host,"confidentiality","standard"),/invalid_state/);
+ r=run(r,host,"agenda_status","active","agenda001");r=run(r,host,"agenda_status","done","agenda001");assert.equal(r.agenda[0].status,"done");
+});

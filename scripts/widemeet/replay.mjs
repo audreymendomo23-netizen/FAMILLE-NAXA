@@ -282,12 +282,16 @@ try{
  let ms=await ok(room+"/create",{room_id:mid,title:"Minutes qualification",description:"Synthetic meeting",scheduled_ms:Date.now(),duration_minutes:10,invitees:[mg.id]},mhs.access_token);
  async function mcmd(token,action,value=null,target=null){ms=await ok(room+"/command",{room_id:mid,request_id:randomUUID(),expected_revision:ms.revision,action,value,target},token)}
  await mcmd(mhs.access_token,"lobby_config",true);
+ const agendaId=randomUUID();await mcmd(mhs.access_token,"set_agenda",[{id:agendaId,title:"Synthetic agenda",minutes:5,owner:mg.id}]);await mcmd(mhs.access_token,"confidentiality","confidential");
  await mcmd(mgs.access_token,"respond","accepted");await mcmd(mhs.access_token,"start");
  const waiting=await ok(room+"/read",{room_id:mid},mgs.access_token);assert.equal(waiting.lobbyRequired,true);assert.equal(waiting.participants.length,0);assert.equal(waiting.events.length,0);
  assert.equal((await request(room+"/media-grant",{room_id:mid},mgs.access_token)).status,403);
  await mcmd(mgs.access_token,"lobby_request");await mcmd(mhs.access_token,"lobby_reject",null,mg.id);
  await mcmd(mgs.access_token,"lobby_request");await mcmd(mhs.access_token,"lobby_admit",null,mg.id);
  assert.equal((await ok(room+"/read",{room_id:mid},mgs.access_token)).lobbyStatus,"admitted");
+ await mcmd(mhs.access_token,"agenda_status","active",agendaId);await mcmd(mhs.access_token,"agenda_status","done",agendaId);assert.equal((await ok(room+"/read",{room_id:mid},mgs.access_token)).agenda[0].status,"done");assert.equal(ms.confidentiality,"confidential");
+ assert.equal((await request(room+"/command",{room_id:mid,request_id:randomUUID(),expected_revision:ms.revision,action:"screen",target:mg.id,value:true},mhs.access_token)).status,409);
+ pass("actual structured agenda progression and confidential screen restriction");
  pass("actual N2 internal waiting room rejects live state until explicit admission and permits controlled retry");
  await mcmd(mhs.access_token,"invite_member",null,mo.id);
  await mcmd(mhs.access_token,"lock_admission",true);

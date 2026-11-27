@@ -28,7 +28,7 @@ fun writeMinutesPdf(data:JSONObject,english:Boolean,output:OutputStream){
    val top=layout.getLineTop(line);var next=line+1;while(next<layout.lineCount&&layout.getLineBottom(next)-top<=680)next++
    val page=doc.startPage(PdfDocument.PageInfo.Builder(595,842,pageNo).create());val canvas=page.canvas
    canvas.drawText("WideMeet | "+tr("Compte rendu","Meeting minutes"),45f,35f,label)
-   canvas.save();canvas.clipRect(45f,60f,550f,740f);canvas.translate(45f,60f-top);layout.draw(canvas);canvas.restore()
+   canvas.save();canvas.clipRect(45f,60f,550f,minOf(740f,60f+layout.getLineTop(next)-top));canvas.translate(45f,60f-top);layout.draw(canvas);canvas.restore()
    canvas.drawText((tr("Copie destinée à ","Copy intended for ")+recipient).take(90),45f,790f,footer);canvas.drawText(pageNo.toString(),530f,790f,footer)
    doc.finishPage(page);line=next;pageNo++
   };doc.writeTo(output)
