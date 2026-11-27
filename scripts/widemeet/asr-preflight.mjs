@@ -30,4 +30,8 @@ try{
  const quiet=await infer(silence);
  assert.equal(quiet.segments.length,0,"silence must not generate text");
  console.log("PASS offline ASR silent input emits no transcript");
+ const translated=await runLocalAsr({python:process.env.WM_ASR_PYTHON,modelDir:process.env.WM_ASR_MODEL,path:join(dir,"fr.ogg"),home:dir,translate:true});
+ assert.equal(translated.language,"fr");assert.match(translated.segments.map(x=>x.text).join(" "),/project|meeting/i);
+ console.log("PASS actual local Whisper French speech to English text");
+
 }finally{await rm(dir,{recursive:true,force:true})}
