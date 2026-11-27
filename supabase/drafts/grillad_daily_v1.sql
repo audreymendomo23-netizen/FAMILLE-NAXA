@@ -33,6 +33,7 @@ begin
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
  select * into old from grillad_private.daily_summary where org=p_org and site=p_site and service_day=p_day order by version desc limit 1;
  select jsonb_build_object('ca',coalesce(sum(s.total),0),'sales_count',count(distinct (s.site,coalesce(s.direct_order,s.id))) filter(where s.source='direct')+count(distinct s.connect_order) filter(where s.source='connect'),'sold',coalesce(sum(s.qty),0),
+ 'encaissements',(select coalesce(sum(c.amount),0) from grillad_private.cash_receipts c where c.org=p_org and c.site=p_site and c.reversed_at is null and c.recorded_at>=lo and c.recorded_at<hi),
  'cost',case when count(*) filter(where s.cost is null)>0 then null else coalesce(sum(s.qty*s.cost),0) end,
  'expenses',(select coalesce(sum(e.value),0) from grillad_private.expenses e where e.cancelled_at is null and e.org=p_org and e.site=p_site and e.created_at>=lo and e.created_at<hi),
  'prepared',(select coalesce(sum(a.qty),0) from grillad_private.preparations a where a.org=p_org and a.site=p_site and a.created_at>=lo and a.created_at<hi),

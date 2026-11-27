@@ -138,6 +138,7 @@ begin
    update grillad_private.items set connect_reserved=connect_reserved-x.qty,sold=sold+x.qty where id=x.item;
    insert into grillad_private.sales(id,org,site,item,cash,actor,qty,price,cost,source,connect_order) values(gen_random_uuid(),p_org,p_site,x.item,c.id,auth.uid(),x.qty,x.price,x.cost,'connect',p_order);
   end loop;
+  insert into grillad_private.cash_receipts(id,org,site,cash,actor,source,amount) values(p_order,p_org,p_site,c.id,auth.uid(),'connect',p_received);
  elsif (p_next='refused' and o.status='submitted') or (p_next='cancelled' and o.status in ('submitted','accepted','preparing','ready')) then
   if p_reason is null or length(btrim(p_reason)) not between 1 and 300 then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
   if o.status in ('accepted','preparing','ready') then

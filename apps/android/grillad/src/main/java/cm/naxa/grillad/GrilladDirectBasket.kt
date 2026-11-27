@@ -6,8 +6,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
-@Composable internal fun GrilladDirectBasket(items:List<JSONObject>,enabled:Boolean,submit:(JSONArray)->Unit){
- var open by remember{mutableStateOf(false)};val qty=remember{mutableStateMapOf<String,String>()}
+@Composable internal fun GrilladDirectBasket(items:List<JSONObject>,enabled:Boolean,submit:(JSONArray,Long)->Unit){
+ var open by remember{mutableStateOf(false)};var received by remember{mutableStateOf("")};val qty=remember{mutableStateMapOf<String,String>()}
  OutlinedButton({open=!open},enabled=enabled){Text(if(open)"Fermer le panier" else "Vente de plusieurs articles")}
  if(!open)return
  Text("Panier de vente",style=MaterialTheme.typography.titleMedium)
@@ -17,5 +17,5 @@ import org.json.JSONObject
  if(value.isNotBlank()&&(n==null||n<0||n>remaining||n>1_000_000))valid=false
  if(n!=null&&n>0&&n<=remaining&&n<=1_000_000){lines.put(obj("item" to id,"qty" to n,"price" to price));total+=n*price}}
  Text("Total indicatif : "+total+" F")
- Button({submit(lines);qty.clear();open=false},enabled=enabled&&valid&&lines.length() in 1..20,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Valider le panier")}
+ OutlinedTextField(received,{received=it},label={Text("Espèces nettes du panier")});Button({submit(lines,total);qty.clear();received="";open=false},enabled=enabled&&valid&&lines.length() in 1..20&&received.toLongOrNull()==total,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Valider le panier")}
 }

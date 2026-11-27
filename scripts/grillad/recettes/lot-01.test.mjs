@@ -7,7 +7,7 @@ const env={url:'https://fixture.supabase.co',key:'public-fixture',service:'serve
 const scope={p_org:org,p_site:site};
 const mutations=[
  ['add_item',{name:'Poulet',family:'Poulet',price:1000,cost:500}],
- ['prepare',{item,qty:4}],['sell',{item,qty:1}],['sell_basket',{lines:[{item,qty:2,price:1000}]}],
+ ['prepare',{item,qty:4}],['sell',{item,qty:1,price:1000,received:1000}],['sell_basket',{received:2000,lines:[{item,qty:2,price:1000}]}],
  ['cancel_sale',{sale:item,reason:'Correction'}],['cancel_basket',{sale:item,reason:'Correction'}],
  ['open_cash',{opening:100}],['close_cash',{counted:100,reason:'Contrôle'}],['expense',{label:'Bois',value:200}],
  ['target',{day:'2026-11-27',amount:5000}],['change_price',{item,price:1200,reason:'Révision'}],

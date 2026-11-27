@@ -47,6 +47,14 @@ create table grillad_private.sales(
  foreign key(item,org,site) references grillad_private.items(id,org,site),
  foreign key(cash,org,site) references grillad_private.cash(id,org,site)
 );
+-- One net cash declaration per direct sale/basket or independent Connect order.
+create table grillad_private.cash_receipts(
+ id uuid not null,org uuid not null,site uuid not null,cash uuid not null,actor uuid not null,
+ source text not null check(source in ('direct','connect')),amount bigint not null check(amount>0),method text not null default 'cash' check(method='cash'),
+ recorded_at timestamptz not null default now(),reversed_at timestamptz,reversed_by uuid,reverse_reason text,
+ primary key(org,site,source,id),foreign key(cash,org,site) references grillad_private.cash(id,org,site),
+ check((reversed_at is null and reversed_by is null and reverse_reason is null) or (reversed_at is not null and reversed_by is not null and reverse_reason is not null)));
+alter table grillad_private.cash_receipts enable row level security;
 create table grillad_private.expenses(
  id uuid primary key,org uuid not null,site uuid not null,cash uuid not null,
  actor uuid not null,label text not null check(length(label) between 1 and 160),value bigint not null check(value>0),
@@ -196,10 +204,12 @@ begin
   insert into grillad_private.cash(id,org,site,opening,opened_by) values(p_event,p_org,p_site,n,u);
   result:=jsonb_build_object('id',p_event);
  when 'sell' then
+  if (p_payload->>'price')::bigint is distinct from x.price or (p_payload->>'received')::bigint is distinct from qty*x.price then raise exception 'GRILLAD_CASH_DECLARATION' using errcode='22023';end if;
   if qty>x.prepared-x.sold-x.connect_reserved then raise exception 'GRILLAD_STOCK' using errcode='22023';end if;
   insert into grillad_private.sales(id,org,site,item,cash,actor,qty,price,cost) values(p_event,p_org,p_site,x.id,c.id,u,qty,x.price,x.cost);
   update grillad_private.items set sold=sold+qty where id=x.id;
-  result:=jsonb_build_object('id',p_event,'total',qty*x.price,'remaining',x.prepared-x.sold-x.connect_reserved-qty);
+  insert into grillad_private.cash_receipts(id,org,site,cash,actor,source,amount) values(p_event,p_org,p_site,c.id,u,'direct',qty*x.price);
+  result:=jsonb_build_object('id',p_event,'total',qty*x.price,'received',qty*x.price,'remaining',x.prepared-x.sold-x.connect_reserved-qty);
  when 'sell_basket' then
   if jsonb_typeof(p_payload->'lines') is distinct from 'array' then raise exception 'GRILLAD_BASKET' using errcode='22023';end if;
   basket_count:=jsonb_array_length(p_payload->'lines');
@@ -215,7 +225,9 @@ begin
    update grillad_private.items set sold=sold+qty where id=x.id;
    basket_total:=basket_total+qty*x.price;
   end loop;
-  result:=jsonb_build_object('id',p_event,'total',basket_total,'lines',basket_count);
+  if (p_payload->>'received')::bigint is distinct from basket_total then raise exception 'GRILLAD_CASH_DECLARATION' using errcode='22023';end if;
+  insert into grillad_private.cash_receipts(id,org,site,cash,actor,source,amount) values(p_event,p_org,p_site,c.id,u,'direct',basket_total);
+  result:=jsonb_build_object('id',p_event,'total',basket_total,'received',basket_total,'lines',basket_count);
  when 'cancel_basket' then
   reason:=btrim(p_payload->>'reason');item_id:=(p_payload->>'sale')::uuid;
   if reason is null or length(reason) not between 1 and 300 or item_id is null then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
@@ -224,6 +236,8 @@ begin
    update grillad_private.sales set cancelled_at=now(),cancelled_by=u,cancel_reason=reason where id=v.id;
    update grillad_private.items set sold=sold-v.qty where id=v.item;
   end loop;
+  update grillad_private.cash_receipts set reversed_at=now(),reversed_by=u,reverse_reason=reason where id=item_id and org=p_org and site=p_site and source='direct' and cash=c.id and reversed_at is null;
+  if not found then raise exception 'GRILLAD_CASH_RECEIPT_MISSING' using errcode='22023';end if;
   result:=jsonb_build_object('id',item_id,'cancelled',true);
  when 'cancel_sale' then
   reason:=btrim(p_payload->>'reason');if reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
@@ -231,6 +245,8 @@ begin
   if not found then raise exception 'GRILLAD_SALE' using errcode='22023';end if;
   update grillad_private.sales set cancelled_at=now(),cancelled_by=u,cancel_reason=reason where id=v.id;
   update grillad_private.items set sold=sold-v.qty where id=v.item;
+  update grillad_private.cash_receipts set reversed_at=now(),reversed_by=u,reverse_reason=reason where id=v.id and org=p_org and site=p_site and source='direct' and cash=c.id and reversed_at is null;
+  if not found then raise exception 'GRILLAD_CASH_RECEIPT_MISSING' using errcode='22023';end if;
   result:=jsonb_build_object('id',v.id,'cancelled',true);
  when 'expense' then
   label:=btrim(p_payload->>'label');n:=(p_payload->>'value')::bigint;
@@ -247,7 +263,7 @@ begin
  when 'close_cash' then
   n:=(p_payload->>'counted')::bigint;reason:=btrim(p_payload->>'reason');
   if n is null or n<0 then raise exception 'GRILLAD_AMOUNT' using errcode='22023';end if;
-  v_expected:=c.opening+coalesce((select sum(total) from grillad_private.sales where cash=c.id and cancelled_at is null),0)-coalesce((select sum(value) from grillad_private.expenses where cash=c.id and cancelled_at is null),0);
+  v_expected:=c.opening+coalesce((select sum(amount) from grillad_private.cash_receipts where cash=c.id and reversed_at is null),0)-coalesce((select sum(value) from grillad_private.expenses where cash=c.id and cancelled_at is null),0);
   if n<>v_expected and (reason is null or length(reason) not between 1 and 300) then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
   update grillad_private.cash set counted=n,expected=v_expected,closed_at=now(),close_reason=reason where id=c.id;
   result:=jsonb_build_object('id',c.id,'expected',v_expected,'counted',n,'difference',n-v_expected);
@@ -308,7 +324,7 @@ end $$;
 -- Read only own site; seller gets no costs, expenses, manager totals, or other sellers' sales.
 create function grillad_private.snapshot(p_org uuid,p_site uuid,p_from date,p_to date)
 returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
-declare r text;u uuid:=auth.uid();v_items jsonb;v_sales jsonb;v_finance jsonb;v_cash jsonb;v_expenses jsonb;v_forecasts jsonb;v_target bigint;v_notices jsonb;v_inactive_items jsonb;v_cash_history jsonb;v_adjustments jsonb;v_dimensions jsonb;
+declare r text;u uuid:=auth.uid();v_items jsonb;v_sales jsonb;v_finance jsonb;v_cash jsonb;v_expenses jsonb;v_forecasts jsonb;v_target bigint;v_notices jsonb;v_inactive_items jsonb;v_cash_history jsonb;v_adjustments jsonb;v_dimensions jsonb;v_receipts jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
  if p_from is null or p_to is null or p_to<p_from or p_to-p_from>366 then raise exception 'GRILLAD_PERIOD' using errcode='22023';end if;
@@ -318,9 +334,10 @@ begin
  select coalesce(jsonb_agg(to_jsonb(a) order by a.created_at desc),'[]'::jsonb) into v_adjustments from (select id,item,delta,reason,actor,created_at from grillad_private.stock_adjustments where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) a;
  select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'family',i.family,'price',i.price) order by i.name),'[]'::jsonb) into v_inactive_items from grillad_private.items i where i.org=p_org and i.site=p_site and not i.active;
  select coalesce(jsonb_agg(to_jsonb(h) order by h.closed_at desc),'[]'::jsonb) into v_cash_history from (select c.id,c.opened_at,c.closed_at,c.opening,c.expected,c.counted,c.counted-c.expected as difference,c.close_reason from grillad_private.cash c where c.org=p_org and c.site=p_site and c.closed_at is not null and (c.closed_at at time zone 'Africa/Douala')::date between p_from and p_to order by c.closed_at desc limit 200) h;
- select jsonb_build_object('ca',coalesce(sum(total),0),'sales_count',count(distinct (site,coalesce(direct_order,id))) filter(where source='direct')+count(distinct connect_order) filter(where source='connect'),'direct_ca',coalesce(sum(total) filter(where source='direct'),0),'connect_ca',coalesce(sum(total) filter(where source='connect'),0),'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,'charges',(select coalesce(sum(value),0) from grillad_private.expenses where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to)) into v_finance from grillad_private.sales where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to;
- select jsonb_build_object('id',c.id,'opening',c.opening,'expected',c.opening+coalesce((select sum(total) from grillad_private.sales where cash=c.id and cancelled_at is null),0)-coalesce((select sum(value) from grillad_private.expenses where cash=c.id and cancelled_at is null),0)) into v_cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
+ select jsonb_build_object('ca',coalesce(sum(total),0),'encaissements',(select coalesce(sum(amount),0) from grillad_private.cash_receipts where org=p_org and site=p_site and reversed_at is null and (recorded_at at time zone 'Africa/Douala')::date between p_from and p_to),'sales_count',count(distinct (site,coalesce(direct_order,id))) filter(where source='direct')+count(distinct connect_order) filter(where source='connect'),'direct_ca',coalesce(sum(total) filter(where source='direct'),0),'connect_ca',coalesce(sum(total) filter(where source='connect'),0),'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,'charges',(select coalesce(sum(value),0) from grillad_private.expenses where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to)) into v_finance from grillad_private.sales where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to;
+ select jsonb_build_object('id',c.id,'opening',c.opening,'expected',c.opening+coalesce((select sum(amount) from grillad_private.cash_receipts where cash=c.id and reversed_at is null),0)-coalesce((select sum(value) from grillad_private.expenses where cash=c.id and cancelled_at is null),0)) into v_cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
  select coalesce(jsonb_agg(to_jsonb(e) order by e.created_at desc),'[]'::jsonb) into v_expenses from (select id,label,value,cash,created_at,cancelled_at,cancelled_by,cancel_reason from grillad_private.expenses where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) e;
+ select coalesce(jsonb_agg(to_jsonb(q) order by q.recorded_at desc),'[]'::jsonb) into v_receipts from (select id,source,amount,method,cash,actor,recorded_at,reversed_at,reverse_reason from grillad_private.cash_receipts where org=p_org and site=p_site and (recorded_at at time zone 'Africa/Douala')::date between p_from and p_to order by recorded_at desc limit 200) q;
  select amount into v_target from grillad_private.targets where org=p_org and site=p_site and day=p_to;
  select coalesce(jsonb_agg(jsonb_build_object('kind',t.kind,'subject',t.subject,'day',t.day,'amount',t.amount,'actual',coalesce(a.actual,0),'label',case when t.kind='item' then coalesce((select i.name from grillad_private.items i where i.org=p_org and i.site=p_site and i.id::text=t.subject),t.subject) else t.subject end) order by t.kind,t.subject),'[]'::jsonb) into v_dimensions from grillad_private.dimension_targets t left join lateral(select sum(s.total) actual from grillad_private.sales s join grillad_private.items i on i.id=s.item and i.org=s.org and i.site=s.site where s.org=t.org and s.site=t.site and s.cancelled_at is null and (s.created_at at time zone 'Africa/Douala')::date=t.day and ((t.kind='item' and s.item::text=t.subject) or (t.kind='family' and i.family=t.subject) or (t.kind='seller' and s.actor::text=t.subject))) a on true where t.org=p_org and t.site=p_site and t.day=p_to;
  select coalesce(jsonb_agg(jsonb_build_object('item',i.id,'name',i.name,'quantity',case when d.observed>=3 then ceil(d.mean)::bigint else null end,'days',d.observed)),'[]'::jsonb) into v_forecasts
@@ -329,7 +346,7 @@ begin
  select coalesce(jsonb_agg(z),'[]'::jsonb) into v_notices from (select 'stock:'||id id,name||' : quantité épuisée' text from grillad_private.items where org=p_org and site=p_site and active and prepared=sold+connect_reserved union all select 'cash:'||id,'Écart de caisse à vérifier' from grillad_private.cash where org=p_org and site=p_site and closed_at is not null and counted<>expected and (closed_at at time zone 'Africa/Douala')::date=p_to) z;
  else select jsonb_build_object('id',c.id) into v_cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
  end if;
- return jsonb_build_object('role',r,'items',v_items,'sales',v_sales,'finance',v_finance,'cash',v_cash,'cash_history',coalesce(v_cash_history,'[]'::jsonb),'inactive_items',coalesce(v_inactive_items,'[]'::jsonb),'stock_adjustments',coalesce(v_adjustments,'[]'::jsonb),'expenses',coalesce(v_expenses,'[]'::jsonb),'forecasts',coalesce(v_forecasts,'[]'::jsonb),'notices',coalesce(v_notices,'[]'::jsonb),'target',v_target,'dimension_targets',coalesce(v_dimensions,'[]'::jsonb),'from',p_from,'to',p_to,'generated_at',now());
+ return jsonb_build_object('role',r,'items',v_items,'sales',v_sales,'finance',v_finance,'cash',v_cash,'cash_receipts',coalesce(v_receipts,'[]'::jsonb),'cash_history',coalesce(v_cash_history,'[]'::jsonb),'inactive_items',coalesce(v_inactive_items,'[]'::jsonb),'stock_adjustments',coalesce(v_adjustments,'[]'::jsonb),'expenses',coalesce(v_expenses,'[]'::jsonb),'forecasts',coalesce(v_forecasts,'[]'::jsonb),'notices',coalesce(v_notices,'[]'::jsonb),'target',v_target,'dimension_targets',coalesce(v_dimensions,'[]'::jsonb),'from',p_from,'to',p_to,'generated_at',now());
 end $$;
 -- Server-derived workspace list. No arbitrary organization/site values from login.
 create function grillad_private.workspace() returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
@@ -371,7 +388,7 @@ begin
  where s.org=p_org and s.site=p_site and s.source='direct' and coalesce(s.direct_order,s.id)=p_sale
  and (r<>'seller' or s.actor=u) group by o.legal_name,l.name;
  if out is null then raise exception 'GRILLAD_RECEIPT' using errcode='42501';end if;
- return out;
+ return out||jsonb_build_object('cash_declaration',(select jsonb_build_object('method',c.method,'amount',c.amount,'net',case when c.reversed_at is null then c.amount else 0 end,'reversed',c.reversed_at is not null) from grillad_private.cash_receipts c where c.org=p_org and c.site=p_site and c.source='direct' and c.id=p_sale and (r<>'seller' or c.actor=u)));
 end $$;
 create function public.grillad_receipt(p_org uuid,p_site uuid,p_sale uuid) returns jsonb
 language sql stable security invoker set search_path=pg_catalog as $$select grillad_private.receipt(p_org,p_site,p_sale)$$;

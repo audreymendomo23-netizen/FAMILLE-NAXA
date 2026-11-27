@@ -62,7 +62,7 @@ do $$
 declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';i uuid:='b6000000-0000-0000-0000-000000000001';p uuid:='b7000000-0000-0000-0000-000000000001';e uuid:=gen_random_uuid();d date:=(now() at time zone 'Africa/Douala')::date;v jsonb;
 begin
  perform public.grillad_connect_transition(o,s,p,gen_random_uuid(),'accepted',null,null);
- begin perform public.grillad_action(o,s,gen_random_uuid(),'sell',jsonb_build_object('item',i,'qty',4));raise exception 'reserved stock leak';exception when invalid_parameter_value then null;end;
+ begin perform public.grillad_action(o,s,gen_random_uuid(),'sell',jsonb_build_object('item',i,'qty',4,'price',1000,'received',4000));raise exception 'reserved stock leak';exception when invalid_parameter_value then null;end;
  perform public.grillad_connect_transition(o,s,p,gen_random_uuid(),'preparing',null,null);
  perform public.grillad_connect_transition(o,s,p,gen_random_uuid(),'ready',null,null);
  perform public.grillad_connect_transition(o,s,p,e,'handed',2000,null);
@@ -77,7 +77,7 @@ do $$
 declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;v jsonb;
 begin
  v:=public.grillad_report(o,s,d,d,false,null,null,null);
- if (v->>'ca')::int<>2000 or (v->>'connect_ca')::int<>2000 or (v->>'sales_count')::int<>1 then raise exception 'report accounting';end if;
+ if (v->>'ca')::int<>2000 or (v->>'connect_ca')::int<>2000 or (v->>'encaissements')::int<>2000 or (v->>'sales_count')::int<>1 then raise exception 'report accounting';end if;
  v:=public.grillad_report(o,s,d,d,false,'Poulet',null,null);
  if (v->>'ca')::int<>2000 or v->'expenses'<>'null'::jsonb then raise exception 'report filtered expense allocation';end if;
  begin perform public.grillad_report(o,s,d,d,true,null,null,null);raise exception 'network must be explicit';exception when insufficient_privilege then null;end;
