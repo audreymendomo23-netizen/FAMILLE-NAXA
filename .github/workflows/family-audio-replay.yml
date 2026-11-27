@@ -1,5 +1,12 @@
 name: Family media — isolated audio recording
 on:
+  workflow_call:
+  push:
+    branches: [test/widemeet-bulk-metier-b3-20261127]
+    paths:
+      - "supabase/drafts/widemeet_transcription.sql"
+      - "scripts/widemeet/media-product-replay.mjs"
+      - ".github/workflows/family-audio-replay.yml"
   pull_request:
     branches: [test/widemeet-qualification-20261126]
     types: [opened, synchronize, reopened]
@@ -8,6 +15,7 @@ on:
       - 'scripts/widemeet/media-product-replay.mjs'
       - 'scripts/widemeet/local-asr.py'
       - 'scripts/widemeet/asr-preflight.mjs'
+      - 'scripts/widemeet/live-caption-worker.mjs'
       - 'scripts/widemeet/asr-requirements.txt'
       - 'packages/media-core/**'
       - 'supabase/drafts/widemeet_*.sql'
@@ -24,6 +32,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Test B3 durable consumer loop
+        run: |
+          node --check scripts/widemeet/asr-worker.mjs
+          node --check scripts/widemeet/live-caption-worker.mjs
+          node --check packages/media-core/widemeet-live-captions.mjs
+          node --test packages/media-core/widemeet-asr-loop.test.mjs
       - name: Prepare isolated recording dependencies
         run: |
           npm install --no-save --no-package-lock --no-audit --no-fund livekit-client@2.25.0 livekit-server-sdk@2.20.1 ws@8.18.3 @playwright/test@1.56.1
@@ -47,6 +61,10 @@ jobs:
           mkdir -p "$OUT"
           chmod 777 "$OUT"
           echo "WM_EGRESS_OUT=$OUT" >> "$GITHUB_ENV"
+          ACTIVE="$RUNNER_TEMP/wm-egress-active"
+          mkdir -p "$ACTIVE"
+          chmod 777 "$ACTIVE"
+          echo "WM_EGRESS_ACTIVE=$ACTIVE" >> "$GITHUB_ENV"
           docker run -d --name wm-audio-redis --network host redis:7.4.1-alpine redis-server --bind 127.0.0.1 --port 6381 --save "" --appendonly no
           # Egress Go SDK does not reliably pair loopback-only ICE candidates. Keep
           # signaling and Redis private; advertise the isolated runner interface for RTP.
@@ -88,7 +106,7 @@ jobs:
           docker run -d --name wm-audio-lk --network host -v "$RUNNER_TEMP/wm-audio-lk.yaml:/etc/livekit.yaml:ro" livekit/livekit-server:v1.13.9 --config /etc/livekit.yaml
           for i in $(seq 1 60); do if curl -fsS http://127.0.0.1:7880/ >/dev/null; then break; fi; sleep 1; done
           curl -fsS http://127.0.0.1:7880/
-          docker run -d --name wm-audio-egress --network host --cap-add SYS_ADMIN -e EGRESS_CONFIG_FILE=/etc/egress.yaml -v "$RUNNER_TEMP/wm-egress.yaml:/etc/egress.yaml:ro" -v "$OUT:/out" livekit/egress:v1.14.1
+          docker run -d --name wm-audio-egress --network host --cap-add SYS_ADMIN -e EGRESS_CONFIG_FILE=/etc/egress.yaml -v "$RUNNER_TEMP/wm-egress.yaml:/etc/egress.yaml:ro" -v "$OUT:/out" -v "$ACTIVE:/home/egress/tmp" livekit/egress:v1.14.1
           for i in $(seq 1 90); do if curl -fsS http://127.0.0.1:7990/ >/dev/null; then exit 0; fi; sleep 1; done
           echo "Egress readiness failed"
           exit 1
@@ -172,7 +190,7 @@ jobs:
           set -a; source "$RUNNER_TEMP/wm-recording.env"; set +a
           [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
           export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
-          export WM_AUTH_QUALIFIED=true WM_ROOM_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_MEDIA_QUALIFIED=true WM_RECORDING_QUALIFIED=true WM_RECORDING_STORAGE_QUALIFIED=true WM_TRANSCRIPTION_QUALIFIED=true WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
+          export WM_AUTH_QUALIFIED=true WM_ROOM_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_MEDIA_QUALIFIED=true WM_RECORDING_QUALIFIED=true WM_RECORDING_STORAGE_QUALIFIED=true WM_TRANSCRIPTION_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_LIVE_CAPTIONS_QUALIFIED=true WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
           export WM_LIVEKIT_URL=wss://127.0.0.1:7881 WM_LIVEKIT_API_KEY="$LK_TEST_KEY" WM_LIVEKIT_API_SECRET="$LK_TEST_SECRET"
           node scripts/widemeet/media-product-replay.mjs
       - name: Stop isolated recording database
@@ -189,4 +207,4 @@ jobs:
         if: always()
         run: |
           docker rm -f wm-audio-egress wm-audio-lk wm-audio-redis || true
-          rm -rf "$RUNNER_TEMP/wm-egress-out" "$RUNNER_TEMP/wm-audio-lk.yaml" "$RUNNER_TEMP/wm-egress.yaml"
+          rm -rf "$RUNNER_TEMP/wm-egress-active" "$RUNNER_TEMP/wm-egress-out" "$RUNNER_TEMP/wm-audio-lk.yaml" "$RUNNER_TEMP/wm-egress.yaml"

@@ -1,5 +1,6 @@
 name: WideMeet — isolated GoTrue and room Replay
 on:
+  workflow_call:
   workflow_dispatch:
   pull_request:
     branches: [test/widemeet-qualification-20261126]

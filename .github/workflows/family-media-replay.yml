@@ -1,5 +1,6 @@
 name: Family media — isolated SFU replay
 on:
+  workflow_call:
   pull_request:
     branches: [test/widemeet-qualification-20261126]
     types: [opened, synchronize, reopened]

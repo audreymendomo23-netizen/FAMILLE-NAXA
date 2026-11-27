@@ -1,0 +1,111 @@
+name: WideMeet B5 — isolated support SFU replay
+on:
+  workflow_call:
+  pull_request:
+    branches: [test/widemeet-qualification-20261126]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'scripts/widemeet/support-media-replay.mjs'
+      - 'packages/media-core/widemeet-support-admission.mjs'
+      - 'supabase/drafts/widemeet_support.sql'
+      - 'supabase/functions/widemeet-auth/**'
+      - 'apps/web/widemeet/src/Support*'
+      - 'apps/android/widemeet/src/main/java/cm/naxa/widemeet/Support*'
+      - '.github/workflows/widemeet-b5-support-media.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-media:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare pinned test dependencies
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund livekit-client@2.25.0 livekit-server-sdk@2.20.1 ws@8.18.3 @playwright/test@1.56.1
+          # NAXA Replay already uses the hosted Ubuntu Chromium system libraries.
+          # Keep the pinned Playwright version; check the actual browser before SFU.
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream"]}); try { const p=await b.newPage(); await p.goto("about:blank"); console.log("WIDEMEET_SFU_CHROMIUM_READY"); } finally { await b.close(); }'
+      - name: Start disposable SFU bound to loopback
+        run: |
+          set -euo pipefail
+          KEY="naxareplay"
+          SECRET="$(openssl rand -hex 32)"
+          echo "::add-mask::$SECRET"
+          echo "LK_TEST_KEY=$KEY" >> "$GITHUB_ENV"
+          echo "LK_TEST_SECRET=$SECRET" >> "$GITHUB_ENV"
+          cat > "$RUNNER_TEMP/lk.yaml" <<EOF
+          port: 7880
+          bind_addresses: ["127.0.0.1"]
+          rtc:
+            node_ip: 127.0.0.1
+            use_external_ip: false
+            tcp_port: 7882
+            udp_port: 7883
+          room:
+            auto_create: false
+            enable_remote_unmute: false
+          keys:
+            $KEY: $SECRET
+          EOF
+          chmod 600 "$RUNNER_TEMP/lk.yaml"
+          docker run -d --name naxa-lk --network host -v "$RUNNER_TEMP/lk.yaml:/etc/livekit.yaml:ro" livekit/livekit-server:v1.13.8 --config /etc/livekit.yaml
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:7880/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs naxa-lk
+          exit 1
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+      - name: Start disposable product database and install exact schema
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wm-media-db"
+          cd "$RUNNER_TEMP/wm-media-db"
+          supabase init
+          supabase start
+          supabase status -o env > "$RUNNER_TEMP/wm-media.env"
+          chmod 600 "$RUNNER_TEMP/wm-media.env"
+          set -a; source "$RUNNER_TEMP/wm-media.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          # Same preinstalled-client strategy as NAXA SERVICES technical gate.
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n1_identity.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n2_n3_rooms.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n1_billing.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n2_external.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n4_minutes.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n4_presence.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_support.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
+      - name: Exercise real support audio and consented synthetic screen with SFU eviction
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-media.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export WM_AUTH_QUALIFIED=true WM_SUPPORT_QUALIFIED=true WM_SUPPORT_MEDIA_QUALIFIED=true WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
+          export WM_SUPPORT_LIVEKIT_URL=wss://127.0.0.1:7881 WM_SUPPORT_LIVEKIT_API_KEY="$LK_TEST_KEY" WM_SUPPORT_LIVEKIT_API_SECRET="$LK_TEST_SECRET"
+          node scripts/widemeet/support-media-replay.mjs
+      - name: Stop disposable product database
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/wm-media-db"; then cd "$RUNNER_TEMP/wm-media-db" && supabase stop --no-backup; fi
+      - name: Cleanup
+        if: always()
+        run: docker rm -f naxa-lk || true
