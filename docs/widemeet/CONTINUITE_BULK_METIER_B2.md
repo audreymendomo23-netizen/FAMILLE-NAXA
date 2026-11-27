@@ -3,3 +3,7 @@ Pagination serveur stable (created_at,id), borne 1–200, pages UI 50, recherche
 
 ### Réponses contextualisées
 Candidat c6fe82f : 10/10 SUCCESS, preuve réelle pagination Edge. Ajout reply_to validé même conversation, extrait serveur limité à 180 caractères, idempotence inclut la référence, refus référence étrangère/inexistante, sélection/annulation Web/Compose. Replay réel ajouté. Les mentions, signalements avec mandat dédié et watch direct complet restent ouverts; aucune permission administrative implicite. Aucun déploiement ni migration hébergée.
+
+
+### 27/11/2026 — Correction du Replay après ajout du compteur non lu
+Run 46061823730: 8/10 jobs SUCCESS, Replay et synthèse FAILURE. Le contrôle exact du nom Replay staff ne tient pas compte du suffixe non lus; hypothèse vérifiable, non cause serveur établie. Contact Web identifié par son ID existant, recette cible le membre de test et vérifie son libellé, puis conserve toutes les assertions d'envoi/réponse. Pas de modification d'ACL. Nouvelle qualification requise.

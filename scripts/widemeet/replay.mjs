@@ -737,7 +737,7 @@ try{
  pass("real browser workspace chat, concurrent rooms, polls, visible statistics and reports routes backed by GoTrue and Edge");
  await hp.getByRole("navigation").getByRole("button",{name:"Chat",exact:true}).click();
  await hp.getByRole("button",{name:"Messages privés",exact:true}).click();
- await hp.getByLabel("Rechercher un contact",{exact:true}).fill("staff");await hp.getByRole("button",{name:"Rechercher",exact:true}).click();await hp.getByRole("button",{name:"Replay staff",exact:true}).click();
+ await hp.getByLabel("Rechercher un contact",{exact:true}).fill("staff");await hp.getByRole("button",{name:"Rechercher",exact:true}).click();const staffContact=hp.locator(`button[data-member-id="${g.id}"]`);await staffContact.waitFor();assert.match(await staffContact.innerText(),/^Replay staff(?: · \d+ non lus)?$/);await staffContact.click();
  await hp.getByText("Synthetic private workspace message",{exact:true}).waitFor();
  await hp.getByLabel("Votre message",{exact:true}).fill("Synthetic private browser message");
  await hp.getByRole("button",{name:"Envoyer",exact:true}).click();
