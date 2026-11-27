@@ -136,7 +136,7 @@ try{
   await secondScreen.close();
   console.log("PASS B2 Connect re-pair, actual host policy evicts receiver and policy re-enable never resurrects lease");
   console.log("PASS B2 product Connect: same-account separate device offer, host policy, confirmation, RTP, renewal and revocation");
-  await startConnectUiReplay({browser,sourceSession:hs,receiverSession,roomId:rid,roomApi,evicted,sfu});
+  await startConnectUiReplay({browser,sourceSession:hs,receiverSession,roomId:rid,roomApi,evicted,sfu,proxyServer:proxy.server});
  }
  if(external)console.log("PASS real cross-workspace named guest with no subscription, explicit lobby admission and bidirectional media");
  let finishAtEnd=null;
