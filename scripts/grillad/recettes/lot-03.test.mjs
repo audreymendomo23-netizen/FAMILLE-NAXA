@@ -14,4 +14,5 @@ mutate('set_cost_composition',{item,reason:'Estimation',components:[{label:'Vian
 mutate('set_team_assignment',{user:item,role:'seller',reason:'Renfort'});
 mutate('dimension_target',{day:'2026-11-27',kind:'family',subject:'Poulet',amount:5000,reason:'Objectif'});
 mutate('set_site_enabled',{site:item,enabled:false,reason:'Pause'});
+mutate('missing_departure_request',{arrival:item,seconds:30,reason:'Oubli'});mutate('missing_departure_decide',{request:item,decision:'approved',reason:'Vérifié'});
 for(const [i,c] of cases.entries()){test('GRC-'+String(64+i*2).padStart(3,'0')+' '+c.name+' caller',route(c));test('GRC-'+String(65+i*2).padStart(3,'0')+' '+c.name+' anonymous denied',anonymous(c))}

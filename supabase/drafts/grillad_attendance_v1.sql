@@ -28,24 +28,36 @@ create table grillad_private.attendance_corrections(
 create unique index grillad_pending_attendance_correction on grillad_private.attendance_corrections(departure) where status in ('pending','approved');
 alter table grillad_private.attendance_corrections enable row level security;
 revoke all on grillad_private.attendance_corrections from public,anon,authenticated;
+-- Manual close of a proved arrival; never creates a photographic/GPS departure.
+create table grillad_private.missing_departures(
+ id uuid primary key,org uuid not null,site uuid not null,arrival uuid not null references grillad_private.attendance(id),
+ requester uuid not null,proposed_at timestamptz not null,seconds bigint not null check(seconds>0),reason text not null check(length(reason) between 1 and 300),requested_at timestamptz not null default now(),
+ status text not null default 'pending' check(status in ('pending','approved','rejected')),decided_by uuid,decided_at timestamptz,decision_reason text,
+ foreign key(org,site) references grillad_private.enabled_sites(org,site),
+ check((status='pending' and decided_by is null and decided_at is null and decision_reason is null) or (status<>'pending' and decided_by is not null and decided_by<>requester and decided_at is not null and decision_reason is not null)));
+create unique index grillad_missing_departure_one on grillad_private.missing_departures(arrival) where status in ('pending','approved');
+alter table grillad_private.missing_departures enable row level security;
+revoke all on grillad_private.missing_departures from public,anon,authenticated;
 create unique index grillad_attendance_pair on grillad_private.attendance(paired_arrival) where paired_arrival is not null;
 create index grillad_attendance_actor on grillad_private.attendance(org,actor,captured_at desc);
 alter table grillad_private.attendance_policy enable row level security;
 alter table grillad_private.attendance enable row level security;
 revoke all on grillad_private.attendance_policy,grillad_private.attendance from public,anon,authenticated;
 create function grillad_private.attendance_status(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
-declare r text;enabled boolean;out jsonb;corrections jsonb;
+declare r text;enabled boolean;out jsonb;corrections jsonb;missing jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
  select p.enabled into enabled from grillad_private.attendance_policy p where org=p_org and site=p_site;
  select coalesce(jsonb_agg(to_jsonb(x) order by x.captured_at desc),'[]'::jsonb) into out from (
  select a.id,a.actor,a.kind,a.captured_at,a.received_at,a.paired_arrival,a.photo is not null and a.photo_until>now() as photo_available,
+ (a.kind='arrival' and not exists(select 1 from grillad_private.attendance d where d.paired_arrival=a.id) and not exists(select 1 from grillad_private.missing_departures m where m.arrival=a.id and m.status='approved')) as open_arrival,
  case when a.kind='departure' then extract(epoch from a.captured_at-b.captured_at)::bigint else null end as duration_seconds,
  case when a.kind='departure' then coalesce(c.proposed_seconds,extract(epoch from a.captured_at-b.captured_at)::bigint) else null end as effective_duration_seconds
  from grillad_private.attendance a left join grillad_private.attendance b on b.id=a.paired_arrival left join grillad_private.attendance_corrections c on c.departure=a.id and c.org=a.org and c.site=a.site and c.status='approved'
  where a.org=p_org and a.site=p_site and (r in ('owner','manager') or a.actor=auth.uid()) order by a.captured_at desc limit 100) x;
  select coalesce(jsonb_agg(to_jsonb(c) order by c.requested_at desc),'[]'::jsonb) into corrections from (select id,departure,requester,proposed_seconds,reason,requested_at,status,decided_by,decided_at,decision_reason from grillad_private.attendance_corrections where org=p_org and site=p_site and (r in ('owner','manager') or requester=auth.uid()) order by requested_at desc limit 100)c;
- return jsonb_build_object('enabled',coalesce(enabled,false),'history',out,'corrections',corrections);
+ select coalesce(jsonb_agg(to_jsonb(m) order by m.requested_at desc),'[]'::jsonb) into missing from (select id,arrival,requester,proposed_at,seconds,reason,requested_at,status,decided_by,decided_at,decision_reason from grillad_private.missing_departures where org=p_org and site=p_site and (r in ('owner','manager') or requester=auth.uid()) order by requested_at desc limit 100)m;
+ return jsonb_build_object('enabled',coalesce(enabled,false),'history',out,'corrections',corrections,'missing_departures',missing);
 end $$;
 create function grillad_private.attendance_capture(p_org uuid,p_site uuid,p_event uuid,p_kind text,p_at timestamptz,p_lat double precision,p_lon double precision,p_accuracy double precision,p_photo text)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
@@ -69,7 +81,8 @@ begin
  distance:=6371000*2*asin(least(1,sqrt(power(sin(radians(p_lat-policy.latitude)/2),2)+cos(radians(policy.latitude))*cos(radians(p_lat))*power(sin(radians(p_lon-policy.longitude)/2),2))));
  if distance+p_accuracy>policy.radius_m then raise exception 'GRILLAD_OUTSIDE_SITE' using errcode='22023';end if;
  if exists(select 1 from grillad_private.attendance where org=p_org and actor=u and photo_hash=h) then raise exception 'GRILLAD_PHOTO_REUSED' using errcode='22023';end if;
- select a.* into arrival from grillad_private.attendance a where a.org=p_org and a.actor=u and a.kind='arrival' and not exists(select 1 from grillad_private.attendance b where b.paired_arrival=a.id) order by a.captured_at desc limit 1;
+ select a.* into arrival from grillad_private.attendance a where a.org=p_org and a.actor=u and a.kind='arrival' and not exists(select 1 from grillad_private.attendance b where b.paired_arrival=a.id) and not exists(select 1 from grillad_private.missing_departures m where m.arrival=a.id and m.status='approved') order by a.captured_at desc limit 1;
+ if p_kind='arrival' and (exists(select 1 from grillad_private.attendance d where d.org=p_org and d.actor=u and d.kind='departure' and d.captured_at>=p_at) or exists(select 1 from grillad_private.missing_departures m where m.org=p_org and m.requester=u and m.status='approved' and m.proposed_at>=p_at)) then raise exception 'GRILLAD_OVERLAP' using errcode='22023';end if;
  if p_kind='arrival' and arrival.id is not null then raise exception 'GRILLAD_ALREADY_PRESENT' using errcode='22023';end if;
  if p_kind='departure' and (arrival.id is null or arrival.site<>p_site or p_at<=arrival.captured_at) then raise exception 'GRILLAD_NO_ARRIVAL' using errcode='22023';end if;
  insert into grillad_private.attendance(id,org,site,actor,kind,captured_at,latitude,longitude,accuracy,photo,photo_hash,photo_until,paired_arrival)
@@ -130,5 +143,35 @@ begin
 end $$;
 -- Called only inside the already scoped, locked and idempotent business RPC.
 revoke all on function grillad_private.attendance_correct(uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+
+create function grillad_private.missing_departure(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare r text;u uuid:=auth.uid();a grillad_private.attendance%rowtype;m grillad_private.missing_departures%rowtype;duration bigint;why text;decision text;end_at timestamptz;
+begin
+ r:=grillad_private.scope(p_org,p_site);why:=btrim(p_payload->>'reason');
+ if why is null or length(why) not between 1 and 300 then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
+ if p_action='missing_departure_request' then
+  perform pg_advisory_xact_lock(hashtextextended('grillad-attendance:'||p_org::text||':'||u::text,0));
+  select * into a from grillad_private.attendance where id=(p_payload->>'arrival')::uuid and org=p_org and site=p_site and actor=u and kind='arrival';
+  if not found then raise exception 'GRILLAD_PROOF_DENIED' using errcode='42501';end if;
+  duration:=(p_payload->>'seconds')::bigint;
+  if duration is null or duration<=0 or duration>extract(epoch from now()-a.captured_at) then raise exception 'GRILLAD_MANUAL_TIME' using errcode='22023';end if;
+  end_at:=a.captured_at+make_interval(secs=>duration::double precision);
+  if exists(select 1 from grillad_private.attendance where paired_arrival=a.id) or exists(select 1 from grillad_private.missing_departures where arrival=a.id and status in ('pending','approved')) then raise exception 'GRILLAD_ARRIVAL_ALREADY_CLOSED_OR_PENDING' using errcode='22023';end if;
+  insert into grillad_private.missing_departures(id,org,site,arrival,requester,proposed_at,seconds,reason) values(p_event,p_org,p_site,a.id,u,end_at,duration,why);
+  return jsonb_build_object('id',p_event,'status','pending','source','manual');
+ elsif p_action='missing_departure_decide' then
+  if r not in ('owner','manager') then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+  decision:=p_payload->>'decision';if decision is null or decision not in ('approved','rejected') then raise exception 'GRILLAD_DECISION' using errcode='22023';end if;
+  select * into m from grillad_private.missing_departures where id=(p_payload->>'request')::uuid and org=p_org and site=p_site;
+  if not found or m.requester=u then raise exception 'GRILLAD_CORRECTION_DENIED' using errcode='42501';end if;
+  perform pg_advisory_xact_lock(hashtextextended('grillad-attendance:'||p_org::text||':'||m.requester::text,0));
+  select * into m from grillad_private.missing_departures where id=m.id for update;
+  if m.status<>'pending' then raise exception 'GRILLAD_CORRECTION_CLOSED' using errcode='22023';end if;
+  if decision='approved' and exists(select 1 from grillad_private.attendance where paired_arrival=m.arrival) then raise exception 'GRILLAD_ARRIVAL_ALREADY_CLOSED' using errcode='22023';end if;
+  update grillad_private.missing_departures set status=decision,decided_by=u,decided_at=now(),decision_reason=why where id=m.id;
+  return jsonb_build_object('id',m.id,'status',decision,'source','manual');
+ else raise exception 'GRILLAD_ACTION' using errcode='22023';end if;
+end $$;
+revoke all on function grillad_private.missing_departure(uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
 
 commit;
