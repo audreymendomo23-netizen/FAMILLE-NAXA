@@ -793,3 +793,7 @@ Précédent candidat 9c5ce82 : quatre partitions API négatives SUCCESS (180 con
 
 ## Retour CI en parallèle — B2-025
 Job 140622931286 du run 46033491431 : échec Playwright avant reprise réseau, strict mode getByLabel(/Plat recette/) sélectionne à la fois quantité et instruction apparue après saisie. Correction par rôle spinbutton et attente explicite de l'instruction, assertion du panier avant coupure conservée. Pas de conclusion métier avant exécution complète du scénario. Nouveau candidat à requalifier.
+
+
+## Vague 1 — développement et qualification simultanés
+Run a887b0a 46034202321 business en file et 46034202303 SQL en cours au départ. Nouveau job wave1-business autonome, GoTrue/Edge/PostgreSQL local, quatre tests nommés B2-019 (transitions et replays), B2-022 (deux ETA et journal), B2-032 (capacité, chevauchement concurrent, rejeu, expiration avec horloge de fixture) et B3-003 (verre/bouteille/pack/casier, décimale non représentable, unité incompatible). Résultats partiels explicites, pas de faux vert global. UI salle Web : capacité, garde groupe, état traduit, clés de réservation/attente distinctes. UI conditionnement : quantité exacte dans unité métier plutôt que milli, borne d'entrée alignée gateway. Les 4 vagues API et les suites Web/Android restent en parallèle. Aucun changement SQL, main ou production ; nouveau candidat à qualifier.
