@@ -43,7 +43,7 @@ export async function login(base,identifier,password,fetcher=fetch,device=instal
  if(!res.ok)throw Error("LOGIN_REJECTED");const session=parseSession(await res.json());if(typeof remember==="boolean")setRememberPreference(remember&&session.refresh_available);return session;
 }
 export async function authorizedRequest(base,action,body,token,fetcher=fetch){
- if(!["logout","change-password","onboarding-state","onboarding-step","switch-workspace","identity","recovery-enroll"].includes(action)||!tokenOk(token))throw Error("FORBIDDEN_ACTION");
+ if(!["logout","change-password","onboarding-state","onboarding-step","switch-workspace","identity","recovery-enroll","chat-media"].includes(action)||!tokenOk(token))throw Error("FORBIDDEN_ACTION");
  const res=await fetcher(endpoint(base,action),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify({...body,app_id:"WIDEMEET"}),cache:"no-store",redirect:"error",credentials:["logout","change-password"].includes(action)?"include":"omit"});
  if(!res.ok)throw Error("REQUEST_REJECTED");return res.status===204?{}:res.json();
 }

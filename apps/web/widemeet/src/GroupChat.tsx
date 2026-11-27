@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState}from "react";
 import{identityAction}from"./session.mjs";
+import{ChatMedia}from"./ChatMedia";
 export function GroupChat({base,session,locale,onBack}){
  const tr=(fr,en)=>locale==="en"?en:fr;
  const [groups,G]=useState([]),[contacts,C]=useState([]),[selected,S]=useState([]),[name,N]=useState(""),[group,V]=useState(null),[members,U]=useState([]),[messages,M]=useState([]),[body,B]=useState(""),[query,Q]=useState(""),[busy,W]=useState(false),[error,E]=useState(false);
@@ -20,5 +21,5 @@ export function GroupChat({base,session,locale,onBack}){
  <button disabled={busy} onClick={()=>work(async()=>{if(confirm(tr("Quitter le groupe ?","Leave this group?"))){await req("remove",{group_id:group.id,member_id:session.member_id});close();await load()}})}>{tr("Quitter le groupe","Leave group")}</button>
  <form onSubmit={e=>{e.preventDefault();void work(()=>thread(group,query))}}><label>{tr("Rechercher dans le groupe","Search group")}<input maxLength={100} value={query} onChange={e=>Q(e.target.value)}/></label><button disabled={busy}>{tr("Rechercher","Search")}</button></form>
  {messages.map(m=><article key={m.id}><strong>{m.display_name}</strong><p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{m.body}</p><small>{new Date(m.created_at).toLocaleString(locale)}</small>{m.sender_id!==session.member_id&&!m.read_at&&<button disabled={busy} onClick={()=>work(async()=>{await req("seen",{group_id:group.id,message_id:m.id});await thread(group,query)})}>{tr("Marquer comme lu","Mark seen")}</button>}</article>)}
- <form onSubmit={e=>{e.preventDefault();void work(send)}}><label>{tr("Message de groupe","Group message")}<textarea required maxLength={2000} value={body} disabled={busy||!!pending.current} onChange={e=>B(e.target.value)}/></label><button disabled={busy||!body.trim()}>{tr("Envoyer au groupe","Send to group")}</button></form></>}</section>
+ <form onSubmit={e=>{e.preventDefault();void work(send)}}><label>{tr("Message de groupe","Group message")}<textarea required maxLength={2000} value={body} disabled={busy||!!pending.current} onChange={e=>B(e.target.value)}/></label><button disabled={busy||!body.trim()}>{tr("Envoyer au groupe","Send to group")}</button></form>{import.meta.env.VITE_WIDEMEET_CHAT_MEDIA_ENABLED==="true"&&<ChatMedia key={group.id} base={base} session={session} locale={locale} groupId={group.id}/>}</>}</section>
 }

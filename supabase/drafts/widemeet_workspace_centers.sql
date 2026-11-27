@@ -202,4 +202,88 @@ exception when invalid_text_representation or unique_violation then return null;
 end $wm$;
 revoke all on function public.wm_group_chat(text,text,jsonb) from public,anon,authenticated;
 grant execute on function public.wm_group_chat(text,text,jsonb) to service_role;
+
+-- B2 shared chat media ledger. Distinct from meeting recording, archives and support.
+-- The object is private; only a trusted gateway accesses Storage. Staging is never readable.
+create table public.wm_chat_media(
+ id uuid primary key, workspace_id uuid not null references public.wm_workspaces(id),
+ sender_id uuid not null references public.wm_accounts(id),
+ peer_id uuid references public.wm_accounts(id), group_id uuid references public.wm_chat_groups(id),
+ kind text not null check(kind in ('file','voice')),
+ mime text not null check(mime in ('application/pdf','image/jpeg','image/png','audio/ogg','audio/webm','audio/mp4')),
+ name text not null check(length(name) between 1 and 120),
+ bytes integer not null check(bytes between 1 and 1048576),
+ sha256 text not null check(length(sha256)=64 and translate(sha256,'0123456789abcdef','')=''),
+ state text not null default 'staged' check(state in ('staged','ready','revoked')),
+ created_at timestamptz not null default clock_timestamp(), published_at timestamptz, revoked_at timestamptz,
+ check((peer_id is null)<>(group_id is null)), check(peer_id is null or peer_id<>sender_id),
+ check((kind='voice')=(mime in ('audio/ogg','audio/webm','audio/mp4')))
+);
+create index wm_chat_media_direct on public.wm_chat_media(workspace_id,sender_id,peer_id,published_at desc,id);
+create index wm_chat_media_group on public.wm_chat_media(group_id,published_at desc,id);
+alter table public.wm_chat_media enable row level security;
+revoke all on public.wm_chat_media from public,anon,authenticated;
+grant select,insert,update on public.wm_chat_media to service_role;
+create function public.wm_chat_media_action(p_hash text,p_action text,p_data jsonb)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a record; gid uuid; peer uuid; mid uuid; m public.wm_chat_media%rowtype; joined timestamptz; v jsonb; k text; mime_type text; filename text; size_bytes integer; sha text;
+begin
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into a from public.wm_lock_room_actor_for(p_hash,null);
+ if not found then return null;end if;
+ if not exists(select 1 from public.wm_workspaces w where w.id=a.workspace_id and w.enabled and w.kind='enterprise') then return null;end if;
+ gid:=(p_data->>'group_id')::uuid;peer:=(p_data->>'peer_id')::uuid;
+ if (gid is null)=(peer is null) or peer=a.account_id then return null;end if;
+ if gid is not null then
+  select gm.joined_at into joined from public.wm_chat_group_members gm join public.wm_chat_groups cg on cg.id=gm.group_id and cg.workspace_id=a.workspace_id where gm.group_id=gid and gm.account_id=a.account_id and gm.removed_at is null;
+  if not found then return null;end if;
+ else
+  perform 1 from public.wm_accounts x join public.wm_memberships mb on mb.account_id=x.id and mb.workspace_id=a.workspace_id and mb.enabled where x.id=peer and x.enabled and not x.password_change_required for share of x,mb;
+  if not found then return null;end if;
+ end if;
+ if p_action='list' then
+  select coalesce(jsonb_agg(to_jsonb(c) order by c.published_at,c.id),'[]'::jsonb) into v from (
+   select x.id,x.sender_id,x.kind,x.mime,x.name,x.bytes,x.sha256,x.published_at from public.wm_chat_media x
+   where x.workspace_id=a.workspace_id and x.state='ready' and
+   ((gid is not null and x.group_id=gid and x.published_at>=joined)
+    or (peer is not null and x.group_id is null and ((x.sender_id=a.account_id and x.peer_id=peer) or (x.sender_id=peer and x.peer_id=a.account_id))))
+   order by x.published_at desc,x.id desc limit 100
+  ) c;return jsonb_build_object('items',v);
+ end if;
+ mid:=(p_data->>'id')::uuid;if mid is null then return null;end if;
+ select * into m from public.wm_chat_media x where x.id=mid;
+ if p_action='reserve' then
+  k:=p_data->>'kind';mime_type:=p_data->>'mime';filename:=p_data->>'name';size_bytes:=(p_data->>'bytes')::integer;sha:=p_data->>'sha256';
+  if k is null or mime_type is null or filename is null or size_bytes is null or sha is null then return null;end if;
+  if k not in ('file','voice') or mime_type not in ('application/pdf','image/jpeg','image/png','audio/ogg','audio/webm','audio/mp4') or (k='voice')<>(mime_type in ('audio/ogg','audio/webm','audio/mp4')) or length(filename) not between 1 and 120 or size_bytes not between 1 and 1048576 or length(sha)<>64 or translate(sha,'0123456789abcdef','')<>'' then return null;end if;
+  if found then
+   if m.workspace_id<>a.workspace_id or m.sender_id<>a.account_id or m.peer_id is distinct from peer or m.group_id is distinct from gid or m.kind<>k or m.mime<>mime_type or m.name<>filename or m.bytes<>size_bytes or m.sha256<>sha or m.state='revoked' or (gid is not null and m.created_at<joined) then return null;end if;
+   if m.state='staged' and m.created_at<=clock_timestamp()-interval '15 minutes' then return null;end if;
+  else
+   if (select count(*) from public.wm_chat_media x where x.sender_id=a.account_id and x.created_at>clock_timestamp()-interval '1 minute')>=5 then return null;end if;
+   insert into public.wm_chat_media(id,workspace_id,sender_id,peer_id,group_id,kind,mime,name,bytes,sha256) values(mid,a.workspace_id,a.account_id,peer,gid,k,mime_type,filename,size_bytes,sha) returning * into m;
+  end if;
+  return jsonb_build_object('id',m.id,'key',m.workspace_id::text||'/'||m.id::text,'state',m.state,'bytes',m.bytes,'sha256',m.sha256,'mime',m.mime,'name',m.name,'kind',m.kind);
+ end if;
+ if not found or m.workspace_id<>a.workspace_id then return null;end if;
+ if gid is not null then
+  if m.group_id is distinct from gid or m.created_at<joined then return null;end if;
+ else
+  if m.group_id is not null or not ((m.sender_id=a.account_id and m.peer_id=peer) or (m.sender_id=peer and m.peer_id=a.account_id)) then return null;end if;
+ end if;
+ if p_action='publish' then
+  if m.sender_id<>a.account_id or m.state='revoked' or (m.state='staged' and m.created_at<=clock_timestamp()-interval '15 minutes') then return null;end if;
+  update public.wm_chat_media set state='ready',published_at=coalesce(published_at,clock_timestamp()) where id=mid returning * into m;
+ elsif p_action='revoke' then
+  if m.sender_id<>a.account_id then return null;end if;
+  update public.wm_chat_media set state='revoked',revoked_at=coalesce(revoked_at,clock_timestamp()) where id=mid returning * into m;
+ elsif p_action='read' then
+  if m.state<>'ready' or (gid is not null and m.published_at<joined) then return null;end if;
+ else return null;
+ end if;
+ return jsonb_build_object('id',m.id,'key',m.workspace_id::text||'/'||m.id::text,'state',m.state,'bytes',m.bytes,'sha256',m.sha256,'mime',m.mime,'name',m.name,'kind',m.kind);
+exception when invalid_text_representation or numeric_value_out_of_range or unique_violation or check_violation then return null;
+end $wm$;
+revoke all on function public.wm_chat_media_action(text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_chat_media_action(text,text,jsonb) to service_role;
 commit;

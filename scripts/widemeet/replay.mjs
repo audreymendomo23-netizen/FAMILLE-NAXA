@@ -42,6 +42,8 @@ async function login(f){return ok(auth+"/login",{identifier:f.login,password:f.p
 try{
  const w=await createWorkspace("Replay A"),other=await createWorkspace("Replay B");
  const h=await fixture(w,"promoteur"),g=await fixture(w,"staff"),o=await fixture(other,"promoteur");
+ process.env.WM_CHAT_MEDIA_QUALIFIED="true";
+ await success(base+"/storage/v1/bucket",{id:"wm-chat-media",name:"wm-chat-media",public:false,file_size_limit:1048576});
  const code=await readFile("supabase/functions/widemeet-room/index.ts","utf8");
  const anchor="Deno.serve(async request=>{";
  assert.equal(code.split(anchor).length,2);
@@ -179,7 +181,28 @@ try{
  await groupOk(b2gcs.access_token,"seen",groupMessage);
  assert.ok((await groupOk(b2gcs.access_token,"thread",{group_id:chatGroupId})).items[0].read_at);
  assert.equal((await groupReq(b2gas.access_token,"remove",{group_id:chatGroupId,member_id:b2gc.id})).status,403);
+ // Actual isolated Storage + Edge + ACL: same binary, stable UUID, no public URL.
+ const mediaReq=(token,action,data)=>request(auth+"/chat-media",{action,data},token),mediaOk=(token,action,data)=>ok(auth+"/chat-media",{action,data},token);
+ const pdf=Buffer.from("%PDF-1.4\nB2 disposable test\n%%EOF"),pdfId=randomUUID(),pdfPayload={group_id:chatGroupId,id:pdfId,kind:"file",mime:"application/pdf",name:"fixture.pdf",content:pdf.toString("base64")};
+ const storedPdf=await mediaOk(b2ghs.access_token,"upload",pdfPayload);
+ assert.equal(storedPdf.state,"ready");assert.equal(storedPdf.key,undefined);
+ assert.deepEqual(await mediaOk(b2ghs.access_token,"upload",pdfPayload),storedPdf);
+ assert.equal((await mediaReq(b2ghs.access_token,"upload",{...pdfPayload,name:"changed.pdf"})).status,403);
+ assert.equal((await mediaReq(b2ghs.access_token,"upload",{...pdfPayload,id:randomUUID(),content:Buffer.from("<svg>test</svg>").toString("base64")})).status,400);
+ const gotPdf=await mediaOk(b2gcs.access_token,"download",{group_id:chatGroupId,id:pdfId});
+ assert.deepEqual(Buffer.from(gotPdf.content,"base64"),pdf);
+ for(const x of [b2gds,os])assert.equal((await mediaReq(x.access_token,"download",{group_id:chatGroupId,id:pdfId})).status,403);
+ const unauth=await fetch(base+"/storage/v1/object/public/wm-chat-media/"+b2groupW+"/"+pdfId);assert.ok(!unauth.ok);
+ // Audio container fixture validates bytes and ACL, not actual microphone playback.
+ const ogg=Buffer.from("OggS B2 synthetic container"),voiceId=randomUUID(),voicePayload={peer_id:b2ga.id,id:voiceId,kind:"voice",mime:"audio/ogg",name:"voice.ogg",content:ogg.toString("base64")};
+ await mediaOk(b2ghs.access_token,"upload",voicePayload);
+ assert.deepEqual(Buffer.from((await mediaOk(b2gas.access_token,"download",{peer_id:b2gh.id,id:voiceId})).content,"base64"),ogg);
+ assert.equal((await mediaReq(b2gcs.access_token,"download",{peer_id:b2gh.id,id:voiceId})).status,403);
+ assert.equal((await mediaReq(b2gas.access_token,"revoke",{peer_id:b2gh.id,id:voiceId})).status,403);
+ await mediaOk(b2ghs.access_token,"revoke",{peer_id:b2ga.id,id:voiceId});
+ assert.equal((await mediaReq(b2gas.access_token,"download",{peer_id:b2gh.id,id:voiceId})).status,403);
  await groupOk(b2ghs.access_token,"remove",{group_id:chatGroupId,member_id:b2gc.id});
+ assert.equal((await mediaReq(b2gcs.access_token,"download",{group_id:chatGroupId,id:pdfId})).status,403);
  assert.equal((await groupReq(b2gcs.access_token,"thread",{group_id:chatGroupId})).status,403);
  assert.equal((await groupReq(b2gcs.access_token,"send",{...groupMessage,message_id:randomUUID()})).status,403);
  assert.equal((await groupOk(b2ghs.access_token,"members",{group_id:chatGroupId})).items.length,2);
@@ -191,6 +214,8 @@ try{
  await groupOk(b2ghs.access_token,"create",groupPayload); // exact original request after rename must not overwrite it
  await groupOk(b2ghs.access_token,"add",{group_id:chatGroupId,member_id:b2gc.id});
  await groupOk(b2ghs.access_token,"add",{group_id:chatGroupId,member_id:b2gd.id});
+ for(const x of [b2gcs,b2gds]){assert.equal((await mediaReq(x.access_token,"download",{group_id:chatGroupId,id:pdfId})).status,403);assert.equal((await mediaOk(x.access_token,"list",{group_id:chatGroupId})).items.length,0)}
+ pass("B2 actual private Storage chat file/voice integrity, retry, tenant ACL, revoke and no pre-admission media");
  for(const x of [b2gcs,b2gds]){assert.equal((await groupOk(x.access_token,"thread",{group_id:chatGroupId})).items.length,0);assert.equal((await groupReq(x.access_token,"seen",groupMessage)).status,403)}
  const newMessage={group_id:chatGroupId,message_id:randomUUID(),body:"B2 new after admission"};
  await groupOk(b2ghs.access_token,"send",newMessage);

@@ -1,0 +1,31 @@
+import React,{useEffect,useRef,useState}from"react";
+import{authorizedRequest}from"./session.mjs";
+import{MAX_CHAT_MEDIA_BYTES,decodeMedia,encodeMedia,mediaDigest,safeMediaName,validMediaBytes}from"../../../../packages/widemeet-domain/chat-media.mjs";
+export function ChatMedia({base,session,locale,peerId,groupId}){
+ const tr=(fr,en)=>locale==="en"?en:fr;
+ const [items,L]=useState([]),[pending,P]=useState(null),[busy,B]=useState(false),[error,E]=useState(false),[recording,R]=useState(false),[audio,A]=useState(null);
+ const rec=useRef(null),stream=useRef(null),live=useRef(true),run=useRef(false),audioUrl=useRef(null),timer=useRef(null),generation=useRef(0);
+ const scope=peerId?{peer_id:peerId}:{group_id:groupId};
+ const req=(action,data={})=>authorizedRequest(base,"chat-media",{action,data:{...scope,...data}},session.access_token);
+ function clearAudio(){if(audioUrl.current)URL.revokeObjectURL(audioUrl.current);audioUrl.current=null;A(null)}
+ function stopMic(){if(timer.current)clearTimeout(timer.current);timer.current=null;stream.current?.getTracks().forEach(t=>t.stop());stream.current=null}
+ useEffect(()=>{live.current=true;return()=>{live.current=false;generation.current++;if(rec.current&&rec.current.state!=="inactive")rec.current.stop();stopMic();if(audioUrl.current)URL.revokeObjectURL(audioUrl.current)}},[]);
+ async function refresh(){const n=generation.current;try{const x=await req("list");if(live.current&&n===generation.current){L(x.items);if(audioUrl.current&&audio&&!x.items.some(m=>m.id===audio.id))clearAudio()}}catch{if(live.current&&n===generation.current){L([]);clearAudio();E(true)}throw Error("access")}}
+ useEffect(()=>{let active=true,poll=false;async function tick(){if(!active||poll||run.current)return;poll=true;try{await refresh()}catch{}finally{poll=false}}void tick();const t=setInterval(tick,5000);return()=>{active=false;generation.current++;clearInterval(t)}},[session.access_token,audio?.id]);
+ async function work(fn){if(run.current)return;run.current=true;B(true);E(false);try{await fn()}catch{if(live.current)E(true)}finally{run.current=false;if(live.current)B(false)}}
+ async function prepare(blob,name,kind){if(blob.size>MAX_CHAT_MEDIA_BYTES)throw Error("size");const b=new Uint8Array(await blob.arrayBuffer()),mime=blob.type.split(";")[0];if(!validMediaBytes(kind,mime,b))throw Error("format");if(live.current)P({id:crypto.randomUUID(),kind,mime,name:safeMediaName(name,mime),content:encodeMedia(b)})}
+ async function start(){if(recording||pending||run.current||!navigator.mediaDevices?.getUserMedia||!globalThis.MediaRecorder)return;await work(async()=>{
+  const type=["audio/webm;codecs=opus","audio/ogg;codecs=opus","audio/mp4"].find(t=>MediaRecorder.isTypeSupported(t));if(!type)throw Error("audio");
+  const st=await navigator.mediaDevices.getUserMedia({audio:true,video:false});if(!live.current){st.getTracks().forEach(t=>t.stop());return}stream.current=st;
+  try{const r=new MediaRecorder(st,{mimeType:type,audioBitsPerSecond:32000});rec.current=r;let size=0;const parts=[];r.ondataavailable=e=>{size+=e.data.size;if(size<=MAX_CHAT_MEDIA_BYTES)parts.push(e.data);else if(r.state!=="inactive")r.stop()};r.onerror=()=>{stopMic();if(live.current){R(false);E(true)}};r.onstop=()=>{stopMic();rec.current=null;if(live.current){R(false);if(size>MAX_CHAT_MEDIA_BYTES)E(true);else void prepare(new Blob(parts,{type:r.mimeType}),"message-vocal","voice").catch(()=>E(true))}};r.start(500);R(true);timer.current=setTimeout(()=>{if(r.state!=="inactive")r.stop()},60000)}catch(e){stopMic();throw e}
+ })}
+ async function download(m){const v=await req("download",{id:m.id});const b=decodeMedia(v.content);if(v.id!==m.id||v.bytes!==m.bytes||v.sha256!==m.sha256||b.length!==m.bytes||await mediaDigest(b)!==m.sha256||!validMediaBytes(m.kind,m.mime,b))throw Error("integrity");if(!live.current)return;const u=URL.createObjectURL(new Blob([b],{type:m.mime}));if(m.kind==="voice"){clearAudio();audioUrl.current=u;A({id:m.id,url:u})}else{const a=document.createElement("a");a.href=u;a.download=safeMediaName(m.name,m.mime);a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}}
+ return <section className="card" aria-label={tr("Fichiers et messages vocaux","Files and voice messages")}><h3>{tr("Fichiers et messages vocaux","Files and voice messages")}</h3><p>{tr("PDF, JPEG, PNG ou message vocal. Limite de recette : 1 Mio, enregistrement 60 s.","PDF, JPEG, PNG or voice message. Test limit: 1 MiB, recording 60 s.")}</p>
+ {error&&<p role="alert">{tr("Accès, format ou transfert non confirmé.","Access, format or transfer unconfirmed.")}</p>}
+ <label>{tr("Choisir une pièce jointe","Choose attachment")}<input type="file" accept="application/pdf,image/jpeg,image/png" disabled={busy||!!pending||recording} onChange={e=>{const f=e.target.files?.[0];e.target.value="";if(f)void work(()=>prepare(f,f.name,"file"))}}/></label>
+ {recording?<button onClick={()=>rec.current?.stop()}>{tr("Terminer l’enregistrement","Stop recording")}</button>:<button disabled={busy||!!pending} onClick={start}>{tr("Enregistrer un message vocal","Record voice message")}</button>}
+ {pending&&<><p>{pending.name}</p><button disabled={busy} onClick={()=>work(async()=>{await req("upload",pending);P(null);await refresh()})}>{tr("Envoyer le fichier","Send file")}</button><button disabled={busy} onClick={()=>P(null)}>{tr("Abandonner la tentative locale","Discard local retry")}</button></>}
+ {items.map(m=><article key={m.id}><p>{m.name} · {m.bytes} o</p><button disabled={busy} onClick={()=>work(()=>download(m))}>{m.kind==="voice"?tr("Écouter","Listen"):tr("Télécharger","Download")}</button>{m.sender_id===session.member_id&&<button disabled={busy} onClick={()=>work(async()=>{if(confirm(tr("Révoquer l’accès au fichier ?","Revoke file access?"))){await req("revoke",{id:m.id});if(audio?.id===m.id)clearAudio();await refresh()}})}>{tr("Révoquer le fichier","Revoke file")}</button>}</article>)}
+ {audio&&<audio controls src={audio.url}/>}
+ </section>
+}

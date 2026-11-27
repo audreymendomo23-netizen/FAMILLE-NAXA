@@ -1,5 +1,6 @@
 // WideMeet internal login candidate. Adapted from NS internal aliases and ZIPPLE opaque sessions.
 // No deployment until disposable Replay and rate-limit qualification; default disabled.
+import {chatMedia} from "./chat-media.ts";
 const url=(Deno.env.get("SUPABASE_URL")??"").replace(/\/$/,"");
 const service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
 const anon=Deno.env.get("SUPABASE_ANON_KEY")??"";
@@ -59,7 +60,10 @@ Deno.serve(async request=>{
  if(request.method!=="POST")return send(405,{error:"method"});
  try{
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
- const raw=await request.text();if(raw.length>(action==="identity"?90000:16384))return send(413,{error:"request_too_large"});
+ const limit=action==="chat-media"?1405000:action==="identity"?90000:16384;
+ // Bound the streamed body before allocating/decode; normal identity limits are unchanged.
+ const reader=request.body?.getReader();if(!reader)return send(400,{error:"invalid_request"});
+ const decoder=new TextDecoder();let raw="",size=0;for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit){await reader.cancel().catch(()=>{});return send(413,{error:"request_too_large"})}raw+=decoder.decode(value,{stream:true})}raw+=decoder.decode();
  const body=JSON.parse(raw);
  if(!body||body.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
  if(action==="register"){
@@ -220,6 +224,15 @@ Deno.serve(async request=>{
  const finished=await rest("rpc/wm_finish_password_change",{method:"POST",body:JSON.stringify({p_hash,p_request:requestId})});
  if(finished!==true)return send(409,{error:"change_unconfirmed"});
  return send(200,{changed:true,reconnect:true},{"Set-Cookie":clearCookie});
+ }
+ if(action==="chat-media"){
+ if(Deno.env.get("WM_CHAT_MEDIA_QUALIFIED")!=="true"||Deno.env.get("WM_WORKSPACE_CENTERS_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
+ if(access.length!==64||[...access].some(c=>!"0123456789abcdef".includes(c)))return send(401,{error:"credentials"});
+ if(!["list","upload","download","revoke"].includes(body.action)||!body.data||typeof body.data!=="object"||Array.isArray(body.data))return send(400,{error:"invalid_request"});
+ const p_hash=await digest(access);
+ const result=await chatMedia({base:url,service,p_hash,action:body.action,data:body.data,rpc:(a:string,d:Record<string,unknown>)=>rest("rpc/wm_chat_media_action",{method:"POST",body:JSON.stringify({p_hash,p_action:a,p_data:d})})});
+ return send(result.status,result.body);
  }
  if(action==="identity"){
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
