@@ -356,6 +356,8 @@ try{
  await cmd(gs.access_token,"survey_vote",[1],nid);await cmd(hs.access_token,"close_poll",null,nid);
  assert.deepEqual(state.polls.find(p=>p.id===nid).nominativeResponses,[{memberId:g.id,selection:[1]}]);
  pass("actual editable nominative survey preserves secrecy until closure");
+ const targetId=randomUUID();await cmd(hs.access_token,"survey",{question:"B4 targeted rating",kind:"rating",options:Array.from({length:10},(_,i)=>String(i+1)),anonymous:true,visibility:"closed",quorum:100,threshold:50,eligibleIds:[g.id]},targetId);
+ assert.equal(state.polls.find(p=>p.id===targetId).canVote,false);await cmd(gs.access_token,"survey_vote",[9],targetId);await cmd(hs.access_token,"close_poll",null,targetId);const targetResult=state.polls.find(p=>p.id===targetId);assert.equal(targetResult.eligible,1);assert.equal(targetResult.nonresponses,0);assert.equal(targetResult.optionShares[9],100);assert.equal(targetResult.nominativeResponses,null);pass("B4 targeted ten point survey and transparent denominator");
  await cmd(hs.access_token,"pause");await cmd(hs.access_token,"resume");await cmd(hs.access_token,"exclude",null,g.id);
  assert.equal((await request(room+"/read",{room_id:rid},gs.access_token)).status,404);
  await cmd(hs.access_token,"end");assert.equal(state.status,"ended");
@@ -447,7 +449,7 @@ try{
  await tok(mhs.access_token,"return",{id:task.id,expected_revision:2});
  await tok(mgs.access_token,"submit",{...evidence,expected_revision:3});
  await tok(mhs.access_token,"approve",{id:task.id,expected_revision:4});
- assert.equal((await tok(mgs.access_token,"list")).items[0].state,"done");
+ const completedTask=(await tok(mgs.access_token,"list")).items[0];assert.equal(completedTask.state,"done");assert.deepEqual(completedTask.history.map(x=>x.action),["create","submit","return","submit","approve"]);
  pass("actual N4 task assignment, evidence, correction, approval, idempotence and tenant/recipient isolation");
  const reportBody={app_id:"WIDEMEET",room_id:mid,request_id:randomUUID(),locale:"fr"};const reportReq=token=>fetch(room+"/report-xlsx",{method:"POST",headers:{apikey:anon,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(reportBody)});assert.equal((await reportReq(mgs.access_token)).status,403);const excel=await reportReq(mhs.access_token);assert.equal(excel.status,200);const xlsx=Buffer.from(await excel.arrayBuffer());assert.equal(xlsx.subarray(0,2).toString(),"PK");assert.ok(xlsx.includes(Buffer.from("Verify human decision")));pass("actual N4 authorized Excel report, real OOXML and recipient denial");
 
