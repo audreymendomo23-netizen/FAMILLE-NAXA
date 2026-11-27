@@ -158,31 +158,31 @@ try{
 
 
  // B2 collective conversations: three genuine accounts, no implicit administrator or tenant access.
- const groupW=await createWorkspace("B2 dedicated group workspace");
- const gh=await fixture(groupW,"promoteur"),ga=await fixture(groupW,"staff"),gc=await fixture(groupW,"staff"),gd=await fixture(groupW,"manager");
- const ghs=await login(gh),gas=await login(ga),gcs=await login(gc),gds=await login(gd);
+ const b2groupW=await createWorkspace("B2 dedicated group workspace");
+ const b2gh=await fixture(b2groupW,"promoteur"),b2ga=await fixture(b2groupW,"staff"),b2gc=await fixture(b2groupW,"staff"),b2gd=await fixture(b2groupW,"manager");
+ const b2ghs=await login(b2gh),b2gas=await login(b2ga),b2gcs=await login(b2gc),b2gds=await login(b2gd);
  const groupReq=(token,action,data={})=>request(auth+"/identity",{action:"group-chat-"+action,data},token);
  const groupOk=(token,action,data={})=>ok(auth+"/identity",{action:"group-chat-"+action,data},token);
- const chatGroupId=randomUUID(),groupPayload={group_id:chatGroupId,name:"B2 discussion",member_ids:[ga.id,gc.id]};
- assert.equal((await groupReq(ghs.access_token,"create",{...groupPayload,member_ids:[ga.id,o.id]})).status,403);
- await groupOk(ghs.access_token,"create",groupPayload);
- await groupOk(ghs.access_token,"create",{...groupPayload,member_ids:[gc.id,ga.id]});
- assert.equal((await groupReq(ghs.access_token,"create",{...groupPayload,name:"Changed"})).status,403);
+ const chatGroupId=randomUUID(),groupPayload={group_id:chatGroupId,name:"B2 discussion",member_ids:[b2ga.id,b2gc.id]};
+ assert.equal((await groupReq(b2ghs.access_token,"create",{...groupPayload,member_ids:[b2ga.id,o.id]})).status,403);
+ await groupOk(b2ghs.access_token,"create",groupPayload);
+ await groupOk(b2ghs.access_token,"create",{...groupPayload,member_ids:[b2gc.id,b2ga.id]});
+ assert.equal((await groupReq(b2ghs.access_token,"create",{...groupPayload,name:"Changed"})).status,403);
  const groupMessage={group_id:chatGroupId,message_id:randomUUID(),body:"B2 group message"};
- await groupOk(gas.access_token,"send",groupMessage);await groupOk(gas.access_token,"send",groupMessage);
- assert.equal((await groupReq(gas.access_token,"send",{...groupMessage,body:"Changed"})).status,403);
- for(const s of [ghs,gcs]){const t=await groupOk(s.access_token,"thread",{group_id:chatGroupId});assert.equal(t.items.length,1);assert.equal(t.items[0].body,groupMessage.body)}
- assert.ok((await groupOk(gcs.access_token,"list")).items.some(x=>x.id===chatGroupId));
- assert.equal((await groupOk(ghs.access_token,"members",{group_id:chatGroupId})).items.length,3);
- for(const s of [gds,os]){assert.equal((await groupReq(s.access_token,"thread",{group_id:chatGroupId})).status,403);assert.equal((await groupReq(s.access_token,"send",groupMessage)).status,403);assert.ok(!(await groupOk(s.access_token,"list")).items.some(x=>x.id===chatGroupId))}
- assert.equal((await groupReq(gas.access_token,"seen",groupMessage)).status,403);
- await groupOk(gcs.access_token,"seen",groupMessage);
- assert.ok((await groupOk(gcs.access_token,"thread",{group_id:chatGroupId})).items[0].read_at);
- assert.equal((await groupReq(gas.access_token,"remove",{group_id:chatGroupId,member_id:gc.id})).status,403);
- await groupOk(ghs.access_token,"remove",{group_id:chatGroupId,member_id:gc.id});
- assert.equal((await groupReq(gcs.access_token,"thread",{group_id:chatGroupId})).status,403);
- assert.equal((await groupReq(gcs.access_token,"send",{...groupMessage,message_id:randomUUID()})).status,403);
- assert.equal((await groupOk(ghs.access_token,"members",{group_id:chatGroupId})).items.length,2);
+ await groupOk(b2gas.access_token,"send",groupMessage);await groupOk(b2gas.access_token,"send",groupMessage);
+ assert.equal((await groupReq(b2gas.access_token,"send",{...groupMessage,body:"Changed"})).status,403);
+ for(const s of [b2ghs,b2gcs]){const t=await groupOk(s.access_token,"thread",{group_id:chatGroupId});assert.equal(t.items.length,1);assert.equal(t.items[0].body,groupMessage.body)}
+ assert.ok((await groupOk(b2gcs.access_token,"list")).items.some(x=>x.id===chatGroupId));
+ assert.equal((await groupOk(b2ghs.access_token,"members",{group_id:chatGroupId})).items.length,3);
+ for(const s of [b2gds,os]){assert.equal((await groupReq(s.access_token,"thread",{group_id:chatGroupId})).status,403);assert.equal((await groupReq(s.access_token,"send",groupMessage)).status,403);assert.ok(!(await groupOk(s.access_token,"list")).items.some(x=>x.id===chatGroupId))}
+ assert.equal((await groupReq(b2gas.access_token,"seen",groupMessage)).status,403);
+ await groupOk(b2gcs.access_token,"seen",groupMessage);
+ assert.ok((await groupOk(b2gcs.access_token,"thread",{group_id:chatGroupId})).items[0].read_at);
+ assert.equal((await groupReq(b2gas.access_token,"remove",{group_id:chatGroupId,member_id:b2gc.id})).status,403);
+ await groupOk(b2ghs.access_token,"remove",{group_id:chatGroupId,member_id:b2gc.id});
+ assert.equal((await groupReq(b2gcs.access_token,"thread",{group_id:chatGroupId})).status,403);
+ assert.equal((await groupReq(b2gcs.access_token,"send",{...groupMessage,message_id:randomUUID()})).status,403);
+ assert.equal((await groupOk(b2ghs.access_token,"members",{group_id:chatGroupId})).items.length,2);
  pass("B2 collective group: three accounts, exact retry, explicit read, nonmember/tenant denial and removal");
 
  // Dedicated support agents, no implicit rights for a tenant promoter.
@@ -508,14 +508,14 @@ try{
  await new Promise((r,reject)=>{server.once("error",reject);server.listen(8443,"127.0.0.1",r)});
  browser=await chromium.launch({headless:true});
  const hc=await browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"}),gc=await browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"}),hp=await hc.newPage(),gp=await gc.newPage();
- async function sign(page,f,remember=false){
+ async function sign(page,f,remember=false,workspaceName="Replay A"){
  await page.goto("https://127.0.0.1:8443");
  await page.getByRole("button",{name:"Se connecter",exact:true}).click();
  await page.getByLabel("Identifiant WideMeet",{exact:true}).fill(f.login);
  await page.getByLabel("Mot de passe",{exact:true}).fill(f.password);
  if(remember)await page.getByLabel("Rester connecté",{exact:true}).check();
  await page.getByRole("button",{name:"Se connecter",exact:true}).click();
- await page.getByText("Replay A",{exact:true}).waitFor();
+ await page.getByText(workspaceName,{exact:true}).waitFor();
  await page.getByRole("navigation").getByRole("button",{name:"Agenda"}).click();
  await page.getByRole("region",{name:"Réunions"}).waitFor();
  }
@@ -585,11 +585,60 @@ try{
  await directIncoming.getByRole("button",{name:"Marquer comme lu",exact:true}).click();
  await directIncoming.getByText(/Consultation déclarée/).waitFor();
  await hp.locator("article").filter({hasText:"Synthetic private browser message"}).getByText(/Consultation déclarée/).waitFor({timeout:15000});
+
+ // The server commits, but the transport drops the first response. Polling must continue while retry is pending.
+ const lostPattern="**/widemeet-auth/identity";let lostOnce=false;
+ await hp.route(lostPattern,async route=>{
+  const payload=route.request().postDataJSON();
+  if(!lostOnce&&payload?.action==="center-send"&&payload?.data?.body==="B2 lost response fixture"){
+   lostOnce=true;const committed=await route.fetch();assert.equal(committed.status(),200);await route.abort();return;
+  }await route.continue();
+ });
+ try{
+  await hp.getByLabel("Votre message",{exact:true}).fill("B2 lost response fixture");
+  await hp.getByRole("button",{name:"Envoyer",exact:true}).click();
+  await hp.getByText(/Accès ou action non confirmé/).waitFor();
+  await hp.getByText("B2 lost response fixture",{exact:true}).waitFor({timeout:20000});assert.equal(lostOnce,true);
+  await gp.getByText("B2 lost response fixture",{exact:true}).waitFor({timeout:20000});
+  await hp.getByRole("button",{name:"Envoyer",exact:true}).click();
+  await hp.waitForFunction(()=>document.querySelector("textarea")?.value==="");
+  await hp.getByText("B2 lost response fixture",{exact:true}).waitFor();
+  assert.equal((await centerOk(hs.access_token,"thread",{peer_id:g.id,query:"B2 lost response fixture"})).items.length,1);
+  pass("B2 direct chat committed lost response, polling remains active and retry stays idempotent");
+ }finally{await hp.unroute(lostPattern)}
  await menuPage("Statistiques");
  await hp.getByRole("heading",{name:"Bilan consolidé Premium",exact:true}).waitFor();
  const period=hp.getByRole("combobox",{name:"Période écoulée",exact:true});await period.selectOption("7");assert.equal(await period.inputValue(),"7");
  await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();await hp.getByText("Votes clôturés explicitement",{exact:true}).waitFor();await hp.getByText("Tâches approuvées",{exact:true}).waitFor();
  pass("real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period");
+ // B2 group UI is exercised in separate contexts and workspace to preserve existing fixtures.
+ const b2contexts=await Promise.all([0,1,2].map(()=>browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"})));
+ try{
+  const [b2owner,b2first,b2second]=await Promise.all(b2contexts.map(c=>c.newPage()));
+  await Promise.all([[b2owner,b2gh],[b2first,b2ga],[b2second,b2gc]].map(([p,f])=>sign(p,f,false,"B2 dedicated group workspace")));
+  for(const p of [b2owner,b2first,b2second]){
+   await p.getByRole("navigation").getByRole("button",{name:"Chat",exact:true}).click();
+   await p.getByRole("button",{name:"Messages privés",exact:true}).click();
+   await p.getByRole("button",{name:"Groupes de discussion",exact:true}).click();
+   await p.getByRole("heading",{name:"Groupes de discussion",exact:true}).waitFor();
+  }
+  await b2owner.getByLabel("Nom du groupe de discussion",{exact:true}).fill("B2 UI group");
+  const staff=b2owner.getByRole("checkbox",{name:"Replay staff",exact:true});await staff.nth(0).check();await staff.nth(1).check();
+  await b2owner.getByRole("button",{name:"Créer le groupe de discussion",exact:true}).click();
+  await b2owner.getByRole("button",{name:/B2 UI group/}).click();
+  for(const p of [b2first,b2second]){await p.getByRole("button",{name:"Actualiser",exact:true}).click();await p.getByRole("button",{name:/B2 UI group/}).click();}
+  await b2owner.getByLabel("Message de groupe",{exact:true}).fill("B2 browser group content");
+  await b2owner.getByRole("button",{name:"Envoyer au groupe",exact:true}).click();
+  for(const p of [b2owner,b2first,b2second])await p.getByText("B2 browser group content",{exact:true}).waitFor({timeout:20000});
+  await b2first.getByRole("button",{name:"Marquer comme lu",exact:true}).click();
+  await b2first.getByRole("button",{name:"Marquer comme lu",exact:true}).waitFor({state:"detached"});
+  const g2=(await groupOk(b2ghs.access_token,"list")).items.find(x=>x.name==="B2 UI group");assert.ok(g2);
+  await groupOk(b2ghs.access_token,"remove",{group_id:g2.id,member_id:b2gc.id});
+  await b2second.getByText("B2 browser group content",{exact:true}).waitFor({state:"detached",timeout:20000});
+  await b2first.getByText("B2 browser group content",{exact:true}).waitFor();
+  pass("B2 three browser group creation, message delivery, read and revoked member purge");
+ }finally{await Promise.all(b2contexts.map(c=>c.close()))}
+
 
  await menuPage("Traduction et écoute");
  await hp.getByRole("combobox",{name:"Langue parlée préférée",exact:true}).selectOption("ff");
