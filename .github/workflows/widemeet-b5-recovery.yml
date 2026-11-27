@@ -1,5 +1,13 @@
 name: WideMeet B5 — isolated recovery and support UI
 on:
+  push:
+    branches: [test/widemeet-bulk-metier-b5-b6-20261127]
+    paths:
+      - 'supabase/drafts/widemeet_support.sql'
+      - 'apps/web/widemeet/src/SupportCenter.tsx'
+      - 'apps/android/widemeet/src/main/java/cm/naxa/widemeet/SupportCenter.kt'
+      - 'scripts/widemeet/support-recovery-replay.mjs'
+      - '.github/workflows/widemeet-b5-recovery.yml'
   workflow_dispatch:
   pull_request:
     branches: [test/widemeet-qualification-20261126]

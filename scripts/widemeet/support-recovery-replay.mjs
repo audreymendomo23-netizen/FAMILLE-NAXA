@@ -144,6 +144,23 @@ try{
  await hp.getByText("Note enregistrée : 4/5",{exact:true}).waitFor();
  assert.equal((await sk(fresh.access_token,"read",{ticket_id:id})).feedback,4);
  pass("B5 independent browser support ticket, reply, closure and persisted feedback");
+ await hp.getByRole("button",{name:"Retour aux demandes",exact:true}).click();
+ await hp.getByLabel("Sujet",{exact:true}).fill("Synthetic privacy request");
+ await hp.getByLabel("Catégorie",{exact:true}).selectOption("privacy_access");
+ await hp.getByText(/aucune donnée n’est automatiquement exportée/).waitFor();
+ await hp.getByLabel("Description du problème",{exact:true}).fill("Request for an authorized review only");
+ await hp.getByRole("button",{name:"Envoyer la demande",exact:true}).click();
+ await hp.getByRole("heading",{name:"Synthetic privacy request",exact:true}).waitFor();
+ const privacyCase=(await sk(fresh.access_token,"list")).items.find(q=>q.subject==="Synthetic privacy request");
+ assert.equal(privacyCase.category,"privacy_access");assert.equal(privacyCase.status,"open");
+ assert.equal((await sr(xs.access_token,"read",{ticket_id:privacyCase.id})).status,403);
+ assert.equal((await sr(gs.access_token,"read",{ticket_id:privacyCase.id})).status,403);
+ await sk(gs.access_token,"claim",{ticket_id:privacyCase.id});
+ assert.equal((await sk(gs.access_token,"read",{ticket_id:privacyCase.id})).category,"privacy_access");
+ assert.equal((await sr(xs.access_token,"read",{ticket_id:privacyCase.id})).status,403);
+ for(const category of ["privacy_rectify","privacy_erase"]){const p={ticket_id:randomUUID(),message_id:randomUUID(),subject:"Synthetic "+category,category,body:"Authorized review requested"};await sk(fresh.access_token,"create",p);await sk(fresh.access_token,"create",p);assert.equal((await sk(fresh.access_token,"read",{ticket_id:p.ticket_id})).category,category)}
+ assert.equal((await sr(fresh.access_token,"create",{ticket_id:randomUUID(),message_id:randomUUID(),subject:"Invalid",category:"privacy_execute",body:"Invalid"})).status,403);
+ pass("B6 real privacy rights intake, three structured categories, exact retry, assigned access and third party denial");
 }finally{
  if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));
  for(const child of children)if(child.exitCode===null){child.kill("SIGTERM");await new Promise(r=>child.once("exit",r))}

@@ -1,7 +1,7 @@
 name: WideMeet — N0–N4 isolated gate
 on:
   push:
-    branches: [work/widemeet-n0-20261126]
+    branches: [work/widemeet-n0-20261126, test/widemeet-bulk-metier-b5-b6-20261127]
     paths:
       - 'apps/android/widemeet/**'
       - 'apps/web/widemeet/**'
