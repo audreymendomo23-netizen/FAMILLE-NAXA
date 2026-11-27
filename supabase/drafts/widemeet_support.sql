@@ -310,4 +310,109 @@ begin
 end $wm$;
 revoke all on function public.wm_support_media_admission(text,uuid) from public,anon,authenticated;
 grant execute on function public.wm_support_media_admission(text,uuid) to service_role;
+-- B5 recovery candidate: independently enrolled secret + two reviewers, no agent-held secret.
+create table public.wm_support_recovery_fallback(
+ account_id uuid primary key references public.wm_accounts(id), key_hash text not null unique check(key_hash ~ '^[a-f0-9]{64}$'),
+ epoch bigint not null, created_at timestamptz not null default clock_timestamp(),
+ operation_id uuid
+);
+alter table public.wm_support_recovery_fallback enable row level security;
+revoke all on public.wm_support_recovery_fallback from public,anon,authenticated;
+grant select,insert,update on public.wm_support_recovery_fallback to service_role;
+create function public.wm_support_enroll_fallback(p_hash text,p_key_hash text,p_epoch bigint)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare s record; a public.wm_accounts%rowtype;
+begin
+ if p_key_hash is null or p_key_hash !~ '^[a-f0-9]{64}$' then return false;end if;
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into s from public.wm_session_context(p_hash);
+ if not found or s.password_change_required then return false;end if;
+ select * into a from public.wm_accounts where id=s.account_id and enabled for update;
+ if not found or a.password_change_required or a.password_change_id is not null or a.credential_epoch is distinct from p_epoch then return false;end if;
+ if not exists(select 1 from public.wm_session_context(p_hash) c where c.session_id=s.session_id and not c.password_change_required) then return false;end if;
+ insert into public.wm_support_recovery_fallback(account_id,key_hash,epoch) values(a.id,p_key_hash,a.credential_epoch)
+ on conflict(account_id) do update set key_hash=excluded.key_hash,epoch=excluded.epoch,created_at=clock_timestamp(),operation_id=null;
+ return true;
+end $wm$;
+revoke all on function public.wm_support_enroll_fallback(text,text,bigint) from public,anon,authenticated;
+grant execute on function public.wm_support_enroll_fallback(text,text,bigint) to service_role;
+create function public.wm_support_begin_fallback(p_identifier text,p_key_hash text,p_request uuid,p_commitment text)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a public.wm_accounts%rowtype; f public.wm_support_recovery_fallback%rowtype; rr public.wm_recovery_requests%rowtype; result jsonb;
+begin
+ if p_request is null or p_key_hash is null or p_key_hash !~ '^[a-f0-9]{64}$' or p_commitment is null or p_commitment !~ '^[a-f0-9]{64}$' then return null;end if;
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into a from public.wm_accounts where login_id=p_identifier and enabled for update;
+ if not found then return null;end if;
+ select * into f from public.wm_support_recovery_fallback where account_id=a.id and key_hash=p_key_hash for update;
+ if not found then return null;end if;
+ -- Only the exact interrupted operation may resume; existing GoTrue fence checks commitment.
+ if f.operation_id is not null then
+  if f.operation_id<>p_request then return null;end if;
+  return public.wm_begin_key_recovery(p_identifier,p_key_hash,p_request,p_commitment);
+ end if;
+ if a.password_change_id is not null or a.password_change_required or a.credential_epoch<>f.epoch then return null;end if;
+ select * into rr from public.wm_recovery_requests where account_id=a.id and status='pending' and requested_at>=f.created_at and requested_at>clock_timestamp()-interval '24 hours' for update;
+ if not found then return null;end if;
+ -- Reject objections and require two distinct currently authorized reviewers.
+ if exists(select 1 from public.wm_support_recovery_reviews where request_id=rr.id and decision='reject') then return null;end if;
+ if (select count(*) from public.wm_support_recovery_reviews v join public.wm_support_recovery_reviewers p on p.account_id=v.reviewer_id and p.enabled join public.wm_accounts u on u.id=v.reviewer_id and u.enabled and not u.password_change_required where v.request_id=rr.id and v.decision='escalate' and v.reviewer_id<>a.id and v.created_at>=rr.requested_at)<2 then return null;end if;
+ -- Transfer the distinct, pre-enrolled proof into the existing one-use credential fence atomically.
+ insert into public.wm_recovery_keys(account_id,key_hash,epoch) values(a.id,p_key_hash,a.credential_epoch)
+ on conflict(account_id) do update set key_hash=excluded.key_hash,epoch=excluded.epoch,created_at=clock_timestamp(),operation_id=null,password_commitment=null,write_started_at=null,consumed_at=null,completed_at=null;
+ result:=public.wm_begin_key_recovery(p_identifier,p_key_hash,p_request,p_commitment);
+ if result is null then raise exception 'fallback fence unavailable';end if;
+ update public.wm_support_recovery_fallback set operation_id=p_request where account_id=a.id;
+ return result;
+end $wm$;
+revoke all on function public.wm_support_begin_fallback(text,text,uuid,text) from public,anon,authenticated;
+grant execute on function public.wm_support_begin_fallback(text,text,uuid,text) to service_role;
+-- Media join handles bind a grant to the exact screen consent instance. An old token
+-- cannot become valid again when the requester grants a different screen consent.
+create table public.wm_support_media_handles(
+ handle text primary key check(handle ~ '^[a-f0-9]{64}$'),
+ call_id uuid not null references public.wm_support_calls(id),
+ session_id uuid not null references public.wm_device_sessions(id),
+ share_id uuid, expires_at timestamptz not null
+);
+alter table public.wm_support_media_handles enable row level security;
+revoke all on public.wm_support_media_handles from public,anon,authenticated;
+grant select,insert,delete on public.wm_support_media_handles to service_role;
+create function public.wm_support_issue_media(p_hash text,p_call uuid,p_handle text)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare state jsonb; s record; c public.wm_support_calls%rowtype;
+begin
+ if p_handle is null or p_handle !~ '^[a-f0-9]{64}$' then return null;end if;
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ state:=public.wm_support_media_admission(p_hash,p_call);if state is null then return null;end if;
+ select * into s from public.wm_session_context(p_hash);if not found then return null;end if;
+ select * into c from public.wm_support_calls where id=p_call;
+ delete from public.wm_support_media_handles where call_id=p_call and expires_at<=clock_timestamp();
+ if (select count(*) from public.wm_support_media_handles where call_id=p_call and session_id=s.session_id)>=60 then return null;end if;
+ insert into public.wm_support_media_handles(handle,call_id,session_id,share_id,expires_at)
+ values(p_handle,p_call,s.session_id,case when state->'sources' ? 'screen_share' then c.screen_id else null end,c.deadline);
+ return state;
+end $wm$;
+revoke all on function public.wm_support_issue_media(text,uuid,text) from public,anon,authenticated;
+grant execute on function public.wm_support_issue_media(text,uuid,text) to service_role;
+create function public.wm_support_check_media(p_hash text,p_call uuid)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare h public.wm_support_media_handles%rowtype; c public.wm_support_calls%rowtype; raw_hash text; state jsonb;
+begin
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into h from public.wm_support_media_handles where handle=p_hash and call_id=p_call and expires_at>clock_timestamp();
+ if not found then return null;end if;
+ select token_hash into raw_hash from public.wm_device_sessions where id=h.session_id;
+ if not found then return null;end if;
+ state:=public.wm_support_media_admission(raw_hash,p_call);if state is null then return null;end if;
+ if h.share_id is not null then
+  select * into c from public.wm_support_calls where id=p_call;
+  if c.screen_id is distinct from h.share_id or c.screen_state not in ('consented','active') then return null;end if;
+ else
+  state:=jsonb_set(state,'{sources}','["microphone"]'::jsonb);
+ end if;
+ return state;
+end $wm$;
+revoke all on function public.wm_support_check_media(text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_support_check_media(text,uuid) to service_role;
 commit;
