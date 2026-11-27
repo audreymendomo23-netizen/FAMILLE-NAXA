@@ -336,6 +336,24 @@ begin
 end $wm$;
 revoke all on function public.wm_support_enroll_fallback(text,text,bigint) from public,anon,authenticated;
 grant execute on function public.wm_support_enroll_fallback(text,text,bigint) to service_role;
+-- A holder of the pre-enrolled backup code can obtain a case reference safely.
+-- No case identifier or account details are disclosed to an unproved requester.
+create function public.wm_support_request_fallback(p_identifier text,p_key_hash text)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a public.wm_accounts%rowtype; f public.wm_support_recovery_fallback%rowtype; rid uuid;
+begin
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into a from public.wm_accounts where login_id=p_identifier and enabled for update;
+ if not found or a.password_change_required or a.password_change_id is not null then return null;end if;
+ select * into f from public.wm_support_recovery_fallback where account_id=a.id and key_hash=p_key_hash and epoch=a.credential_epoch and operation_id is null for update;
+ if not found then return null;end if;
+ update public.wm_recovery_requests set status='rejected' where account_id=a.id and status='pending' and (requested_at<f.created_at or requested_at<=clock_timestamp()-interval '24 hours');
+ insert into public.wm_recovery_requests(account_id) values(a.id) on conflict(account_id) where status='pending' do nothing;
+ select id into rid from public.wm_recovery_requests where account_id=a.id and status='pending';
+ return jsonb_build_object('case_id',rid);
+end $wm$;
+revoke all on function public.wm_support_request_fallback(text,text) from public,anon,authenticated;
+grant execute on function public.wm_support_request_fallback(text,text) to service_role;
 create function public.wm_support_begin_fallback(p_identifier text,p_key_hash text,p_request uuid,p_commitment text)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare a public.wm_accounts%rowtype; f public.wm_support_recovery_fallback%rowtype; rr public.wm_recovery_requests%rowtype; result jsonb;
