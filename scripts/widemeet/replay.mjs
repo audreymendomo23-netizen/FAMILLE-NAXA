@@ -76,6 +76,7 @@ try{
  assert.equal(attempts.filter(x=>x.status===201).length,1);
  assert.equal(attempts.filter(x=>x.status>=400).length,1);
  const passRoom=attempts.find(x=>x.status===201).data;
+ const replayedCreate={...meeting,room_id:passRoom.id};assert.equal((await request(room+"/create",replayedCreate,ps)).status,200);assert.ok((await request(room+"/create",{...replayedCreate,title:"Changed"},ps)).status>=400);pass("actual N1 exact paid room creation replay consumes no additional pass");
  const after=await ok(room+"/pass-list",{},ps);assert.equal(after[0].room_id,passRoom.id);assert.ok(Date.parse(after[0].valid_until)<=Date.now()+86400000);
  assert.equal((await ok(room+"/list",{},ps)).length,1);
  const noPass={...meeting,room_id:randomUUID()};delete noPass.pass_id;
@@ -344,6 +345,7 @@ try{
  assert.equal((await mreq(os.access_token,"read",publication)).status,403);
  assert.ok((await mok(mgs.access_token,"list")).items.some(x=>x.room_id===mid&&x.unread));
  assert.equal((await mok(mgs.access_token,"read",publication)).body,draft.body);
+ const guestNotices=await ok(room+"/notices",{},mgs.access_token),otherNotices=await ok(room+"/notices",{},mos.access_token);const notice=guestNotices.items.find(x=>x.k==="minutes:"+mv1);assert.ok(notice);assert.ok(!otherNotices.items.some(x=>x.k===notice.k));assert.equal((await request(room+"/notices",{read:notice.k},mos.access_token)).status,403);assert.equal((await ok(room+"/notices",{read:notice.k},mgs.access_token)).read,true);assert.ok((await ok(room+"/notices",{},mgs.access_token)).items.find(x=>x.k===notice.k).read_at);pass("actual N4 recipient-scoped in-app notice, read receipt and forbidden third party");
  const exportRequest={...publication,request_id:randomUUID()};assert.equal((await mreq(mos.access_token,"export",exportRequest)).status,403);const exportData=await mok(mgs.access_token,"export",exportRequest);assert.equal(exportData.body,draft.body);assert.equal(exportData.verification_id,mv1);assert.ok(exportData.recipient_name);assert.equal((await mreq(mhs.access_token,"export",exportRequest)).status,403);pass("actual N4 exact published PDF export payload, recipient watermark identity and audit request isolation");
  const treq=(token,action,data={})=>request(room+"/tasks",{action,data},token);
  const tok=(token,action,data={})=>ok(room+"/tasks",{action,data},token);

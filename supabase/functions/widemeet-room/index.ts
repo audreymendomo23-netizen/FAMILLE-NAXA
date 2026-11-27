@@ -69,6 +69,10 @@ Deno.serve(async request=>{
  if(!object.ok||!object.body||object.headers.has("content-length")&&Number(object.headers.get("content-length"))!==result.bytes)return send(503,{error:"unavailable"});
  return new Response(object.body,{status:200,headers:{...cors,"Content-Type":"audio/ogg","Cache-Control":"private, no-store","Content-Disposition":"attachment; filename=widemeet-"+b.recording_id.toLowerCase()+".ogg","X-Content-Type-Options":"nosniff"}});
  }
+ if(action==="notices"){
+ if(Deno.env.get("WM_NOTICES_QUALIFIED")!=="true"||b.read!=null&&typeof b.read!=="string")return send(403,{error:"forbidden"});
+ const result=await rpc("wm_notices",{p_hash,p_read:b.read??null});return result?send(200,result):send(403,{error:"forbidden"});
+ }
  if(action==="presence"){
  if(Deno.env.get("WM_PRESENCE_QUALIFIED")!=="true"||!uuid.test(b.room_id??""))return send(403,{error:"forbidden"});
  const result=await rpc("wm_presence_report",{p_hash,p_room:b.room_id.toLowerCase()});
