@@ -164,28 +164,6 @@ private fun NaxaServicesRoot(
     val preferences = remember { NaxaServicesPreferences(context) }
     val localPinManager = remember(context) { LocalAccessPinManager(context) }
     val lockGenerationValue by lockGeneration.collectAsState()
-    var databaseRetry by remember { mutableIntStateOf(0) }
-    val databaseResult by produceState<Result<NsServicesDatabase>?>(null, databaseRetry) {
-        value = null
-        value = withContext(Dispatchers.IO) {
-            try { Result.success(SecureLocalDatabase.open(context)) }
-            catch (c: CancellationException) { throw c }
-            catch (failure: Exception) { Result.failure(failure) }
-        }
-    }
-    val localDatabase = databaseResult?.getOrNull()
-    if (localDatabase == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (databaseResult == null) CircularProgressIndicator()
-            else Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-                Text(localizedLabel("Données locales indisponibles. Aucune donnée effacée automatiquement.", "Local data unavailable. No data automatically erased.", "Keɓe nokkuure heɓotaako. Keɓe momtaaka."))
-                Button(onClick = { databaseRetry++ }) { Text(localizedLabel("Réessayer", "Retry", "Fuɗɗito")) }
-            }
-        }
-        return
-    }
-    DisposableEffect(localDatabase) { onDispose { localDatabase.close() } }
-    val localRepository = remember(localDatabase) { NaxaServicesLocalRepository(localDatabase) }
     val scope = rememberCoroutineScope()
 
     var route by rememberSaveable { mutableStateOf(AppRoute.LOGIN.name) }
@@ -238,6 +216,23 @@ private fun NaxaServicesRoot(
             .onFailure { PushTokenRegistry.markFailed(it.message ?: "FCM_TOKEN_REGISTRATION_FAILED") }
     }
     var localPinUnlockedMemberId by remember { mutableStateOf<String?>(null) }
+    // Login and legal onboarding do not depend on the local ERP database.
+    // Open only after authentication and local PIN, without showing ERP before verification.
+    val needsDatabase=session?.let{!it.requirePasswordChange&&localPinUnlockedMemberId==it.account.memberId}==true
+    var databaseRetry by remember { mutableIntStateOf(0) }
+    val databaseResult by produceState<Result<NsServicesDatabase>?>(null, needsDatabase, databaseRetry) {
+        value=null
+        if(needsDatabase){
+            value=withContext(Dispatchers.IO){
+                try{Result.success(SecureLocalDatabase.open(context))}
+                catch(c:CancellationException){throw c}
+                catch(failure:Exception){Result.failure(failure)}
+            }
+        }
+    }
+    val localDatabase=databaseResult?.getOrNull()
+    DisposableEffect(localDatabase){onDispose{localDatabase?.close()}}
+    val localRepository=remember(localDatabase){localDatabase?.let{NaxaServicesLocalRepository(it)}}
     var lastHandledLockGeneration by remember { mutableIntStateOf(lockGenerationValue) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -668,6 +663,21 @@ private fun NaxaServicesRoot(
                                 route = AppRoute.LOGIN.name
                             } else if(localPinUnlockedMemberId!=current.account.memberId){
                                 Box(Modifier.fillMaxSize())
+                            } else if(localRepository==null){
+                                Column(Modifier.fillMaxSize().padding(24.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally){
+                                    if(databaseResult==null)CircularProgressIndicator()
+                                    else{
+                                        Text(localizedLabel("Données locales indisponibles. Aucune donnée effacée automatiquement.","Local data unavailable. No data automatically erased.","Keɓe nokkuure heɓotaako. Keɓe momtaaka."))
+                                        Button(onClick={databaseRetry++}){Text(localizedLabel("Réessayer","Retry","Fuɗɗito"))}
+                                    }
+                                    TextButton(onClick={
+                                        val logoutToken=vault.loadAccessToken()?:current.accessToken
+                                        vault.clear();NaxaServicesSyncScheduler.cancel(context);PushTokenRegistry.disable(context)
+                                        rememberSession=false;session=null;pendingRefresh=null;localPinUnlockedMemberId=null
+                                        offlineRestored=false;tourActive=false;route=AppRoute.LOGIN.name
+                                        scope.launch{runCatching{api.revokeCurrentDevicePushTokens(logoutToken)};runCatching{api.logout(logoutToken)}}
+                                    }){Text(localizedLabel("Déconnexion","Sign out","Seŋtu"))}
+                                }
                             } else if(offlineRestored&&AppRoute.valueOf(route) !in offlineLocalRoutes){
                                 AccessDeniedContent(Modifier.fillMaxSize()){route=AppRoute.DASHBOARD.name}
                             } else {

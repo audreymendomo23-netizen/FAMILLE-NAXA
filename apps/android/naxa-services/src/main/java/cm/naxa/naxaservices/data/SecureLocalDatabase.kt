@@ -110,7 +110,13 @@ internal object SecureLocalDatabase {
         }
         clearStage()
         try {
-            SQLiteDatabase.openDatabase(source.absolutePath,"",null,SQLiteDatabase.OPEN_READWRITE,preserveOnCorruption,null).use { plain ->
+            // ATTACH inherits the source connection's CREATE flag. Prepare the target
+            // explicitly with its key; never let ATTACH silently create a plaintext target.
+            check(source.isFile)
+            SQLiteDatabase.openDatabase(stage.absolutePath,passphrase,null,SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY,preserveOnCorruption,null).use { target ->
+                target.execSQL("PRAGMA user_version = 0")
+            }
+            SQLiteDatabase.openDatabase(source.absolutePath,"",null,SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY,preserveOnCorruption,null).use { plain ->
                 plain.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)",emptyArray<String>()).use { c ->
                     check(c.moveToFirst() && c.getInt(0)==0) { "LOCAL_DB_WAL_BUSY" }
                 }
