@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 import org.json.JSONArray
@@ -42,8 +43,8 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     fun run(block:suspend ()->Unit){if(busy||!session.permits(site))return;busy=true;message="";scope.launch{
         try{block()}catch(c:CancellationException){throw c}catch(_:Exception){message=tr("Opération non confirmée","Operation unconfirmed")}finally{busy=false}
     }}
-    LaunchedEffect(session.token,site){
-        try{load()}catch(c:CancellationException){throw c}catch(_:Exception){snapshot=null}
+    LaunchedEffect(session.token,site,tab){
+        do{if(!busy)try{load()}catch(c:CancellationException){throw c}catch(_:Exception){snapshot=null};if(tab=="orders")delay(5000)}while(tab=="orders")
     }
     val operationalRoles=snapshot?.optJSONArray("operation_roles")
     val canServe=canManage||(operationalRoles!=null&&(0 until operationalRoles.length()).any{operationalRoles.optString(it) in setOf("server","floor")})
@@ -65,12 +66,14 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
         OutlinedButton(onClick={tab="erp_write"}){Text(tr("Opérations stock","Stock operations"))}
         OutlinedButton(onClick={tab="crm"}){Text(tr("Clients","Customers"))}
     }
+    OutlinedButton(onClick={tab="stations"}){Text(tr("Postes de préparation","Preparation stations"))}
     if(canManage)OutlinedButton(onClick={tab="bulk3"}){Text(tr("ERP 360° — gestion complète","ERP 360° — management"))}
     if(canServe)OutlinedButton(onClick={tab="support"}){Text(tr("Assistance commandes","Order assistance"))}
     if(canManage)OutlinedButton(onClick={tab="pilotage"}){Text(tr("Performance service","Service performance"))}
     if(canManage)OutlinedButton(onClick={tab="documents"}){Text(tr("Justificatifs","Documents"))}
     OutlinedButton(onClick={tab="attendance"}){Text(tr("Pointage","Attendance"))}
     when(tab){
+        "stations"->{key(session.member,site){ZippleNativeStations(api,session,site,en)}}
         "attendance"->{key(session.member,site){ZippleAttendance(api,session,site,en)}}
         "support"->{key(session.member,site){ZippleNativeOrderSupport(api,session,site,en)}}
         "pilotage"->{key(session.member,site){ZippleNativeServicePerformance(api,session,site,en)}}
@@ -159,10 +162,11 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
                 Text(tr("Tickets et préparation","Tickets and preparation"),style=MaterialTheme.typography.titleMedium)
                 current.rows("orders").forEach{o->
                     Text("#"+o.optString("number")+" · "+o.optString("status")+" · "+o.optLong("total_xaf")+" FCFA")
+                    ZippleServerClock(o,current.optString("server_now"),en)
                     if(o.optString("channel")=="table")Text(tr("Table : ","Table: ")+(current.rows("tables").find{it.optString("session_id")==o.optString("table_session_id")}?.optString("label")?:"—"))
                     o.rows("lines").forEach{l->
                         val state=l.optString("state");val next=mapOf("received" to "preparing","preparing" to "ready","ready" to "served")[state]
-                        Text(l.optString("name")+" × "+l.optInt("qty")+" · "+l.optString("post")+" · "+state)
+                        Text(l.optString("name")+" × "+l.optInt("qty")+" · "+l.optString("substation_label").takeUnless{it.isBlank()||it=="null"}.orEmpty().ifBlank{l.optString("post")}+" · "+state)
                         if(next!=null&&o.optString("status")!="cancelled"&&(canManage||(canServe&&next=="served")))OutlinedButton(enabled=!busy&&session.permits(site),onClick={run{
                             api.call(session,site,"line_advance",JSONObject().put("order_id",o.optString("id")).put("item_id",l.optString("item_id")).put("next",next));load()
                         }}){Text(if(current.optJSONObject("mode")?.optString("space")=="snack_bar"&&o.optString("channel")=="table"&&next=="served")tr("Remettre au client","Hand to customer")else tr("Étape suivante","Next step"))}

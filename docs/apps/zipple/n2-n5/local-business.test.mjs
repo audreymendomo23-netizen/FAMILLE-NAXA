@@ -492,7 +492,33 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   const worker=await context(),workerPage=await worker.newPage();await workerPage.goto(publicOrigin);await workerPage.getByLabel("Identifiant").fill(staffLogin);await workerPage.getByLabel("Mot de passe",{exact:true}).fill(password);await workerPage.getByRole("button",{name:"Se connecter"}).click();await workerPage.getByRole("combobox",{name:"Établissement autorisé",exact:true}).selectOption(site);await workerPage.getByRole("heading",{name:"Nouvelle commande"}).waitFor();
   assert.equal(await workerPage.getByRole("button",{name:"Stocks & finances"}).count(),0);assert.equal(await workerPage.getByRole("button",{name:"Caisse",exact:true}).count(),0);
   await ok("operational_grant",{member_id:staffId,role:"server",enabled:false});assert.equal((await b("snapshot",{},snackStaffToken)).status,403);
-  await workerPage.getByRole("heading",{name:"Nouvelle commande"}).waitFor({state:"hidden",timeout:15000});await worker.close();
+  await workerPage.getByRole("heading",{name:"Nouvelle commande"}).waitFor({state:"hidden",timeout:15000});
+  // Route through distinct preparation subdivisions and prove the employee's UI boundary.
+  const grillProduct=await ok("menu_add",{name:"Grillade routée",post:"kitchen",price_xaf:1200,qty:2});
+  const sideProduct=await ok("menu_add",{name:"Garniture routée",post:"kitchen",price_xaf:300,qty:2});
+  await page.getByRole("button",{name:"Catalogue",exact:true}).click();
+  await page.getByText("Sous-postes de préparation",{exact:true}).click();
+  await page.getByLabel("Nom du sous-poste").fill("Grillades");await page.getByRole("button",{name:"Enregistrer le sous-poste"}).click();
+  const grillStation=await scalar("select id from zp_substations where site_id=$1 and label='Grillades'",[site]);
+  assert.ok(grillStation);
+  await page.getByLabel("Nom du sous-poste").fill("Accompagnements");await page.getByRole("button",{name:"Enregistrer le sous-poste"}).click();
+  const sideStation=await scalar("select id from zp_substations where site_id=$1 and label='Accompagnements'",[site]);assert.ok(sideStation);
+  await page.getByRole("combobox",{name:"Sous-poste pour Grillade routée",exact:true}).selectOption(grillStation);
+  await page.getByRole("combobox",{name:"Sous-poste pour Garniture routée",exact:true}).selectOption(sideStation);
+  await ok("substation_grant",{member_id:staffId,substation_id:grillStation,enabled:true});
+  const routedTicket=await ok("order_create",{channel:"counter",request_id:id(),lines:[{item_id:grillProduct,qty:1},{item_id:sideProduct,qty:1}]});
+  const routedGrillLine=workerPage.getByTestId("station-line-"+routedTicket.id+"-"+grillProduct);
+  await routedGrillLine.waitFor({timeout:15000});
+  assert.equal(await workerPage.getByTestId("station-line-"+routedTicket.id+"-"+sideProduct).count(),0);
+  assert.equal((await b("line_advance",{order_id:routedTicket.id,item_id:sideProduct,next:"preparing"},snackStaffToken)).status,403);
+  await routedGrillLine.getByRole("button",{name:"Étape suivante"}).click();
+  await routedGrillLine.getByText(/Grillades · preparing/).waitFor();
+  const extendedEta=await ok("delay",{order_id:routedTicket.id,minutes:20,reason:"Charge du poste grillades"});
+  await routedGrillLine.locator('[data-clock-target]').waitFor();await routedGrillLine.locator('[data-clock-target="'+extendedEta+'"]').waitFor({timeout:15000});
+  await ok("substation_grant",{member_id:staffId,substation_id:grillStation,enabled:false});
+  await routedGrillLine.waitFor({state:"hidden",timeout:15000});await worker.close();
+  console.log("ZIPPLE_BULK2_REAL_SUBSTATION_CLOCK_AND_REVOCATION_PASS");
+
   console.log("ZIPPLE_BULK2_REAL_EDGE_STAFF_REVOCATION_PASS");
   // Real browser uses synthetic test geolocation only, never a real employee location.
   await staff.grantPermissions(["geolocation"],{origin:publicOrigin});await staff.setGeolocation({latitude:4.05,longitude:9.7,accuracy:20});

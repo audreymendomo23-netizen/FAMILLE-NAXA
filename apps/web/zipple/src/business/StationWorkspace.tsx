@@ -1,11 +1,12 @@
-import React,{useEffect,useState} from "react";
+import React,{useEffect,useRef,useState} from "react";
 import {ServiceClock} from "./ServiceClock";
 export function StationWorkspace({call,en,online}:{call:(a:string,b?:Record<string,unknown>)=>Promise<any>;en:boolean;online:boolean}){
  const t=(fr:string,eng:string)=>en?eng:fr;
  const [data,D]=useState<any>(null),[error,E]=useState(""),[busy,B]=useState(false),[limits,L]=useState<Record<string,string>>({}),[windows,W]=useState<Record<string,{from:string,until:string}>>({});
- async function load(){D(await call("station_snapshot"))}
- async function run(fn:()=>Promise<void>){if(busy||!online)return;B(true);E("");try{await fn()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}
- useEffect(()=>{let live=true;const refresh=()=>call("station_snapshot").then(v=>{if(live)D(v)}).catch(()=>{if(live)D(null)});void refresh();const timer=setInterval(refresh,5000);return()=>{live=false;clearInterval(timer)}},[]);
+ const epoch=useRef(0),mutating=useRef(false);
+ async function load(){const version=++epoch.current;const value=await call("station_snapshot");if(version===epoch.current)D(value)}
+ async function run(fn:()=>Promise<void>){if(mutating.current||!online)return;mutating.current=true;epoch.current++;B(true);E("");try{await fn()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{mutating.current=false;B(false)}}
+ useEffect(()=>{if(!online)return;let live=true;let timer:number|undefined;async function refresh(){if(!live)return;const version=epoch.current;if(!mutating.current)try{const v=await call("station_snapshot");if(live&&version===epoch.current)D(v)}catch{if(live&&version===epoch.current)D(null)}if(live)timer=window.setTimeout(refresh,5000)}void refresh();return()=>{live=false;if(timer!==undefined)window.clearTimeout(timer)}},[online]);
  return <section><h2>{t("Postes de préparation","Preparation stations")}</h2>{error&&<p role="alert">{error}</p>}<button disabled={!online||busy} onClick={()=>run(load)}>{t("Actualiser","Refresh")}</button>
  {data?.lines?.map((l:any)=>{const next=({received:"preparing",preparing:"ready",ready:"served"} as any)[l.state],waitingForHandoff=next==="served"&&l.handoff_allowed===false;return <div key={l.order_id+l.item_id} data-testid={"station-line-"+l.order_id+"-"+l.item_id}><p>#{l.number} · {l.name} × {l.qty} · {l.substation_label??l.post} · {l.state}</p><ServiceClock order={l} serverNow={data.server_now} en={en}/>{l.instructions?.map((n:any,i:number)=><p key={i}>{n.qty} × {n.note}</p>)}{waitingForHandoff&&<p>{t("Prête — remise par le personnel de salle","Ready — handoff by service staff")}</p>}{next&&!waitingForHandoff&&<button disabled={!online||busy} onClick={()=>run(async()=>{await call("line_advance",{order_id:l.order_id,item_id:l.item_id,next});await load()})}>{t("Étape suivante","Next step")}</button>}</div>})}
  {data?.categories?.map((c:any)=><div key={c.category}>{c.category}<button disabled={!online||busy} onClick={()=>run(async()=>{await call("category_set",{category:c.category,active:!c.active});await load()})}>{c.active?t("Suspendre la catégorie","Suspend category"):t("Réactiver la catégorie","Reactivate category")}</button></div>)}
