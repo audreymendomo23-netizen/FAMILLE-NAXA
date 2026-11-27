@@ -1,0 +1,51 @@
+# WideMeet — Cahier des charges parallèle : extension entreprise (B7–B12)
+
+Date : 27 novembre 2026 — Africa/Douala.
+Statut : cadrage conservé, développement différé sur décision du propriétaire. Ce document n'est pas une extension du périmètre de livraison actuel. Aucun nouveau module ni dépendance n'est requis pour clôturer B1–B6. Cahier principal de référence : [12-widemeet.md](12-widemeet.md), sections 1–19 ; les droits initiaux priment. Reprise des B7–B12 uniquement après décision explicite. [V] décision ; [P] proposition à qualifier. Les règles du socle sont réutilisées par référence, pas réécrites.
+
+## 1. Communication et collaboration inclusives en entreprise (27/11/2026)
+
+### 1.1 Arbitrages du propriétaire [V]
+Conserver le fil d'actualité et permettre la publication de vidéos professionnelles. Tous les nouveaux services sont réservés à l'espace entreprise, inclusifs à celle-ci ; les particuliers conservent uniquement le périmètre initial de visioconférence et toutes ses fonctionnalités associées validées aux §1–19, sans restriction nouvelle (agenda, invitations, chat, contacts, archives, traduction, sécurité, pass et droits existants). Un membre d'entreprise conserve un espace personnel distinct ; aucun nouveau module n'y est activé. Les invités externes conservent leurs droits de réunion initiaux, sans accès implicite aux ressources professionnelles.
+Ce cahier parallèle conserve le cadrage révisé de l'ancien §20 (historique 1e807af, proposition antérieure 361ebdfa) : pas de messagerie SMTP grand public, ni d'adresse email publique individuelle, ni d'achat de domaine obligatoire. Courrier interne applicatif, pas une boîte SMTP. Domaine personnalisé et email externe reportés. WideMeet reste le nom effectif ; aucune adoption automatique d'une marque candidate. Ne modifier ni app IDs, ni Firebase naxameet, ni abonnements, ni navigation, ni chantiers B1–B6.
+
+### 1.2 Architecture cible [V/P]
+Les 25 modules initiaux du §14 et les addendums §17–19 restent intégralement protégés. 15 modules complémentaires proposés, soit 40 au total. Réutiliser identité, messagerie, groupes, droits, validation, tâches, notifications et stockage existants ; ne pas les dupliquer.
+
+| Module | Périmètre réservé à l'entreprise |
+|---|---|
+| 26 Courrier interne | Réception, envoyés, brouillons, signatures, pièces jointes, recherche, favoris, confirmation de lecture explicite |
+| 27 Identité professionnelle | Identifiant/adresse applicative unique par entreprise, collaborateur ou fonction ; pas de boîte SMTP |
+| 28 Annuaire professionnel | Recherche par nom, fonction, équipe, région, agence ; raccourcis chat, appel, courrier et invitation |
+| 29 Communications officielles | Notes, circulaires, instructions, diffusion ciblée, confirmations explicites et versions |
+| 30 Fil d'actualité professionnel | Publications texte, images, documents, vidéos professionnelles, réactions, commentaires, sondages, favoris |
+| 31 Organigramme interactif | Directions, équipes, agences, régions et hiérarchie visuelle |
+| 32 Espaces collaboratifs | Projets et équipes, conversations, réunions, documents et missions |
+| 33 Drive entreprise | Dossiers privés, aperçu, partage révocable, recherche et versions |
+| 34 Documents collaboratifs | Rédaction, coédition, commentaires, versions et export |
+| 35 Bibliothèque de connaissances | Procédures, formations, manuels et vidéos référencées, sans dupliquer les fichiers |
+| 36 Circuits d'approbation | Demandes, validation/rejet motivé et suivi, sans remplacer les ERP métiers |
+| 37 Instructions et missions | Conversion de contenus en tâches autorisées via module 18, validation humaine |
+| 38 Recherche universelle | Résultats et index limités aux droits dans l'espace actif |
+| 39 Assistant IA entreprise | Rédaction, synthèse, traduction, recherche autorisée, opt-in et validation humaine |
+| 40 Pilotage de collaboration | Indicateurs agrégés, sans lecture implicite du privé ni surveillance intrusive |
+
+### 1.3 Fil d'actualité et vidéos [V/P]
+[V] Fil privé par entreprise, accessible aux collaborateurs autorisés. Publication de vidéos professionnelles : formations, consignes, démonstrations, annonces de direction, présentations et retours de projet. Pas de réseau social public, ni de publication personnelle externe.
+[P] Composer depuis Android/Web/PWA : texte, photo, vidéo, document, sondage ou lien réunion ; brouillon, titre, description, miniature, audience entreprise/direction/équipe/canal autorisée. Canaux professionnels facultatifs comme filtres ou espaces, sans remplacer le fil. Publication selon rôle et délégation, politique de modération/validation préalable configurable, épinglage, édition/version, archivage, retrait, signalement, réactions et commentaires. Communications officielles distinctes et confirmation de lecture explicite si requise ; une vue vidéo ne vaut pas confirmation.
+[P] Lecteur intégré, pause, progression, plein écran, sous-titres si disponibles, débit adaptatif, économie de données, lecture automatique désactivée par défaut. Upload reprenable, compression/transcodage, miniature, scan malware, contrôle format et taille ; publication seulement après traitement vérifié. Stockage privé, URLs courtes signées ou accès authentifié après ACL, aucune URL publique permanente ; révocation, purge, rétention et limites des copies déjà exportées. Droits de téléchargement distincts. Pas de surveillance individuelle intrusive des vues. Vidéos publiées distinctes des flux SFU et des enregistrements audio de réunion : aucun enregistrement vidéo des réunions implicitement activé.
+[P] Quotas mutualisés par entreprise, stockage réel (source/variantes/sauvegarde), trafic et transcodage mesurés, alertes et limites. Durée, taille, résolution, rétention et répartition des quotas à chiffrer et valider ; pas d'usage illimité ni de supplément automatique.
+
+### 1.4 Expérience applicative [V/P]
+Design mobile-first grand public, non ERP, cartes, avatars, gestes, animations légères, FR/EN, clair/sombre, accessibilité, économie de données. Conserver cinq onglets Accueil, Agenda, Chat, Archives, Profil et hamburger. Accueil entreprise : fil professionnel et raccourcis. Chat : discussions/appels et courrier contextuel. Agenda : réunions et échéances autorisées. Archives : documents, Drive, comptes rendus. Profil : identité professionnelle, changement d'espace et administration dédiée aux habilités. Espace personnel inchangé ; ni fil, ni raccourci, ni notification professionnelle affichés dans l'espace personnel. Aucune fuite via recherche, cache ou lien direct.
+
+### 1.5 Inclusion et coûts [V/P]
+Promoteur seul payeur, collaborateurs sans paiement individuel pour accès professionnel. Conserver §11 (Access 5 000 FCFA/mois, 50 000/an, 20 personnes ajoutées maximum ; Premium 10 000/mois, 100 000/an, 50 personnes maximum ; autres droits et arbitrages inchangés). Répartition précise des nouveaux modules et quotas Access/Premium à valider, sans hausse automatique ; inclusion ne signifie ni gratuité nouvelle des pass individuels ni vidéo illimitée. Réutiliser Supabase/Firebase/Android/Web/PWA et stockage/media-core après audit ; pas de serveur SMTP public nécessaire ; mesurer coût par entreprise, Go, transcodage et trafic avant lancement. Aucun achat, paiement, déploiement ou migration pour cet addendum.
+
+### 1.6 Lots et qualification [P]
+B1–B6 protégés, critères et recettes inchangés. B7 : 26–28 courrier, identité, annuaire. B8 (Hub professionnel, appellation proposée) : 29–31 communications officielles, fil avec vidéos, organigramme. B9 : 32–35 espaces, Drive, Docs, bibliothèque. B10 : 36–37 approbations et missions. B11 : interconnexion des 40 modules et NAXA via module 25. B12 : 38–40 recherche, IA, pilotage.
+Recettes : non-régression de tous les modules initiaux, Connect, durée et qualité de présentation ; même compte dans espaces distincts, refus des nouvelles API aux particuliers et invités, tenant/role/abonnement, URL directe, cache/offline, recherche et notifications, révocation. Fil : ciblage, publication, modération, édition, retrait, réactions, commentaires, sondages, lecture vidéo réelle Android/Web/PWA, upload interrompu/repris, format/quotas, traitement en échec, contrôle ACL vidéo/miniature, purge/restauration et coût. Utiliser comptes synthétiques famille, Chromium/Playwright, émulateurs et appareils physiques lorsque nécessaire. B7–B12 non démarrés côté code ; aucun vert déclaré. Aucun changement de branche de construction ni interruption volontaire de CI.
+
+
+## 2. Conditions de reprise et de livraison
+Le lot initial doit être qualifié selon son propre cahier, indépendamment de l'extension. Aucune modification des tarifs, identité, navigation ou code du socle pour préparer implicitement les nouveaux lots. Au redémarrage, auditer le dernier SHA intégré B1–B6 et les décisions en vigueur, créer une branche dédiée et définir les recettes de non-régression avant développement. Les B7–B12 sont différés, non démarrés, sans échéance ni budget engagé.
