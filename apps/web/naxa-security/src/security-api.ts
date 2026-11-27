@@ -26,3 +26,9 @@ export function browserAttendance(session:SecuritySession,organization_id:string
  if(!["arrival","departure"].includes(action)||!Number.isFinite(p.lat)||Math.abs(p.lat)>90||!Number.isFinite(p.lon)||Math.abs(p.lon)>180||!Number.isFinite(p.accuracy)||p.accuracy<=0||p.accuracy>100||!Number.isFinite(p.observed)||p.observed>now||now-p.observed>120000)throw Error("INVALID_ATTENDANCE");
  return {organization_id,site_id,reporter_id:session.userId,request_id,action,lat:p.lat,lon:p.lon,accuracy_m:p.accuracy,observed_at:new Date(p.observed).toISOString(),source:"browser",mock_reported:null};
 }
+
+// Review RPCs are deliberately allowlisted. Authorization is enforced again on the server.
+export async function reviewRpc(session:SecuritySession,name:"sec_module_review_queue"|"sec_review_module_request",body:Record<string,unknown>){
+ if(!["sec_module_review_queue","sec_review_module_request"].includes(name)||!session.userId||!session.accessToken||!session.publicKey||session.publicKey.startsWith("sb_secret_")||session.publicKey===session.accessToken)throw Error("INVALID_SESSION");
+ const r=await fetch(new URL("/rest/v1/rpc/"+name,SECURITY_URL),{method:"POST",headers:{apikey:session.publicKey,Authorization:"Bearer "+session.accessToken,"Content-Type":"application/json"},body:JSON.stringify(body),cache:"no-store",credentials:"omit",redirect:"error"});if(!r.ok)throw Error("SECURITY_HTTP_"+r.status);return await r.json();
+}
