@@ -29,10 +29,12 @@ import java.time.Instant
  var data by remember{mutableStateOf<JSONObject?>(null)};var config by remember{mutableStateOf<JSONObject?>(null)}
  var busy by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")}
  var filter by remember(session.member,site){mutableStateOf("active")};var search by remember(session.member,site){mutableStateOf("")};var postFilter by remember(session.member,site){mutableStateOf("all")}
+ var itemSearch by remember(session.member,site){mutableStateOf("")};var showAvailability by remember(session.member,site){mutableStateOf(false)}
+ var limits by remember(session.member,site){mutableStateOf<Map<String,String>>(emptyMap())};var windows by remember(session.member,site){mutableStateOf<Map<String,Pair<String,String>>>(emptyMap())}
  var label by remember{mutableStateOf("")};var post by remember{mutableStateOf("kitchen")};var slots by remember{mutableStateOf("1")};var configuration by remember{mutableStateOf(false)}
  suspend fun load(){data=api.call(session,site,"station_snapshot") as? JSONObject}
  suspend fun loadConfig(){config=api.call(session,site,"substation_snapshot") as? JSONObject}
- fun run(block:suspend()->Unit){if(busy)return;busy=true;message="";scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){message=tr("Opération non confirmée","Operation unconfirmed")}finally{busy=false}}}
+ fun run(block:suspend()->Unit){if(busy||!session.permits(site))return;busy=true;message="";scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){message=tr("Opération non confirmée","Operation unconfirmed")}finally{busy=false}}}
  LaunchedEffect(session.token,site){while(true){if(!busy)try{load()}catch(c:CancellationException){throw c}catch(_:Exception){data=null};delay(5000)}}
  Text(tr("Postes de préparation","Preparation stations"),style=MaterialTheme.typography.titleLarge)
  if(message.isNotBlank())Text(message)
@@ -57,6 +59,26 @@ import java.time.Instant
   HorizontalDivider()
  }
  if(data==null)Text(tr("Postes non synchronisés","Stations not synchronized"))
+ if(data!=null){OutlinedButton(onClick={showAvailability=!showAvailability}){Text(tr("Disponibilité des produits","Product availability"))}
+ if(showAvailability){
+  OutlinedTextField(itemSearch,{itemSearch=it.take(160)},label={Text(tr("Rechercher un produit","Search product"))},modifier=Modifier.fillMaxWidth())
+  data?.rows("categories").orEmpty().forEach{c->val name=c.optString("category");Text(name);OutlinedButton(enabled=!busy&&session.permits(site),onClick={run{api.call(session,site,"category_set",JSONObject().put("category",name).put("active",!c.optBoolean("active")));load()}}){Text(if(c.optBoolean("active"))tr("Suspendre la catégorie","Suspend category")else tr("Réactiver la catégorie","Reactivate category"))}}
+  val items=data?.rows("items").orEmpty().filter{it.optString("name").contains(itemSearch.trim(),ignoreCase=true)}
+  if(items.isEmpty())Text(tr("Aucun produit correspondant.","No matching product."))
+  items.forEach{i->val id=i.optString("id");key(id){
+   Text(i.optString("name")+" · "+i.optInt("available_qty"))
+   OutlinedButton(enabled=!busy&&session.permits(site),onClick={run{api.call(session,site,"station_availability",JSONObject().put("item_id",id).put("active",!i.optBoolean("active")));load()}}){Text(if(i.optBoolean("active"))tr("Suspendre","Suspend")else tr("Réactiver","Reactivate"))}
+   fun hour(k:String)=i.optString(k).takeUnless{it=="null"}.orEmpty().take(5)
+   val w=windows[id]?: (hour("available_from") to hour("available_until"))
+   OutlinedTextField(w.first,{windows=windows+(id to (it.take(5) to w.second))},label={Text(tr("Disponible dès HH:MM","Available from HH:MM"))},enabled=!busy)
+   OutlinedTextField(w.second,{windows=windows+(id to (w.first to it.take(5)))},label={Text(tr("Disponible jusqu’à HH:MM","Available until HH:MM"))},enabled=!busy)
+   val valid=(w.first.isBlank()&&w.second.isBlank())||(listOf(w.first,w.second).all{Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]").matches(it)})
+   OutlinedButton(enabled=!busy&&valid&&session.permits(site),onClick={run{api.call(session,site,"station_window",JSONObject().put("item_id",id).put("available_from",w.first.takeIf{it.isNotBlank()}?:JSONObject.NULL).put("available_until",w.second.takeIf{it.isNotBlank()}?:JSONObject.NULL));windows=windows-id;load()}}){Text(tr("Enregistrer les horaires (Douala)","Save hours (Douala)"))}
+   if(i.optString("kind")!="formula"){val limit=limits[id]?:i.optString("sale_limit").takeUnless{it=="null"}.orEmpty();OutlinedTextField(limit,{limits=limits+(id to it.filter(Char::isDigit).take(10))},label={Text(tr("Portions vendables limitées","Temporary sellable limit"))},enabled=!busy)
+    OutlinedButton(enabled=!busy&&session.permits(site)&&(limit.isBlank()||limit.toIntOrNull()?.let{it in 0..i.optInt("available_qty")}==true),onClick={run{api.call(session,site,"station_limit",JSONObject().put("item_id",id).put("limit",limit.toIntOrNull()?:JSONObject.NULL));limits=limits-id;load()}}){Text(tr("Enregistrer la limite (vide = aucune)","Save limit (empty = none)"))}}
+   HorizontalDivider()
+  }}
+ }}
  if(manager){
   OutlinedButton(enabled=!busy,onClick={configuration=!configuration;if(configuration)run{loadConfig()}}){Text(tr("Configurer les sous-postes","Configure substations"))}
   if(configuration){

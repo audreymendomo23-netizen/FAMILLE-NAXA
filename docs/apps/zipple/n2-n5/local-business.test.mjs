@@ -141,7 +141,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByLabel("Nom d’usage").fill("Client recette");await page.getByLabel("Téléphone volontaire (facultatif)").fill("237699000001");await page.getByLabel("Le client a volontairement communiqué ces informations.").check();await page.getByRole("button",{name:"Enregistrer la fiche"}).click();
   await page.getByRole("combobox",{name:"Client sélectionné"}).selectOption({label:"Client recette · 237699000001"});
   const orderId=await scalar("select id from zp_orders where org_id=$1",[org]);
-  await page.getByRole("combobox",{name:"Commande à rattacher"}).selectOption(orderId);await page.getByRole("button",{name:"Rattacher la commande"}).click();await page.getByText(/Non réglée/).waitFor();
+  await page.getByRole("combobox",{name:"Commande à rattacher"}).selectOption(orderId);await page.getByRole("button",{name:"Rattacher la commande"}).click();await page.locator("p").filter({hasText:/· Non réglée$/}).waitFor();
   await page.getByLabel("Objet du suivi").fill("Suivi recette");await page.getByLabel("Échéance du suivi").fill("2026-12-01");await page.getByRole("button",{name:"Créer le suivi"}).click();
   await page.getByRole("button",{name:"Clôturer le suivi"}).click();await page.getByText("Terminé",{exact:true}).waitFor();
   assert.ok(await scalar("select completed_at from zp_customer_followups where org_id=$1",[org]));

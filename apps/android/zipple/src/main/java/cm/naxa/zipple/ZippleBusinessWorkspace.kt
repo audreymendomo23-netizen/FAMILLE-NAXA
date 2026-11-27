@@ -27,7 +27,8 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     var tab by remember { mutableStateOf("orders") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
-    var cart by remember { mutableStateOf<Map<String,Int>>(emptyMap()) }
+    var cart by remember(session.member,site) { mutableStateOf<Map<String,Int>>(emptyMap()) }
+    var menuSearch by remember(session.member,site){mutableStateOf("")};var orderSearch by remember(session.member,site){mutableStateOf("")};var cashSearch by remember(session.member,site){mutableStateOf("")};var stockSearch by remember(session.member,site){mutableStateOf("")};var lowOnly by remember(session.member,site){mutableStateOf(false)}
     var orderKey by remember { mutableStateOf(UUID.randomUUID().toString()) }
     var quoteKey by remember { mutableStateOf(UUID.randomUUID().toString()) }
     var plan by remember { mutableStateOf("ACCESS") }
@@ -144,9 +145,14 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
                 Text(tr("Règlement déjà reçu, aucun débit API.","Payment already received, no API charge."))
                 listOf("cash","mtn_momo","orange_money","bank","card").forEach{method->OutlinedButton(enabled=canWrite,onClick={cashMethod=method;cashRef=""}){Text((if(cashMethod==method)"✓ " else "")+method)}}
                 if(cashMethod!="cash")OutlinedTextField(cashRef,{cashRef=it.take(160)},label={Text(tr("Référence","Reference"))})
-                snapshot?.rows("orders")?.filter{it.optString("status")=="served"&&!it.optBoolean("settled",it.optBoolean("paid"))}?.forEach{o->
+                val payable=snapshot?.rows("orders").orEmpty().filter{it.optString("status")=="served"&&!it.optBoolean("settled",it.optBoolean("paid"))}
+                Text(tr("Commandes à encaisser","Orders awaiting payment")+" : "+payable.size+" · "+payable.sumOf{it.optLong("total_xaf")}+" FCFA")
+                OutlinedTextField(cashSearch,{cashSearch=it.take(100)},label={Text(tr("Rechercher une commande à encaisser","Search order to collect"))},modifier=Modifier.fillMaxWidth())
+                val visible=payable.filter{it.optString("number").contains(cashSearch.trim(),ignoreCase=true)||it.optString("id").contains(cashSearch.trim(),ignoreCase=true)}
+                if(visible.isEmpty())Text(tr("Aucune commande correspondante.","No matching order."))
+                visible.forEach{o->
                     val oid=o.optString("id")
-                    Text(o.optLong("total_xaf").toString()+" FCFA")
+                    Text("#"+o.optString("number")+" · "+o.optLong("total_xaf")+" FCFA")
                     Button(enabled=canWrite&&(cashMethod=="cash"||cashRef.trim().length>=4),onClick={run{
                         val body=JSONObject().put("cash_id",cash).put("order_id",oid).put("method",cashMethod).put("amount_xaf",o.optLong("total_xaf")).put("reference",if(cashMethod=="cash")JSONObject.NULL else cashRef.trim())
                         val encoded=body.toString();val saved=settlementKeys[oid];val request=if(saved?.first==encoded)saved.second else UUID.randomUUID().toString().also{settlementKeys[oid]=encoded to it}
@@ -168,7 +174,12 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
         }
         "stock"->{
             Text(tr("Matières disponibles","Available ingredients"))
-            erp?.rows("ingredients")?.forEach{i->
+            val ingredients=erp?.rows("ingredients").orEmpty()
+            OutlinedTextField(stockSearch,{stockSearch=it.take(160)},label={Text(tr("Rechercher une matière","Search ingredient"))},modifier=Modifier.fillMaxWidth())
+            Row{Checkbox(checked=lowOnly,onCheckedChange={lowOnly=it});Text(tr("Uniquement les seuils atteints","Only reorder thresholds reached"))}
+            val visible=ingredients.filter{i->(!lowOnly||i.optLong("available_milli")<=i.optLong("reorder_milli"))&&listOf("name","sku").any{i.optString(it).contains(stockSearch.trim(),ignoreCase=true)}}
+            Text(visible.size.toString()+" / "+ingredients.size+" "+tr("matières reçues","received ingredients"));if(erp!=null&&visible.isEmpty())Text(tr("Aucune matière correspondante.","No matching ingredient."))
+            visible.forEach{i->
                 val qty=i.optLong("available_milli");Text(i.optString("name")+" · "+java.math.BigDecimal.valueOf(qty,3).stripTrailingZeros().toPlainString()+" "+i.optString("unit"))
                 if(qty<=i.optLong("reorder_milli"))Text(tr("Seuil atteint","Reorder threshold reached"))
             }
@@ -183,7 +194,10 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
                 listOf("counter","takeaway","table").forEach{c->OutlinedButton(enabled=canWrite,onClick={channel=c;tableSession="";orderKey=UUID.randomUUID().toString()}){Text((if(channel==c)"✓ " else "")+when(c){"counter"->tr("Comptoir","Counter");"takeaway"->tr("À emporter","Takeaway");else->tr("À table","Table")})}}
                 if(channel=="table")current.rows("tables").filter{!it.isNull("session_id")&&it.optString("kind")!="pickup"}.forEach{x->val ts=x.optString("session_id");OutlinedButton(enabled=canWrite,onClick={tableSession=ts;orderKey=UUID.randomUUID().toString()}){Text((if(tableSession==ts)"✓ " else "")+x.optString("label"))}}
                 val items=current.rows("items").filter{it.optBoolean("active")&&it.optInt("available_qty")>0}
-                items.forEach{i->
+                OutlinedTextField(menuSearch,{menuSearch=it.take(160)},label={Text(tr("Rechercher un produit","Search product"))},modifier=Modifier.fillMaxWidth())
+                val visibleItems=items.filter{i->listOf("name","category","post").any{i.optString(it).contains(menuSearch.trim(),ignoreCase=true)}}
+                if(visibleItems.isEmpty())Text(tr("Aucun produit correspondant.","No matching product."))
+                visibleItems.forEach{i->
                     val id=i.optString("id");val count=cart[id]?:0;Text(i.optString("name")+" · "+i.optLong("price_xaf")+" FCFA")
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
                         OutlinedButton(enabled=canWrite&&count>0,onClick={cart=cart+(id to (count-1));orderKey=UUID.randomUUID().toString()}){Text("−")}
@@ -192,6 +206,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
                     }
                 }
                 val selected=items.filter{(cart[it.optString("id")]?:0)>0}
+                if(selected.isNotEmpty()){Text(tr("Récapitulatif du panier","Cart summary"));selected.forEach{i->val id=i.optString("id");Text(i.optString("name")+" × "+(cart[id]?:0)+" · "+(i.optLong("price_xaf")*(cart[id]?:0))+" FCFA")};OutlinedButton(enabled=canWrite,onClick={cart=emptyMap();orderKey=UUID.randomUUID().toString()}){Text(tr("Vider le panier","Clear cart"))}}
                 Text(tr("Total indicatif","Estimated total")+" : "+selected.sumOf{it.optLong("price_xaf")*(cart[it.optString("id")]?:0)}+" FCFA")
                 Button(enabled=canWrite&&selected.isNotEmpty()&&(channel!="table"||tableSession.isNotBlank()),onClick={run{
                     val lines=JSONArray();selected.forEach{val id=it.optString("id");lines.put(JSONObject().put("item_id",id).put("qty",cart[id]))}
@@ -200,7 +215,10 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
                     cart=emptyMap();orderKey=UUID.randomUUID().toString();load()
                 }}){Text(tr("Envoyer en préparation","Send to preparation"))}
                 Text(tr("Tickets et préparation","Tickets and preparation"),style=MaterialTheme.typography.titleMedium)
-                current.rows("orders").forEach{o->
+                OutlinedTextField(orderSearch,{orderSearch=it.take(100)},label={Text(tr("Rechercher un ticket","Search ticket"))},modifier=Modifier.fillMaxWidth())
+                val matchingOrders=current.rows("orders").filter{o->listOf("number","id","status").any{o.optString(it).contains(orderSearch.trim(),ignoreCase=true)}}
+                if(matchingOrders.isEmpty())Text(tr("Aucun ticket correspondant.","No matching ticket."))
+                matchingOrders.forEach{o->
                     Text("#"+o.optString("number")+" · "+o.optString("status")+" · "+o.optLong("total_xaf")+" FCFA")
                     ZippleServerClock(o,current.optString("server_now"),en)
                     if(o.optString("channel")=="table")Text(tr("Table : ","Table: ")+(current.rows("tables").find{it.optString("session_id")==o.optString("table_session_id")}?.optString("label")?:"—"))
