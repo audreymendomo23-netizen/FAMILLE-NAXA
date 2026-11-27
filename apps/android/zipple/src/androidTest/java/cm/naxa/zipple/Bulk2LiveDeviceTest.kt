@@ -143,6 +143,30 @@ class Bulk2LiveDeviceTest {
    val card=client.getString("card");val code=client.getString("code")
    assertNotEquals(card,code);assertEquals(card,UUID.fromString(card).toString());assertEquals(code,UUID.fromString(code).toString())
   }}
+  awaitText("Enregistrer la carte QR");awaitText("Partager la carte QR")
+  awaitText("Enregistrer le QR de parrainage");awaitText("Partager le QR de parrainage")
+  step("native QR PNG and limited content URI share"){runBlocking{
+   val snap=business.call(session,site,"loyalty_snapshot") as JSONObject
+   val client=snap.rows("customers").single{it.optString("label")=="Client QR natif"}
+   fun decoded(bytes:ByteArray):String{
+    val bmp=checkNotNull(android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.size))
+    try{val pixels=IntArray(bmp.width*bmp.height);bmp.getPixels(pixels,0,bmp.width,0,0,bmp.width,bmp.height)
+     return com.google.zxing.qrcode.QRCodeReader().decode(com.google.zxing.BinaryBitmap(com.google.zxing.common.HybridBinarizer(com.google.zxing.RGBLuminanceSource(bmp.width,bmp.height,pixels)))).text
+    }finally{bmp.recycle()}
+   }
+   for(token in listOf(client.getString("card"),client.getString("code"))){
+    assertEquals(token,decoded(zippleQrPng(token)))
+    val intent=zippleQrShareIntent(ctx,token)
+    assertEquals(android.content.Intent.ACTION_SEND,intent.action);assertEquals("image/png",intent.type)
+    assertTrue(intent.flags and android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+    assertEquals(0,intent.flags and android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    val uri=checkNotNull(intent.clipData).getItemAt(0).uri
+    assertEquals("content",uri.scheme);assertEquals(ctx.packageName+".qrshare",uri.authority)
+    assertFalse(uri.toString().contains(token))
+    assertEquals(token,decoded(checkNotNull(ctx.contentResolver.openInputStream(uri)).use{it.readBytes()}))
+   }
+  }}
+  android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_QR_PNG_SHARE_CONTRACT_PASS")
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_LOYALTY_QR_DISPLAY_PASS")
   click("Livraison Restaurant");awaitText("Préparation des zones et livreurs ; commande externe non activée.")
   input("Nom de zone","Zone ERP native");input("Périmètre et consignes","Secteur test");input("Frais FCFA","500");click("Enregistrer la zone");awaitText("Opération enregistrée")
