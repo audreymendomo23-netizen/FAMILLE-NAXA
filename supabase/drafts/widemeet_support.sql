@@ -14,6 +14,15 @@ create table public.wm_support_tickets(
  created_at timestamptz not null default clock_timestamp(),
  updated_at timestamptz not null default clock_timestamp()
 );
+-- Separate privacy-review permission for the requesting workspace.
+create table public.wm_privacy_reviewers(account_id uuid not null references public.wm_accounts(id),workspace_id uuid not null references public.wm_workspaces(id),enabled boolean not null default false,primary key(account_id,workspace_id));
+create table public.wm_privacy_review_events(id uuid primary key,ticket_id uuid not null references public.wm_support_tickets(id),reviewer_id uuid not null references public.wm_accounts(id),decision text not null check(decision in ('needs_information','reviewed','escalated')),created_at timestamptz not null default clock_timestamp());
+create index wm_privacy_events_ticket on public.wm_privacy_review_events(ticket_id,created_at desc,id desc);
+alter table public.wm_privacy_reviewers enable row level security;
+alter table public.wm_privacy_review_events enable row level security;
+revoke all on public.wm_privacy_reviewers,public.wm_privacy_review_events from public,anon,authenticated;
+grant select,insert,update on public.wm_privacy_reviewers to service_role;
+grant select,insert on public.wm_privacy_review_events to service_role;
 create index wm_support_requester_idx on public.wm_support_tickets(requester_id,workspace_id,updated_at desc);
 create index wm_support_queue_idx on public.wm_support_tickets(status,agent_id,created_at);
 create table public.wm_support_messages(
@@ -98,7 +107,7 @@ revoke all on function public.wm_support_session_live(uuid) from public,anon,aut
 grant execute on function public.wm_support_session_live(uuid) to service_role;
 create function public.wm_support_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare s record; t public.wm_support_tickets%rowtype; m public.wm_support_messages%rowtype; aid uuid; tid uuid; mid uuid; b text; subj text; cat text; agent boolean:=false; own boolean:=false; kind text; result jsonb; score integer; prior_score integer; assignment bigint; call public.wm_support_calls%rowtype; call_id uuid; share uuid; ts timestamptz; recovery public.wm_recovery_requests%rowtype; decision text; evidence uuid; review public.wm_support_recovery_reviews%rowtype; reviewer boolean;
+declare s record; t public.wm_support_tickets%rowtype; m public.wm_support_messages%rowtype; aid uuid; tid uuid; mid uuid; b text; subj text; cat text; agent boolean:=false; own boolean:=false; kind text; result jsonb; score integer; prior_score integer; assignment bigint; call public.wm_support_calls%rowtype; call_id uuid; share uuid; ts timestamptz; recovery public.wm_recovery_requests%rowtype; decision text; evidence uuid; review public.wm_support_recovery_reviews%rowtype; reviewer boolean; privacy boolean:=false; privacy_allowed boolean:=false; prior_privacy public.wm_privacy_review_events%rowtype;
 begin
  select * into s from public.wm_session_context(p_hash);
  if not found or s.password_change_required then return null;end if;
@@ -146,7 +155,7 @@ begin
  if p_action='support-queue' then
   if not agent then return null;end if;
   select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at),'[]'::jsonb) into result from
-   (select id,category,status,created_at,updated_at,case when agent_id=aid then subject else null end as subject,coalesce(agent_id=aid,false) as assigned from public.wm_support_tickets where agent_id=aid or (agent_id is null and status='open' and requester_id<>aid) order by created_at limit 100) q;
+   (select id,category,status,created_at,updated_at,case when agent_id=aid then subject else null end as subject,coalesce(agent_id=aid,false) as assigned from public.wm_support_tickets st where (agent_id=aid or (agent_id is null and status='open' and requester_id<>aid)) and (st.category not in ('privacy_access','privacy_rectify','privacy_erase') or exists(select 1 from public.wm_privacy_reviewers pr where pr.account_id=aid and pr.workspace_id=st.workspace_id and pr.enabled)) order by created_at limit 100) q;
   return jsonb_build_object('items',result);
  end if;
  tid:=(p_data->>'ticket_id')::uuid;
@@ -168,6 +177,13 @@ begin
  select * into t from public.wm_support_tickets where id=tid for update;
  if not found then return null;end if;
  own:=t.requester_id=aid and t.workspace_id=s.workspace_id;
+ privacy:=t.category in ('privacy_access','privacy_rectify','privacy_erase');
+ if privacy then
+  select pr.enabled into privacy_allowed from public.wm_privacy_reviewers pr where pr.account_id=aid and pr.workspace_id=t.workspace_id for share;
+  privacy_allowed:=coalesce(privacy_allowed,false);
+  if not own and not (agent and privacy_allowed) then return null;end if;
+  if p_action like 'support-call-%' or p_action like 'support-screen-%' then return null;end if;
+ end if;
  if p_action='support-claim' then
   if not agent or t.requester_id=aid then return null;end if;
   if t.agent_id=aid and t.status<>'closed' then return jsonb_build_object('claimed',true);end if;
@@ -251,10 +267,24 @@ begin
   end if;
   return jsonb_build_object('id',call.id,'state',call.state,'screen_state',call.screen_state,'screen_id',call.screen_id,'transport_ready',false);
  end if;
+ if p_action='support-privacy-review' then
+  if not privacy or own or not agent or not privacy_allowed or t.agent_id is distinct from aid or t.status='closed' then return null;end if;
+  mid:=(p_data->>'event_id')::uuid;decision:=p_data->>'decision';
+  if mid is null or decision is null or decision not in ('needs_information','reviewed','escalated') then return null;end if;
+  select * into prior_privacy from public.wm_privacy_review_events where id=mid;
+  if found then
+   if prior_privacy.ticket_id=tid and prior_privacy.reviewer_id=aid and prior_privacy.decision=decision then return jsonb_build_object('recorded',true);end if;
+   return null;
+  end if;
+  if (select count(*) from public.wm_privacy_review_events where ticket_id=tid)>=100 then return null;end if;
+  insert into public.wm_privacy_review_events(id,ticket_id,reviewer_id,decision) values(mid,tid,aid,decision);
+  update public.wm_support_tickets set updated_at=clock_timestamp() where id=tid;
+  return jsonb_build_object('recorded',true);
+ end if;
  if p_action='support-read' then
   select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at,q.id),'[]'::jsonb) into result from
   (select id,author_kind,body,created_at from public.wm_support_messages where ticket_id=tid order by created_at,id limit 500) q;
-  return jsonb_build_object('id',tid,'subject',t.subject,'category',t.category,'status',t.status,'messages',result,'viewer',kind,'assignment_version',case when kind='agent' then (select max(id)::text from public.wm_support_assignment_events where ticket_id=tid and action='claim') else null end,'feedback',case when own then (select rating from public.wm_support_feedback where ticket_id=tid) else null end);
+  return jsonb_build_object('id',tid,'subject',t.subject,'category',t.category,'status',t.status,'messages',result,'viewer',kind,'assignment_version',case when kind='agent' then (select max(id)::text from public.wm_support_assignment_events where ticket_id=tid and action='claim') else null end,'feedback',case when own then (select rating from public.wm_support_feedback where ticket_id=tid) else null end,'privacy_review_allowed',privacy and not own and agent and privacy_allowed,'privacy_history',case when privacy then (select coalesce(jsonb_agg(jsonb_build_object('id',e.id,'decision',e.decision,'created_at',e.created_at) order by e.created_at,e.id),'[]'::jsonb) from public.wm_privacy_review_events e where e.ticket_id=tid) else '[]'::jsonb end);
  end if;
  if p_action='support-feedback' then
   if not own or t.status<>'closed' or jsonb_typeof(p_data->'rating') is distinct from 'number' or coalesce(p_data->>'rating','') !~ '^[1-5]$' then return null;end if;
@@ -301,7 +331,7 @@ begin
  select * into c from public.wm_support_calls where id=p_call and state='active';
  if not found or c.deadline<=clock_timestamp() or c.requester_lease<=clock_timestamp() or c.agent_lease<=clock_timestamp() then return null;end if;
  select * into t from public.wm_support_tickets where id=c.ticket_id;
- if not found or t.status not in ('assigned','waiting') or t.agent_id is null or not coalesce((select enabled from public.wm_support_agents where account_id=t.agent_id),false) then return null;end if;
+ if not found or t.category in ('privacy_access','privacy_rectify','privacy_erase') or t.status not in ('assigned','waiting') or t.agent_id is null or not coalesce((select enabled from public.wm_support_agents where account_id=t.agent_id),false) then return null;end if;
  select max(id) into av from public.wm_support_assignment_events where ticket_id=t.id and actor_id=t.agent_id and action='claim';
  if av is distinct from c.assignment_id or not public.wm_support_session_live(c.requester_session) or not public.wm_support_session_live(c.agent_session) then return null;end if;
  requester:=s.account_id=t.requester_id and s.workspace_id=t.workspace_id and s.session_id=c.requester_session;

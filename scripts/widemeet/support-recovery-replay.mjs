@@ -155,8 +155,24 @@ try{
  assert.equal(privacyCase.category,"privacy_access");assert.equal(privacyCase.status,"open");
  assert.equal((await sr(xs.access_token,"read",{ticket_id:privacyCase.id})).status,403);
  assert.equal((await sr(gs.access_token,"read",{ticket_id:privacyCase.id})).status,403);
+ await rest("wm_support_agents",{account_id:v.id,enabled:true});
+ assert.equal((await sr(gs.access_token,"claim",{ticket_id:privacyCase.id})).status,403);
+ assert.ok(!(await sk(gs.access_token,"queue")).items.some(q=>q.id===privacyCase.id));
+ await rest("wm_privacy_reviewers",{account_id:g.id,workspace_id:w,enabled:true});
  await sk(gs.access_token,"claim",{ticket_id:privacyCase.id});
  assert.equal((await sk(gs.access_token,"read",{ticket_id:privacyCase.id})).category,"privacy_access");
+ const privacyEvent={ticket_id:privacyCase.id,event_id:randomUUID(),decision:"reviewed"};
+ assert.equal((await sr(fresh.access_token,"privacy-review",privacyEvent)).status,403);
+ assert.equal((await sr(vs.access_token,"privacy-review",privacyEvent)).status,403);
+ await sk(gs.access_token,"privacy-review",privacyEvent);await sk(gs.access_token,"privacy-review",privacyEvent);
+ assert.equal((await sr(gs.access_token,"privacy-review",{...privacyEvent,decision:"escalated"})).status,403);
+ assert.equal((await sk(fresh.access_token,"read",{ticket_id:privacyCase.id})).privacy_history.length,1);
+ assert.equal((await sr(fresh.access_token,"call-request",{ticket_id:privacyCase.id,call_id:randomUUID()})).status,403);
+ await success(base+"/rest/v1/wm_privacy_reviewers?account_id=eq."+g.id+"&workspace_id=eq."+w,{enabled:false},service,service,"PATCH");
+ assert.equal((await sr(gs.access_token,"read",{ticket_id:privacyCase.id})).status,403);
+ assert.equal((await sr(gs.access_token,"privacy-review",{...privacyEvent,event_id:randomUUID()})).status,403);
+ assert.equal((await sk(fresh.access_token,"read",{ticket_id:privacyCase.id})).privacy_history.length,1);
+ pass("B6 dedicated scoped privacy reviewer, immutable review tracking, revoked access and no media");
  assert.equal((await sr(xs.access_token,"read",{ticket_id:privacyCase.id})).status,403);
  for(const category of ["privacy_rectify","privacy_erase"]){const p={ticket_id:randomUUID(),message_id:randomUUID(),subject:"Synthetic "+category,category,body:"Authorized review requested"};await sk(fresh.access_token,"create",p);await sk(fresh.access_token,"create",p);assert.equal((await sk(fresh.access_token,"read",{ticket_id:p.ticket_id})).category,category)}
  assert.equal((await sr(fresh.access_token,"create",{ticket_id:randomUUID(),message_id:randomUUID(),subject:"Invalid",category:"privacy_execute",body:"Invalid"})).status,403);
