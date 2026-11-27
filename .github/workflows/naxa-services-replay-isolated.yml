@@ -31,6 +31,10 @@ on:
       - 'apps/web/naxa-services/src/**'
       - 'packages/offline-web/**'
       - 'supabase/functions/naxa-services-auth/**'
+      - 'supabase/functions/naxa-services-referrals/**'
+      - 'supabase/functions/naxa-services-customer-promotions/**'
+      - 'supabase/functions/naxa-services-notifications/**'
+      - 'supabase/functions/_shared/naxa-services-device-session.ts'
       - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/SecureLocalDatabase.kt'
       - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/auth/**'
       - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/MainActivity.kt'
@@ -1104,11 +1108,35 @@ jobs:
             const bootSession=await act('login',{identifier:bootLogin,password:bootPassword,device:bootDevice});
             assert.equal(bootSession.status,200);assert.equal(bootSession.data.require_password_change,true);
             assert.equal((await act('subscription_access',{},bootSession.data.access_token)).status,403);
+            // Call actual independent gateways with the real locked GoTrue session.
+            const gatedApis=[['referrals','dashboard'],['customer-promotions','customer_referral_dashboard'],['notifications','list_inbox']];
+            for(const [service,action] of gatedApis){
+              await start(service);
+              const locked=await act(action,{},bootSession.data.access_token);
+              assert.equal(locked.status,401,service+' must deny temporary-password session');
+              const anonymous=await act(action,{},anon);
+              assert.equal(anonymous.status,401,service+' must deny anonymous session');
+            }
+            pass('R19-R21: actual referrals, promotions and notification gateways deny locked and anonymous sessions');
+            await start('auth');
             const bootNew='Qa8!'+randomBytes(18).toString('hex');
             const bootChange=await act('change_password',{current_password:bootPassword,new_password:bootNew,refresh_token:bootSession.data.refresh_token},bootSession.data.access_token);
             assert.equal(bootChange.status,200);assert.equal(bootChange.data.require_password_change,false);
             assert.equal((await act('subscription_access',{},bootChange.data.access_token)).status,200);
-            await act('logout',{device:bootDevice},bootChange.data.access_token);
+            for(const [service,action] of gatedApis){
+              await start(service);
+              const allowed=await act(action,{},bootChange.data.access_token);
+              assert.equal(allowed.status,200,service+' must restore valid access after initial password change');
+            }
+            pass('R19-R21: all three actual gateways admit the unlocked promoter after real password rotation');
+            await start('auth');
+            assert.equal((await act('logout',{device:bootDevice},bootChange.data.access_token)).status,200);
+            for(const [service,action] of gatedApis){
+              await start(service);
+              assert.equal((await act(action,{},bootChange.data.access_token)).status,401,service+' must deny revoked session');
+            }
+            pass('R22-R24: all three real gateways reject the same JWT after NAXA device logout');
+            await start('auth');
             pass('official Auth Admin first promoter bootstrap, wrong alias and duplicate refused, real initial password rotation and ERP access');
             const A=await fixture('A'), B=await fixture('B');
             pass('Auth Admin official API created two isolated synthetic users');
