@@ -83,7 +83,10 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  assert.ok(card&&referral);assert.notEqual(card,referral);console.log("ZIPPLE_NATIVE_LOYALTY_QR_PERSISTENCE_PASS");
  console.log("ZIPPLE_BULK45_NATIVE_WORKSPACE_PERSISTENCE_PASS");
  console.log("ZIPPLE_BULK3_ANDROID_REAL_ERP_LEDGER_EVIDENCE_OFFLINE_REVIEW_PASS");
- const closed=await ok("cash_close",{cash_id:cash,counted_xaf:4900});assert.equal(closed.variance_xaf,0);
+ assert.equal(Number(await scalar("select count(*) from zp_bill_transfers where site_id=$1 and reason='Transfert natif contrôlé'",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_payment_groups where site_id=$1 and amount_xaf=1000 and cardinality(order_ids)=2",[site])),1);
+ console.log("ZIPPLE_NATIVE_GROUP_BILL_PERSISTENCE_PASS");
+ const closed=await ok("cash_close",{cash_id:cash,counted_xaf:5900});assert.equal(closed.variance_xaf,0);
  console.log("ZIPPLE_BULK2_ANDROID_REAL_EDGE_SPLIT_QUANTITY_AMOUNT_AND_CASH_PASS");
  }finally{if(server)await new Promise(ok=>server.close(ok));await db.end()}
 });

@@ -187,6 +187,30 @@ class Bulk2LiveDeviceTest {
    assertFalse("seated waiting entry must disappear",rooms.rows("waitlist").any{it.optString("guest_name")=="Installation native"})
   }}
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_FLOOR_RESERVATIONS_WAITLIST_PASS")
+  var firstNumber="";var secondNumber=""
+  step("prepare two served table bills through real Edge"){runBlocking{
+    val source=(business.call(session,site,"table_create",body("label" to "Addition source native")) as JSONObject).getString("id")
+    val target=(business.call(session,site,"table_create",body("label" to "Addition cible native")) as JSONObject).getString("id")
+    val sourceSession=business.call(session,site,"table_open",body("table_id" to source)) as String
+    val targetSession=business.call(session,site,"table_open",body("table_id" to target)) as String
+    val item=business.call(session,site,"menu_add",body("name" to "Addition test natif","post" to "kitchen","price_xaf" to 500,"qty" to 2)) as String
+    suspend fun served(tableSession:String):String{
+      val order=business.call(session,site,"order_create",body("channel" to "table","table_session_id" to tableSession,"request_id" to uid(),"lines" to org.json.JSONArray().put(body("item_id" to item,"qty" to 1)))) as JSONObject
+      for(next in listOf("preparing","ready","served"))business.call(session,site,"line_advance",body("order_id" to order.getString("id"),"item_id" to item,"next" to next))
+      val bill=business.call(session,site,"table_bill",body("table_session_id" to tableSession)) as JSONObject
+      return bill.rows("orders").single().getString("number")
+    }
+    firstNumber=served(sourceSession);secondNumber=served(targetSession)
+  }}
+  click("Additions de table");click("Table source : —");click("Addition source native")
+  awaitText("Reste à régler : 500 FCFA")
+  click("Commande à transférer : —");click("#"+firstNumber)
+  click("Table destinataire : —");click("Addition cible native");input("Motif du transfert","Transfert natif contrôlé")
+  click("Transférer l’addition");awaitText("Transfert confirmé");awaitText("Reste à régler : 0 FCFA")
+  click("Table source : Addition source native");click("Addition cible native");awaitText("Reste à régler : 1000 FCFA")
+  click("Sélectionner #"+firstNumber);click("Sélectionner #"+secondNumber);awaitText("Total sélectionné : 1000 FCFA")
+  click("Confirmer le règlement groupé reçu");awaitText("Règlement groupé confirmé");awaitText("Reste à régler : 0 FCFA")
+  android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_TABLE_BILL_TRANSFER_AND_GROUP_PASS")
   click("Fidélité et parrainage");awaitText("Points non monétaires ; avantages sur commande ultérieure réglée.")
   click("Client : —");click("Client QR natif")
   click("Générer la carte de fidélité");awaitText("Opération enregistrée")

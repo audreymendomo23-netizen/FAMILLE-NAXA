@@ -16,7 +16,7 @@ internal fun zippleBookingTime(value:String):String? = try {
     else LocalDateTime.parse(value.replace(' ','T')).atOffset(doualaOffset).toInstant().toString()
 } catch (_:java.time.DateTimeException){null}
 
-@Composable private fun FloorChoice(label:String, options:List<Pair<String,String>>, selected:String, enabled:Boolean, onSelect:(String)->Unit) {
+@Composable internal fun FloorChoice(label:String, options:List<Pair<String,String>>, selected:String, enabled:Boolean, onSelect:(String)->Unit) {
     var open by remember{mutableStateOf(false)}
     Box {
         OutlinedButton(enabled=enabled&&options.isNotEmpty(),onClick={open=true}) {
