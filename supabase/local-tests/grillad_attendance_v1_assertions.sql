@@ -56,8 +56,26 @@ begin
  v:=public.grillad_action(o,s,e,'missing_departure_decide',p);if v->>'status'<>'approved' or public.grillad_action(o,s,e,'missing_departure_decide',p)<>v then raise exception 'missing approval replay';end if;
  v:=public.grillad_attendance_status(o,s);if jsonb_array_length(v->'history')<>3 or (v->'history'->0->>'open_arrival')::boolean or v->'missing_departures'->0->>'status'<>'approved' then raise exception 'manual evidence separation';end if;
 end $$;
+select set_config('request.jwt.claim.sub','a1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims',jsonb_build_object('session_id','a1000000-0000-0000-0000-000000000011','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.app')))::text,true);
+do $$declare o uuid:='a2000000-0000-0000-0000-000000000001';s uuid:='a3000000-0000-0000-0000-000000000001';dep uuid:=gen_random_uuid();e uuid:=gen_random_uuid();p jsonb;v jsonb;
+begin
+ perform public.grillad_attendance_capture(o,s,dep,'departure_without_arrival',now(),0,0,10,encode(decode('ffd8ff030000000000000000000000ffd9','hex'),'base64'));
+ begin perform public.grillad_action(o,s,gen_random_uuid(),'missing_arrival_request',jsonb_build_object('departure',dep,'seconds',120,'reason','Overlap'));raise exception 'overlap accepted';exception when invalid_parameter_value then null;end;
+ p:=jsonb_build_object('departure',dep,'seconds',10,'reason','Arrivée oubliée');v:=public.grillad_action(o,s,e,'missing_arrival_request',p);
+ if v->>'status'<>'pending' or public.grillad_action(o,s,e,'missing_arrival_request',p)<>v then raise exception 'missing arrival replay';end if;
+ perform set_config('grillad.test.missing_arrival',e::text,true);
+end $$;
+select set_config('request.jwt.claim.sub','a1000000-0000-0000-0000-000000000002',true);
+select set_config('request.jwt.claims',jsonb_build_object('session_id','a1000000-0000-0000-0000-000000000012','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.app')))::text,true);
+do $$declare o uuid:='a2000000-0000-0000-0000-000000000001';s uuid:='a3000000-0000-0000-0000-000000000001';v jsonb;
+begin
+ perform public.grillad_action(o,s,gen_random_uuid(),'missing_arrival_decide',jsonb_build_object('request',current_setting('grillad.test.missing_arrival')::uuid,'decision','approved','reason','Vérifié'));
+ v:=public.grillad_attendance_status(o,s);
+ if jsonb_array_length(v->'history')<>4 or v->'missing_arrivals'->0->>'status'<>'approved' or v->'history'->0->>'kind'<>'departure_without_arrival' or v->'history'->0->>'duration_seconds' is not null then raise exception 'manual arrival evidence separation';end if;
+end $$;
 reset role;
 do $$begin if (select count(*) from grillad_private.attendance_photo_access)<>1 then raise exception 'photo access audit';end if;end $$;
 update grillad_private.attendance set photo_until=now()-interval '1 second';
-do $$declare n bigint;begin n:=grillad_private.purge_attendance_photos();if n<>3 then raise exception 'photo retention count %',n;end if;if exists(select 1 from grillad_private.attendance where photo is not null) then raise exception 'photo retention bytes';end if;n:=grillad_private.purge_attendance_photos();if n<>0 then raise exception 'photo retention replay';end if;end $$;
+do $$declare n bigint;begin n:=grillad_private.purge_attendance_photos();if n<>4 then raise exception 'photo retention count %',n;end if;if exists(select 1 from grillad_private.attendance where photo is not null) then raise exception 'photo retention bytes';end if;n:=grillad_private.purge_attendance_photos();if n<>0 then raise exception 'photo retention replay';end if;end $$;
 rollback;
