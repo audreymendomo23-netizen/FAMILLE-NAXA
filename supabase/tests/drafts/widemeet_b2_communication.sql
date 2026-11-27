@@ -44,6 +44,21 @@ begin
  state:=jsonb_build_object('id',rid,'workspaceId',w,'hostId',host,'revision',1,'status','open','endMs',endms,'hardEndMs',endms,'recording','off','confidentiality','standard','participants',jsonb_build_array(jsonb_build_object('memberId',host,'response','accepted','excluded',false),jsonb_build_object('memberId',guest,'response','accepted','excluded',false)));
  insert into public.wm_rooms(id,workspace_id,host_id,revision,state) values(rid,w,host,1,state);
  d:=jsonb_build_object('room_id',rid,'code_hash',code,'receiver_name','Display','lease_id',lid);
+ -- Reject malformed hashes before INSERT (RPC must fail closed, not raise a CHECK error).
+ if public.wm_display_action(r,'offer',jsonb_build_object('code_hash',repeat('a',63),'name','Invalid')) is not null
+ or public.wm_display_action(r,'offer',jsonb_build_object('code_hash',repeat('a',65),'name','Invalid')) is not null
+ or public.wm_display_action(r,'offer',jsonb_build_object('code_hash',repeat('G',64),'name','Invalid')) is not null
+ or public.wm_display_action(r,'offer',jsonb_build_object('code_hash',repeat('a',64)||'x','name','Invalid')) is not null
+ or public.wm_display_action(r,'offer',jsonb_build_object('name','Invalid')) is not null then raise exception 'malformed hash accepted';end if;
+ -- Direct service-role writes must also obey the database constraint.
+ begin
+  insert into public.wm_display_offers(code_hash,receiver_session,receiver_name,expires_at)
+  select repeat('a',65),session_id,'Invalid direct offer',clock_timestamp()+interval '1 minute'
+  from public.wm_session_context(r);
+  raise exception 'malformed direct offer accepted';
+ exception when check_violation then null;
+ end;
+ raise notice 'B2_CONNECT_HASH_SQL_PASS: malformed hashes refused by RPC and table constraint';
  if public.wm_display_action(r,'offer',jsonb_build_object('code_hash',code,'name','Display')) is null then raise exception 'offer refused';end if;
  if public.wm_display_action(r,'receive',jsonb_build_object('code_hash',code))->>'pending' is distinct from 'true' then raise exception 'pending not enforced';end if;
  if public.wm_display_action(h,'preview',d) is not null then raise exception 'default display policy allowed';end if;
