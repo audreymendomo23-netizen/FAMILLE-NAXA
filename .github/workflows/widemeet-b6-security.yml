@@ -158,6 +158,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_b6_audio_purge.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_b6_minutes_purge.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_b6_minutes_purge.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_b6_device_lease.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_b6_device_lease.sql
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
