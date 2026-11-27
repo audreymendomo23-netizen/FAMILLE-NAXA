@@ -124,3 +124,15 @@ test("B4 targeted rating: frozen eligible list, no unauthorized vote, explicit d
  r=run(r,host,"close_poll",null,"target001");const p=pollSummary(r.polls[0],host.memberId,1000);
  assert.equal(p.eligible,1);assert.equal(p.responses,1);assert.equal(p.nonresponses,0);assert.equal(p.optionShares[9],100);assert.equal(p.nominativeResponses,null);assert.equal(p.quorumMet,true);
 });
+
+test("B4 simple and absolute majority distinguish abstention and nonresponse",()=>{
+ const cfg={question:"Decision",kind:"single",options:["Oui","Non","Abstention"],anonymous:true,visibility:"closed",quorum:100,threshold:50,abstentionIndex:2};
+ for(const mode of ["simple_majority","absolute_majority","threshold"]){
+ let r=open();r=run(r,host,"survey",{...cfg,decisionMode:mode},"majority1");r=run(r,host,"survey_vote",[0],"majority1");r=run(r,guest,"survey_vote",[2],"majority1");
+ let s=pollSummary(r.polls[0],host.memberId,1000);assert.equal(s.abstentions,null);assert.equal(s.expressed,null);assert.equal(s.accepted,null);
+ r=run(r,host,"close_poll",null,"majority1");s=pollSummary(r.polls[0],host.memberId,1000);
+ assert.equal(s.abstentions,1);assert.equal(s.expressed,1);assert.equal(s.nonresponses,0);assert.equal(s.quorumMet,true);assert.equal(s.accepted[0],mode!=="absolute_majority");assert.equal(s.accepted[2],false);assert.equal(s.decisionDenominator,mode==="absolute_majority"?2:1);
+ }
+ let r=open();assert.throws(()=>run(r,host,"survey",{...cfg,kind:"multiple",decisionMode:"simple_majority"},"majority1"),/invalid_poll/);assert.throws(()=>run(r,host,"survey",{...cfg,abstentionIndex:3},"majority1"),/invalid_poll/);
+ r=run(r,host,"survey",{...cfg,decisionMode:"simple_majority"},"majority1");r=run(r,host,"survey_vote",[2],"majority1");r=run(r,guest,"survey_vote",[2],"majority1");r=run(r,host,"close_poll",null,"majority1");assert.equal(pollSummary(r.polls[0],host.memberId,1000).accepted,null);
+});

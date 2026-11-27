@@ -32,22 +32,27 @@ begin
  -- Reuse pollSummary's frozen electorate and response denominator, never raw identities.
  with source as (
   select q,ord,case when jsonb_typeof(q->'eligible')='array' then jsonb_array_length(q->'eligible') end as eligible,
-   (select count(*) from jsonb_object_keys(coalesce(q->'votes','{}'::jsonb))) as responses
+   (select count(*) from jsonb_object_keys(coalesce(q->'votes','{}'::jsonb))) as responses,
+   case when q->>'abstentionIndex' is not null then (select count(*) from jsonb_each(coalesce(q->'votes','{}'::jsonb)) b where b.value @> jsonb_build_array((q->>'abstentionIndex')::integer)) end as abstentions,
+   coalesce(q->>'decisionMode','threshold') as decision_mode
   from jsonb_array_elements(coalesce(r.state->'polls','[]'::jsonb)) with ordinality p(q,ord)
  ), metrics as (
   select *,case when eligible is null then null when eligible=0 then 0::numeric else 100.0*responses/eligible end as response_rate
   from source
  ), decisions as (
-  select *,case when eligible is null or q->>'quorum' is null then null else response_rate>=(q->>'quorum')::numeric end as quorum_met
+  select *,case when eligible is null or q->>'quorum' is null then null else response_rate>=(q->>'quorum')::numeric end as quorum_met,
+   responses-coalesce(abstentions,0) as expressed,
+   case when decision_mode='absolute_majority' then eligible else responses-coalesce(abstentions,0) end as decision_denominator
   from metrics
  )
  select coalesce(jsonb_agg(jsonb_build_object(
   'question',q->>'question','kind',coalesce(q->>'kind','simple'),
   'eligible',eligible,'responses',responses,'nonresponses',case when eligible is null then null else greatest(eligible-responses,0) end,
-  'response_rate',round(response_rate,2),'quorum',(q->>'quorum')::integer,'quorum_met',quorum_met,'threshold',(q->>'threshold')::integer,
+  'abstentions',abstentions,'expressed',expressed,'decision_mode',decision_mode,'decision_denominator',decision_denominator,'response_rate',round(response_rate,2),'quorum',(q->>'quorum')::integer,'quorum_met',quorum_met,'threshold',(q->>'threshold')::integer,
   'options',(select coalesce(jsonb_agg(jsonb_build_object('label',opt,'count',votes_for,
     'share_pct',case when responses=0 then null else round(100.0*votes_for/responses,2) end,
-    'accepted',case when quorum_met is true and responses>0 and q->>'threshold' is not null then 100.0*votes_for/responses>=(q->>'threshold')::numeric else null end)
+    'accepted',case when quorum_met is true and expressed>0 and decision_denominator>0 and q->>'threshold' is not null then
+     case when (q->>'abstentionIndex')::integer=opt_ord-1 then false when decision_mode='threshold' then 100.0*votes_for>=decision_denominator*(q->>'threshold')::numeric else 2*votes_for>decision_denominator end else null end)
     order by opt_ord),'[]'::jsonb)
    from jsonb_array_elements_text(q->'options') with ordinality o(opt,opt_ord)
    cross join lateral (select count(*) as votes_for from jsonb_each(coalesce(q->'votes','{}'::jsonb)) b

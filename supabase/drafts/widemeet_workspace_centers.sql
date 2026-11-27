@@ -80,6 +80,10 @@ begin
    'by_organizer',(select coalesce(jsonb_agg(to_jsonb(g) order by g.organizer,g.organizer_id),'[]'::jsonb) from (
      select r.host_id as organizer_id,ac.display_name as organizer,count(*) as meetings,count(*) filter(where r.state->>'status'='ended' and coalesce(r.state->>'cancelled','false')='false') as ended
      from scoped r join public.wm_accounts ac on ac.id=r.host_id group by r.host_id,ac.display_name) g),
+   'by_team',(select coalesce(jsonb_agg(to_jsonb(g) order by g.manager,g.manager_id),'[]'::jsonb) from (
+     select ma.manager_id,ac.display_name as manager,count(*) as total,count(*) filter(where t.state='done') as done,count(*) filter(where t.state='assigned' and t.due_at<=to_timestamp(upper_ms/1000.0)) as overdue
+     from valid_tasks t join public.wm_manager_assignments ma on ma.workspace_id=a.workspace_id and ma.staff_id=t.assignee_id join public.wm_accounts ac on ac.id=ma.manager_id and ac.enabled join public.wm_memberships mm on mm.workspace_id=ma.workspace_id and mm.account_id=ma.manager_id and mm.enabled and mm.role='manager'
+     where a.role='promoteur' or ma.manager_id=a.account_id group by ma.manager_id,ac.display_name) g),
    'by_assignee',(select coalesce(jsonb_agg(to_jsonb(g) order by g.assignee,g.assignee_id),'[]'::jsonb) from (
      select t.assignee_id,ac.display_name as assignee,count(*) as total,count(*) filter(where t.state='done') as done,count(*) filter(where t.state='assigned' and t.due_at<=to_timestamp(upper_ms/1000.0)) as overdue
      from valid_tasks t join public.wm_accounts ac on ac.id=t.assignee_id group by t.assignee_id,ac.display_name) g))

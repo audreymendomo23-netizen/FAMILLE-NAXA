@@ -40,7 +40,7 @@ begin
  s:=jsonb_build_object('id',r::text,'workspaceId',w::text,'hostId',h::text,'revision',1,'title','Minutes fixture','status','open','recording','off','participants',jsonb_build_array(jsonb_build_object('memberId',h,'response','accepted','excluded',false),jsonb_build_object('memberId',g,'response','accepted','excluded',false),jsonb_build_object('memberId',o,'response','accepted','excluded',false)),'events','[]'::jsonb);
  s:=s||jsonb_build_object('scheduledMs',floor(extract(epoch from clock_timestamp()-interval '1 minute')*1000)::bigint,'durationMinutes',30,'polls',jsonb_build_array(
   jsonb_build_object('open',false,'kind','multiple','question','B4 fixture quorum','options',jsonb_build_array('Oui','Non'),'eligible',jsonb_build_array(h,g,o),'votes',jsonb_build_object(h::text,jsonb_build_array(0),g::text,jsonb_build_array(0,1)),'quorum',60,'threshold',50),
-  jsonb_build_object('open',true,'closesMs',floor(extract(epoch from clock_timestamp()-interval '1 second')*1000)::bigint),
+  jsonb_build_object('open',true,'closesMs',floor(extract(epoch from clock_timestamp()-interval '1 second')*1000)::bigint,'kind','single','question','B4 majority','options',jsonb_build_array('Oui','Non','Abstention'),'eligible',jsonb_build_array(h,g,o),'votes',jsonb_build_object(h::text,jsonb_build_array(0),g::text,jsonb_build_array(2)),'quorum',60,'threshold',50,'decisionMode','absolute_majority','abstentionIndex',2),
   jsonb_build_object('open',true,'closesMs',floor(extract(epoch from clock_timestamp()+interval '1 hour')*1000)::bigint),
   jsonb_build_object('open',true)));
  insert into public.wm_rooms(id,workspace_id,host_id,revision,state) values(r,w,h,1,s);
@@ -89,6 +89,9 @@ begin
  if not exists(select 1 from jsonb_array_elements(public.wm_notices(repeat('b',64))->'items') n where n->>'k'=k and n->>'kind'='task_assigned' and n->>'read_at' is null) then raise exception 'B4 task notice missing';end if;
  if public.wm_notices(repeat('b',64),k)->>'read' is distinct from 'true' then raise exception 'B4 mark read failed';end if;
  update public.wm_tasks set due_at=clock_timestamp()-interval '1 second' where id=(d->>'id')::uuid;
+ select d||jsonb_build_object('due_at',due_at) into d from public.wm_tasks where id=(d->>'id')::uuid;
+ if public.wm_task_action(repeat('a',64),'create',d)->>'revision' is distinct from '1' then raise exception 'B4 exact retry after due date failed';end if;
+ if public.wm_task_action(repeat('a',64),'create',d||jsonb_build_object('id',gen_random_uuid())) is not null then raise exception 'B4 expired new task accepted';end if;
  if not exists(select 1 from jsonb_array_elements(public.wm_notices(repeat('b',64))->'items') n where n->>'k'=k||':overdue' and n->>'kind'='task_overdue' and n->>'read_at' is null) then raise exception 'B4 overdue notice did not become unread';end if;
  if public.wm_notices(repeat('c',64),k||':overdue') is not null then raise exception 'B4 overdue notice leaked';end if;
  if public.wm_notices(repeat('b',64),k||':overdue')->>'read' is distinct from 'true' then raise exception 'B4 overdue mark read failed';end if;
@@ -106,12 +109,19 @@ begin
  if jsonb_array_length(rr->'history')<>5 or rr->'history'->0->>'action' is distinct from 'create' or rr->'history'->4->>'action' is distinct from 'approve' or rr->'history'->4 ? 'actor_id' then raise exception 'B4 task history mismatch: %',rr;end if;
  if has_table_privilege('authenticated','public.wm_task_history','SELECT') or has_table_privilege('service_role','public.wm_task_history','UPDATE') then raise exception 'B4 history ACL';end if;
  update public.wm_room_entitlements set valid_until=clock_timestamp()+interval '1 hour' where workspace_id=w;
+ update public.wm_memberships set role='manager' where workspace_id=w and account_id=o;
+ insert into public.wm_manager_assignments(workspace_id,staff_id,manager_id) values(w,g,o);
  metrics:=public.wm_workspace_center(repeat('a',64),'center-statistics','{"days":7}');
+ if metrics->'by_team'->0->>'manager_id' is distinct from o::text or metrics->'by_team'->0->>'done' is distinct from '1' then raise exception 'B4 team KPI mismatch: %',metrics;end if;
+ rr:=public.wm_workspace_center(repeat('c',64),'center-statistics','{"days":7}');
+ if rr->>'scope' is distinct from 'organizer' or rr->>'total' is distinct from '0' or jsonb_array_length(rr->'by_team')<>0 then raise exception 'B4 manager scope leaked: %',rr;end if;
  if metrics->>'tasks_done' is distinct from '1' or metrics->'by_assignee'->0->>'done' is distinct from '1' then raise exception 'B4 assignee KPI mismatch: %',metrics;end if;
  rr:=public.wm_report_export(repeat('a',64),r,gen_random_uuid());
  metrics:=rr->'polls'->0;
  if metrics->>'eligible' is distinct from '3' or metrics->>'responses' is distinct from '2' or metrics->>'nonresponses' is distinct from '1' or (metrics->>'response_rate')::numeric is distinct from 66.67::numeric or metrics->>'quorum_met' is distinct from 'true' or metrics->'options'->0->>'accepted' is distinct from 'true' or (metrics->'options'->1->>'share_pct')::numeric is distinct from 50::numeric then raise exception 'B4 survey export metrics mismatch: %',metrics;end if;
  if metrics ? 'votes' or metrics ? 'nominativeResponses' then raise exception 'B4 voter identity leaked';end if;
+ metrics:=rr->'polls'->1;
+ if metrics->>'abstentions' is distinct from '1' or metrics->>'expressed' is distinct from '1' or metrics->>'decision_denominator' is distinct from '3' or metrics->'options'->0->>'accepted' is distinct from 'false' or metrics->'options'->2->>'accepted' is distinct from 'false' then raise exception 'B4 absolute majority export mismatch: %',metrics;end if;
  if public.wm_report_export(repeat('b',64),r,gen_random_uuid()) is not null then raise exception 'B4 report exposed to staff';end if;
  perform public.wm_minutes_action(repeat('a',64),'revoke',jsonb_build_object('room_id',r,'version_id',v1));
  if jsonb_array_length(public.wm_task_action(repeat('b',64),'list','{}')->'items')<>0 then raise exception 'revoked task leaked';end if;

@@ -66,13 +66,14 @@ begin
  host:=r.host_id=s.account_id and role_name in ('owner','promoteur','manager');
  if p_action='create' then
   title_text:=btrim(p_data->>'title');
-  if not host or title_text is null or length(title_text) not between 1 and 200 or deadline is null or deadline<=clock_timestamp() or deadline>clock_timestamp()+interval '90 days' or assignee is null then return null;end if;
+  if not host or title_text is null or length(title_text) not between 1 and 200 or deadline is null or assignee is null then return null;end if;
   if not exists(select 1 from public.wm_minutes_recipients m join public.wm_memberships mb on mb.account_id=m.account_id and mb.workspace_id=r.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.version_id=vid and m.account_id=assignee and m.revoked_at is null) then return null;end if;
   select * into t from public.wm_tasks where id=tid;
   if found then
    if t.room_id=rid and t.version_id=vid and t.assignee_id=assignee and t.title=title_text and t.due_at=deadline and t.created_by=s.account_id then return jsonb_build_object('id',tid,'revision',t.revision);end if;
    return null;
   end if;
+  if deadline<=clock_timestamp() or deadline>clock_timestamp()+interval '90 days' then return null;end if;
   if (select count(*) from public.wm_tasks where room_id=rid)>=100 then return null;end if;
   insert into public.wm_tasks(id,room_id,version_id,assignee_id,created_by,title,due_at) values(tid,rid,vid,assignee,s.account_id,title_text,deadline);
   insert into public.wm_task_history(task_id,revision,actor_id,action,state) values(tid,1,s.account_id,'create','assigned');

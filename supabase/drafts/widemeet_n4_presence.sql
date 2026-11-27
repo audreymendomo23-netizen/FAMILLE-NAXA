@@ -58,7 +58,7 @@ begin
  'coverage_ms',coalesce((select sum(gap_ms) from intervals where gap_ms between 1 and 10000),0),
  'unobserved_gap_count',(select count(*) from intervals where gap_ms>10000),
  'unobserved_gap_ms',coalesce((select sum(gap_ms) from intervals where gap_ms>10000),0),
- 'summary',(select jsonb_build_object('participants',count(*),'accepted',count(*) filter(where response='accepted'),'declined',count(*) filter(where response='declined'),'observed',count(*) filter(where samples_seen>0),'unknown',count(*) filter(where samples_seen=0)) from report_rows),
+ 'summary',(select jsonb_build_object('participants',count(*),'accepted',count(*) filter(where response='accepted'),'declined',count(*) filter(where response='declined'),'pending',count(*) filter(where response='pending'),'maybe',count(*) filter(where response='maybe'),'excluded',count(*) filter(where excluded),'observed',count(*) filter(where samples_seen>0),'unknown',count(*) filter(where samples_seen=0)) from report_rows),
  'rows',coalesce((select jsonb_agg(to_jsonb(q)||jsonb_build_object('attendance',case when q.samples_seen>0 then 'observed' else 'unknown' end) order by q.display_name,q.member_id) from report_rows q),'[]'::jsonb))
  into report;return report;
 end $wm$;
