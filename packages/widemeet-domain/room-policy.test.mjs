@@ -55,3 +55,21 @@ test("N3 exclusion stops recording request and anonymous ballots never expose id
  r=run(r,guest,"survey_vote",[0,1],"survey005");assert.equal(pollSummary(r.polls[0],host.memberId).nominativeResponses,null);
  r=run(r,host,"exclude",null,guest.memberId);assert.equal(r.recording,"off");
 });
+
+test("late invitations are host-only, admission lock preserves existing attendees",()=>{
+ let r=open();const newcomer={...guest,memberId:"late00001"};
+ assert.throws(()=>run(r,guest,"invite_member",null,newcomer.memberId),/forbidden/);
+ r=run(r,host,"invite_member",null,newcomer.memberId);assert.equal(r.participants.at(-1).response,"pending");
+ assert.throws(()=>run(r,host,"invite_member",null,newcomer.memberId),/invalid_target/);
+ r=run(r,host,"lock_admission",true);assert.throws(()=>run(r,newcomer,"respond","accepted"),/invalid_response/);
+ assert.ok(mediaPermission(r,guest,1000));assert.equal(mediaPermission(r,newcomer,1000),null);
+ r=run(r,host,"lock_admission",false);r=run(r,newcomer,"respond","accepted");assert.ok(mediaPermission(r,newcomer,1000));
+});
+test("recording pause does not pause the room; only host may restart after consent",()=>{
+ let r=open();r=run(r,host,"consent",true);r=run(r,guest,"consent",true);r=run(r,host,"record",true);
+ assert.throws(()=>run(r,guest,"record_pause"),/forbidden/);
+ r=run(r,host,"record_pause");assert.equal(r.recording,"off");assert.equal(r.recordingPaused,true);assert.equal(r.status,"open");
+ r=run(r,guest,"chat","Meeting continues");assert.ok(mediaPermission(r,guest,1000));
+ r=run(r,guest,"consent",false);assert.throws(()=>run(r,host,"record",true),/consent_required/);
+ r=run(r,guest,"consent",true);r=run(r,host,"record",true);assert.equal(r.recordingPaused,false);
+});
