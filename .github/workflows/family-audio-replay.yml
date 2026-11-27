@@ -5,6 +5,9 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'scripts/widemeet/media-replay.mjs'
+      - 'scripts/widemeet/media-product-replay.mjs'
+      - 'packages/media-core/**'
+      - 'supabase/drafts/widemeet_*.sql'
       - '.github/workflows/family-audio-replay.yml'
   workflow_dispatch:
 permissions:
@@ -84,6 +87,42 @@ jobs:
           exit 1
       - name: Verify actual audio-only capture (synthetic devices only)
         run: node scripts/widemeet/media-replay.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+      - name: Isolated product recording database
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wm-recording-db"
+          cd "$RUNNER_TEMP/wm-recording-db"
+          supabase init
+          supabase start
+          supabase status -o env > "$RUNNER_TEMP/wm-recording.env"
+          chmod 600 "$RUNNER_TEMP/wm-recording.env"
+          set -a; source "$RUNNER_TEMP/wm-recording.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          sudo apt-get install -y postgresql-client
+          for name in widemeet_n1_identity widemeet_n2_n3_rooms widemeet_n1_billing widemeet_n3_recording; do
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/$name.sql"
+          done
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
+      - name: Exercise actual consent-driven WideMeet Egress with private quarantine
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-recording.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export WM_AUTH_QUALIFIED=true WM_ROOM_QUALIFIED=true WM_MEDIA_QUALIFIED=true WM_RECORDING_QUALIFIED=true WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
+          export WM_LIVEKIT_URL=wss://127.0.0.1:7881 WM_LIVEKIT_API_KEY="$LK_TEST_KEY" WM_LIVEKIT_API_SECRET="$LK_TEST_SECRET"
+          node scripts/widemeet/media-product-replay.mjs
+      - name: Stop isolated recording database
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/wm-recording-db"; then cd "$RUNNER_TEMP/wm-recording-db" && supabase stop --no-backup; fi
       - name: Diagnostic status on failure (synthetic room only)
         if: failure()
         run: |
