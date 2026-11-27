@@ -2,14 +2,16 @@
   "projectRef": "idupfjbkwjcavyisxteo",
   "url": "https://idupfjbkwjcavyisxteo.supabase.co",
   "appId": "naxa-security",
-  "mode": "unprovisioned",
+  "mode": "hosted_schema_provisioned_auth_pending",
   "resources": [
     "sec_organizations",
     "sec_memberships",
     "sec_sites",
     "sec_site_memberships",
     "sec_devices",
-    "sec_incidents"
+    "sec_incidents",
+    "sec_work_orders"
   ],
-  "auth": "Dedicated SECURITY account provisioning required; do not reuse other application identities or accept a password before provisioning."
+  "auth": "Dedicated SECURITY account provisioning required; do not reuse other application identities or accept a password before provisioning.",
+  "migrationVersion": "20261127224320"
 }

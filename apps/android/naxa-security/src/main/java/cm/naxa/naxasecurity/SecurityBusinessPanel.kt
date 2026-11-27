@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
  securityFields[screen.id].orEmpty().filter{it.contains(filter,true)}.forEach{field->Text(field,style=MaterialTheme.typography.labelLarge);Text("Non disponible — données non raccordées",style=MaterialTheme.typography.bodySmall)}
  }
  SecurityOperationalPanel(screen.id)
+ if(screen.id in listOf("B4.08","B4.10"))SecurityAttendanceCapture(screen.id)
  Text("Consultation préparatoire. Aucune commande ni validation possible.",style=MaterialTheme.typography.bodySmall)
  }}
 }
