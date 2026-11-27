@@ -159,6 +159,15 @@ Deno.serve(async request=>{
  return send(200,{recovered:true,reconnect:true},{"Set-Cookie":clearCookie});
  }
  if(action==="request-recovery"){
+ if(body.supervised===true){
+  if(Deno.env.get("WM_SUPPORT_RECOVERY_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+  const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"",key=typeof body.recovery_key==="string"?body.recovery_key.trim().toLowerCase():"";
+  if(!/^WM-[A-Z0-9]{8,24}$/.test(identifier)||!/^[a-f0-9]{64}$/.test(key)||!uuid.test(body.installation_id??"")||!["web","android"].includes(body.platform))return send(400,{error:"invalid_request"});
+  const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-support-request:"+identifier),p_installation_hash:await digest("wm-support-request-device:"+body.installation_id.toLowerCase())})});
+  if(allowed!==true)return send(429,{error:"too_many_attempts"});
+  const result=await rest("rpc/wm_support_request_fallback",{method:"POST",body:JSON.stringify({p_identifier:identifier,p_key_hash:await digest("wm-supervised-recovery:"+key)})});
+  return result?.case_id?send(200,result):send(401,{error:"credentials"});
+ }
  const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"";
  if(!/^WM-[A-Z0-9]{8,24}$/.test(identifier)||!uuid.test(body.installation_id??"")||!["web","android"].includes(body.platform))return send(400,{error:"invalid_request"});
  const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-recovery:"+identifier),p_installation_hash:await digest("wm-recovery-installation:"+body.installation_id.toLowerCase())})});
