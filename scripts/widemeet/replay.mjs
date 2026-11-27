@@ -247,6 +247,33 @@ try{
  await groupOk(b2ghs.access_token,"resolve-report",{group_id:chatGroupId,message_id:advanced.message_id,reporter_id:b2ga.id});
  assert.equal((await groupOk(b2ghs.access_token,"reports",{group_id:chatGroupId})).items.length,0);
  pass("B2 group cursor, reply/mention scope, idempotent report and owner resolution");
+ // Dedicated room scoped attachments and voice; no effect on existing fixture/statistics.
+ const b2room=randomUUID();
+ let b2state=await ok(room+"/create",{room_id:b2room,title:"B2 media room",description:"Disposable",scheduled_ms:Date.now(),duration_minutes:30,invitees:[b2ga.id]},b2ghs.access_token);
+ const b2cmd=async(token,action,value=null,target=null)=>{b2state=await ok(room+"/command",{room_id:b2room,request_id:randomUUID(),expected_revision:b2state.revision,action,value,target},token);return b2state};
+ const agendaScope={room_id:b2room,channel:"agenda"},chatScope={room_id:b2room,channel:"room-chat"},agendaId=randomUUID(),roomVoiceId=randomUUID();
+ const agendaFile={...agendaScope,id:agendaId,kind:"file",mime:"application/pdf",name:"agenda.pdf",content:pdf.toString("base64")};
+ await mediaOk(b2ghs.access_token,"upload",agendaFile);
+ assert.equal((await mediaReq(b2gas.access_token,"download",{...agendaScope,id:agendaId})).status,403);
+ await b2cmd(b2gas.access_token,"respond","accepted");
+ assert.deepEqual(Buffer.from((await mediaOk(b2gas.access_token,"download",{...agendaScope,id:agendaId})).content,"base64"),pdf);
+ assert.equal((await mediaReq(b2gas.access_token,"upload",{...agendaFile,id:randomUUID()})).status,403);
+ assert.equal((await mediaReq(b2gcs.access_token,"download",{...agendaScope,id:agendaId})).status,403);
+ assert.equal((await mediaReq(os.access_token,"download",{...agendaScope,id:agendaId})).status,403);
+ assert.equal((await mediaReq(b2ghs.access_token,"download",{...chatScope,id:agendaId})).status,403);
+ await b2cmd(b2ghs.access_token,"start");
+ const roomVoice={...chatScope,id:roomVoiceId,kind:"voice",mime:"audio/ogg",name:"room-voice.ogg",content:ogg.toString("base64")};
+ await mediaOk(b2gas.access_token,"upload",roomVoice);
+ assert.deepEqual(Buffer.from((await mediaOk(b2ghs.access_token,"download",{...chatScope,id:roomVoiceId})).content,"base64"),ogg);
+ await b2cmd(b2ghs.access_token,"chat_permission",false,b2ga.id);
+ assert.equal((await mediaReq(b2gas.access_token,"upload",{...roomVoice,id:randomUUID()})).status,403);
+ await b2cmd(b2ghs.access_token,"pause");
+ assert.equal((await mediaReq(b2gas.access_token,"download",{...chatScope,id:roomVoiceId})).status,403);
+ await b2cmd(b2ghs.access_token,"resume");
+ await b2cmd(b2ghs.access_token,"end");
+ assert.equal((await mediaReq(b2ghs.access_token,"download",{...agendaScope,id:agendaId})).status,403);
+ assert.equal((await mediaReq(b2ghs.access_token,"download",{...chatScope,id:roomVoiceId})).status,403);
+ pass("B2 actual agenda and room media: host upload, RSVP and tenant scope, chat permission, pause and closure");
  pass("B2 group rename, add/rejoin, exact original retry and pre-admission history isolation");
  pass("B2 collective group: three accounts, exact retry, explicit read, nonmember/tenant denial and removal");
 

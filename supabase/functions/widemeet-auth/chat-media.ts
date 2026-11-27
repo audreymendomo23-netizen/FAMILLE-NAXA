@@ -6,7 +6,7 @@ export async function chatMedia({base,service,p_hash,action,data,rpc,fetcher=fet
  const fail=()=>({status:409,body:{error:"media_unconfirmed"}});
  const visible=(m:any)=>({id:m.id,kind:m.kind,mime:m.mime,name:m.name,bytes:m.bytes,sha256:m.sha256,state:m.state});
  const call=(path:string,options:RequestInit={})=>fetcher(base+"/storage/v1/"+path,{...options,headers:{apikey:service,Authorization:"Bearer "+service,...(options.headers??{})},redirect:"error",cache:"no-store",signal:AbortSignal.timeout(15000)});
- const scope={peer_id:data.peer_id??null,group_id:data.group_id??null,id:data.id};
+ const scope={peer_id:data.peer_id??null,group_id:data.group_id??null,room_id:data.room_id??null,channel:data.channel??null,id:data.id};
  const get=(a:string,d:Record<string,unknown>=scope)=>rpc(a,d);
  if(action==="list"){const r=await get("list");return r?{status:200,body:r}:deny()}
  if(action==="revoke"){const r=await get("revoke");return r?{status:200,body:visible(r)}:deny()} // logical revoke first; purge worker must consume tracked ledger.

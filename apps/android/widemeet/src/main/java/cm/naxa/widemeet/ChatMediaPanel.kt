@@ -44,13 +44,13 @@ private class ChatAudio{
  fun clearRecorder(){val r=recorder;recorder=null;runCatching{r?.stop()};runCatching{r?.release()};capture?.delete();capture=null}
  fun clear(){clearRecorder();clearPlayer()}
 }
-@Composable fun ChatMediaPanel(english:Boolean,gateway:AuthGateway,session:Session,peerId:String?=null,groupId:String?=null){
+@Composable fun ChatMediaPanel(english:Boolean,gateway:AuthGateway,session:Session,peerId:String?=null,groupId:String?=null,roomId:String?=null,channel:String?=null,allowUpload:Boolean=true,voiceAllowed:Boolean=true){
  fun tr(fr:String,en:String)=if(english)en else fr
  val context=LocalContext.current;val scope=rememberCoroutineScope();val resources=remember{ChatAudio()}
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var pending by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
  var recording by remember{mutableStateOf(false)};var playing by remember{mutableStateOf<String?>(null)};var saveBytes by remember{mutableStateOf<ByteArray?>(null)}
- fun scoped(d:JSONObject)=d.apply{if(peerId!=null)put("peer_id",peerId)else put("group_id",groupId)}
+ fun scoped(d:JSONObject)=d.apply{if(roomId!=null){put("room_id",roomId);put("channel",channel)}else if(peerId!=null)put("peer_id",peerId)else put("group_id",groupId)}
  suspend fun req(action:String,d:JSONObject=JSONObject())=gateway.chatMedia(session,action,scoped(d))
  fun stopPlayer(){resources.clearPlayer();playing=null}
  suspend fun refresh(){try{val next=mediaItems(req("list"));items=next;if(playing!=null&&next.none{it.optString("id")==playing})stopPlayer()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();stopPlayer();pending=null;saveBytes=null;resources.clearRecorder();recording=false;throw e}}
@@ -75,7 +75,7 @@ private class ChatAudio{
   work{try{val b=withContext(Dispatchers.IO){f.inputStream().use{boundedRead(it)}};prepare(b,"message-vocal.m4a","audio/mp4","voice")}finally{f.delete()}}
  }
  fun startRecording(){
-  if(busy||pending!=null||recording)return
+  if(!allowUpload||!voiceAllowed||busy||pending!=null||recording)return
   try{
    stopPlayer();val f=File.createTempFile("wm-voice-",".m4a",context.cacheDir);resources.capture=f
    @Suppress("DEPRECATION") val r=if(Build.VERSION.SDK_INT>=31)MediaRecorder(context)else MediaRecorder()
@@ -88,8 +88,9 @@ private class ChatAudio{
   }catch(e:Exception){resources.clearRecorder();recording=false;error=true}
  }
  val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){allowed->if(allowed)startRecording()else error=true}
- DisposableEffect(session.deviceId,peerId,groupId){onDispose{resources.clear();saveBytes=null}}
- LaunchedEffect(session.accessToken,peerId,groupId,busy){
+ LaunchedEffect(allowUpload){if(!allowUpload){resources.clearRecorder();recording=false;pending=null}}
+ DisposableEffect(session.deviceId,peerId,groupId,roomId,channel){onDispose{resources.clear();saveBytes=null}}
+ LaunchedEffect(session.accessToken,peerId,groupId,roomId,channel,busy){
   if(busy)return@LaunchedEffect
   while(true){try{refresh()}catch(e:CancellationException){throw e}catch(e:Exception){error=true};delay(5000)}
  }
@@ -100,13 +101,13 @@ private class ChatAudio{
   return b
  }
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-  Text(tr("Fichiers et messages vocaux","Files and voice messages"),style=MaterialTheme.typography.titleMedium)
+  Text(when(channel){"agenda"->tr("Documents de l’ordre du jour","Agenda documents");"room-chat"->tr("Fichiers et vocaux de la salle","Room files and voice messages");else->tr("Fichiers et messages vocaux","Files and voice messages")},style=MaterialTheme.typography.titleMedium)
   Text(tr("PDF, JPEG, PNG. Limite de recette : 1 Mio ; vocal 60 s.","PDF, JPEG, PNG. Test limit: 1 MiB; voice 60 s."))
   if(error)Text(tr("Accès, format ou transfert non confirmé.","Access, format or transfer unconfirmed."),color=MaterialTheme.colorScheme.error)
-  TextButton(enabled=!busy&&pending==null&&!recording,onClick={picker.launch(arrayOf("application/pdf","image/jpeg","image/png"))}){Text(tr("Choisir une pièce jointe","Choose attachment"))}
-  if(recording)Button(onClick={finishRecording()}){Text(tr("Terminer l’enregistrement","Stop recording"))}
-  else TextButton(enabled=!busy&&pending==null,onClick={if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)startRecording()else permission.launch(Manifest.permission.RECORD_AUDIO)}){Text(tr("Enregistrer un message vocal","Record voice message"))}
-  pending?.let{p->Text(p.optString("name"));Button(enabled=!busy,onClick={work{req("upload",p);pending=null;refresh()}}){Text(tr("Envoyer le fichier","Send file"))};TextButton(enabled=!busy,onClick={pending=null}){Text(tr("Abandonner la tentative locale","Discard local retry"))}}
+  if(allowUpload)TextButton(enabled=!busy&&pending==null&&!recording,onClick={picker.launch(arrayOf("application/pdf","image/jpeg","image/png"))}){Text(tr("Choisir une pièce jointe","Choose attachment"))}
+  if(voiceAllowed&&allowUpload&&recording)Button(onClick={finishRecording()}){Text(tr("Terminer l’enregistrement","Stop recording"))}
+  else if(voiceAllowed&&allowUpload)TextButton(enabled=!busy&&pending==null,onClick={if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)startRecording()else permission.launch(Manifest.permission.RECORD_AUDIO)}){Text(tr("Enregistrer un message vocal","Record voice message"))}
+  if(allowUpload)pending?.let{p->Text(p.optString("name"));Button(enabled=!busy,onClick={work{req("upload",p);pending=null;refresh()}}){Text(tr("Envoyer le fichier","Send file"))};TextButton(enabled=!busy,onClick={pending=null}){Text(tr("Abandonner la tentative locale","Discard local retry"))}}
   for(m in items){
    Text(m.optString("name")+" · "+m.optInt("bytes")+" o")
    TextButton(enabled=!busy&&!recording,onClick={work{
