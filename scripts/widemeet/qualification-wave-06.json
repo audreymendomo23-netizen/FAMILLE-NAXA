@@ -1,0 +1,450 @@
+{
+  "wave": 6,
+  "total": 50,
+  "actions": 9,
+  "recipes": 41,
+  "base": "b6efc772555e526200a5d108cf1aaf4b415ed68c",
+  "entries": [
+    {
+      "id": "B1.1-A01",
+      "bulk": "B1",
+      "kind": "action",
+      "description": "Stabiliser dépendances, caches CI et socle commun; consolider parcours N0/N1 non attribués ailleurs."
+    },
+    {
+      "id": "B1.1-R01",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Contrats Node : exécuter tous les tests domaine, prix, sessions et scripts; zéro échec/skip obligatoire.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R02",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Compilation Kotlin/JUnit native : versions verrouillées, tâches réelles, aucune tâche de test NO-SOURCE.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R03",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Résolution Maven : cache froid/chaud, offline, 429/502/503 et miss connu; reprise bornée sur endpoints officiels et échec sur erreur de code.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R04",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Inscription individuelle réelle GoTrue : unicité, retry exact, mot de passe invalide, pas de droit automatique.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R05",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Création entreprise, invitation/adhésion multi-entreprises, changement espace; pas de mélange de données.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R06",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Profil, photo privée, contacts/favoris, groupes de contacts, onboarding 5 onglets, CGU versionnées, reprise et persistance.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N1 private profile JPEG save/read/delete, validation and account isolation"
+        },
+        {
+          "suite": "replay",
+          "marker": "actual N1 contact group CRUD and account/workspace isolation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R07",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Dashboard par rôle, affectation manager/staff, promoteur seul payeur, compteurs scope et révocation.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N1 role-scoped dashboard counters after assignment and revocation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R08",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Prix Access/Premium mois/année et pass 20/50/100 : frontières, maximum, refus capacité non arbitrée, FCFA entier.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R09",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Paiement intention : montant/devise/plan, pending sans droit, rejeu, annulation, expiration et accès archives préservé.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N1 isolated payment intent creation, exact quote, replay, payer and tenant isolation, cancellation; no transfer"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R10",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Paiement réel OM/MoMo, remboursement et reçus [autorisation/qualification commerciale], aucun PIN/OTP ni débit de recette non autorisé.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.1-R11",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Inventaire logo source exact, marque/nom/domaine, contrastes et charte; arbitrages capacité, quotas, SLA consignés sans promesses fictives.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.5-A01",
+      "bulk": "B1",
+      "kind": "action",
+      "description": "Qualifier contrats réseau, environnement et flags."
+    },
+    {
+      "id": "B1.5-R01",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Deno check auth/room/scheduler et nouveaux modules; validation types et entrées malformées.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.5-R02",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "GoTrue/PostgREST réels : HTTP succès/refus, erreurs neutres, CORS/origines, expiration, timeouts, flags fail-closed.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual Edge/PostgREST room create, RSVP, chat, moderation, consent, vote, exclusion, tenant isolation; no media capture"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.5-R03",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Secrets serveur uniquement, redaction journaux et isolation des environnements; aucune clé ou jeton dans APK/JS.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.5-R04",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Scheduler/Edge : appel autorisé, cadence, reprise et idempotence; aucune exécution hors périmètre.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.5-R05",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Régression intégrations sœurs et API, contrôle app_id/tenant, rollback sans toucher leurs ressources.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.7-A01",
+      "bulk": "B2",
+      "kind": "action",
+      "description": "Clore gestion collective, historique et accès membres."
+    },
+    {
+      "id": "B2.7-R06",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Parcours natif complet Android/Web/PWA, gestion groupe et latence.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 three browser group creation, message delivery, read and revoked member purge"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.9-R07",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Appareil Android physique et navigateur cible : livraison, révocation et suppression token, aucun double envoi.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.2-A01",
+      "bulk": "B3",
+      "kind": "action",
+      "description": "Qualifier pipeline durable de l'audio autorisé vers brouillon."
+    },
+    {
+      "id": "B3.2-R06",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Coût, capacité multi-salles et rétention selon arbitrages, limites explicites.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.3-A01",
+      "bulk": "B3",
+      "kind": "action",
+      "description": "Implémenter attribution fiable ou inconnue, sans identité inventée."
+    },
+    {
+      "id": "B3.3-R01",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Deux voix distinctes et alternées, chevauchement et silence; métrique diarisation et horodatages.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.3-R02",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Association locuteur à identité seulement avec preuve autorisée, ambiguïté marquée.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.3-R03",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Correction humaine des segments et révisions, journal et propagation au brouillon.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.3-R04",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Refus accès tiers et anonymisation; corpus multilingue et limites de précision.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.7-A01",
+      "bulk": "B4",
+      "kind": "action",
+      "description": "Implémenter planificateur de rapports non IA et diffusion autorisée."
+    },
+    {
+      "id": "B4.7-R01",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Génération quotidien/hebdo/mensuel/trimestriel/annuel aux frontières calendaires.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.7-R02",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Idempotence et concurrence worker, rattrapage après panne, absence de doublon.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.7-R03",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Consolidation période et dimensions, historique et version, exactitude contre requêtes source.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.7-R04",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Distribution aux rôles autorisés, revalidation à livraison et refus après révocation.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.7-R05",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "UI planification/préférences, export et observabilité sans données privées; mesurer charge.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "WAVE06 real authorized summary refresh retains selected period"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.01-A01",
+      "bulk": "B6",
+      "kind": "action",
+      "description": "Assurer cycle de session et preuves d'accès."
+    },
+    {
+      "id": "B6.01-R03",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Révocation appareil, password change, changement workspace et sessions concurrentes.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N1 native refresh rotation, old secret and wrong installation denial, device revocation and logout"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.01-R04",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Anti-brute force, récupération neutre et rate limit, aucun contournement par fixtures.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.01-R05",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Client purge données/session sur refus et offline borné; Android Keystore et Web cookie.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real opaque session logout and revocation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.06-A01",
+      "bulk": "B6",
+      "kind": "action",
+      "description": "Relier bail SQL durable à publication SFU et Connect."
+    },
+    {
+      "id": "B6.06-R01",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Bail account/installation unique, verrou, renew/release, expiration et révocation SQL.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.06-R02",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Deux salles concurrentes même installation : une publication autorisée, autre refusée; installations distinctes autorisées.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.06-R03",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Fencing multi-instance et crash : ancien lease/grant ne republie pas.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.06-R04",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Connect subscribe-only et pas de double identité; contrôle source/récepteur et sortie audio B2.",
+      "markers": [
+        {
+          "suite": "sfu",
+          "marker": "actual B2 display-only SFU receiver decodes video and cannot publish; source retains transport"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.06-R05",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Tests simultanés SFU réels et bascule Android/Web/PWA sans fuite de flux.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.07-A01",
+      "bulk": "B6",
+      "kind": "action",
+      "description": "Qualifier TURN, faible débit et reprise sans fuite."
+    },
+    {
+      "id": "B6.07-R01",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "TURN réel, NAT/relais et refus credentials expirés, réseau faible représentatif.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.07-R02",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Perte paquets/latence/jitter/débit, dégradation adaptative et mode audio économique.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.07-R03",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Reconnexion, interruption, bascule réseau et recovery sans double présence ni renouvellement interdit.",
+      "markers": [
+        {
+          "suite": "sfu",
+          "marker": "revoked participant cannot reconnect with unexpired signed token"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.07-R04",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Crash SFU/proxy/worker et failover, éviction/reprise sûre, mesures de transport inconnues.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.07-R05",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Charge par plan et multi-salles, coût média/IA et seuils SLA arbitrés; appareil physique.",
+      "markers": [],
+      "complete": false
+    }
+  ]
+}

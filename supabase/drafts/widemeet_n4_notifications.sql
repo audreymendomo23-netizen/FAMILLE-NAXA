@@ -1,5 +1,26 @@
 -- Authorized, derived in-app inbox. No external push or delivery claim.
 begin;
+create table public.wm_periodic_preferences(
+ account_id uuid not null references public.wm_accounts(id), workspace_id uuid not null references public.wm_workspaces(id),
+ member_role text not null check(member_role in ('promoteur','manager')),
+ cadence text not null check(cadence in ('daily','weekly','monthly','quarterly','yearly')),
+ enabled boolean not null, next_start date not null,
+ primary key(account_id,workspace_id,member_role,cadence)
+);
+create table public.wm_periodic_reports(
+ account_id uuid not null,workspace_id uuid not null,member_role text not null,cadence text not null,
+ period_start date not null,period_end date not null check(period_end>period_start),
+ generated_at timestamptz not null default clock_timestamp(),metrics jsonb not null check(jsonb_typeof(metrics)='object'),
+ primary key(account_id,workspace_id,member_role,cadence,period_start),
+ foreign key(account_id,workspace_id,member_role,cadence) references public.wm_periodic_preferences(account_id,workspace_id,member_role,cadence)
+);
+create index wm_periodic_due on public.wm_periodic_preferences(next_start) where enabled;
+alter table public.wm_periodic_preferences enable row level security;
+alter table public.wm_periodic_reports enable row level security;
+revoke all on public.wm_periodic_preferences,public.wm_periodic_reports from public,anon,authenticated;
+grant select,insert,update on public.wm_periodic_preferences to service_role;
+grant select,insert on public.wm_periodic_reports to service_role;
+
 create table public.wm_notice_reads(
  workspace_id uuid not null references public.wm_workspaces(id),
  account_id uuid not null references public.wm_accounts(id),
@@ -34,6 +55,12 @@ begin
   select 'task:'||k.id||':'||k.revision,case when k.state='done' then 'task_done' when k.state='submitted' then 'task_review' when k.due_at<t then 'task_overdue' else 'task_assigned' end,k.id,k.title,k.due_at
   from public.wm_tasks k join public.wm_rooms r on r.id=k.room_id and r.workspace_id=s.workspace_id join public.wm_minutes_eligibility e on e.room_id=k.room_id and e.retain_until>t join public.wm_minutes_versions v on v.id=k.version_id and v.revoked_at is null
   where k.state<>'cancelled' and ((k.assignee_id=s.account_id and exists(select 1 from public.wm_minutes_recipients x where x.version_id=k.version_id and x.account_id=s.account_id and x.revoked_at is null)) or (r.host_id=s.account_id and role_name in ('owner','promoteur','manager') and k.state='submitted'))
+  union all
+  select 'periodic:'||p.member_role||':'||p.cadence||':'||p.period_start,'periodic_report',p.workspace_id,null,p.generated_at
+  from public.wm_periodic_reports p join public.wm_workspaces w on w.id=p.workspace_id and w.enabled and w.kind='enterprise'
+  where p.workspace_id=s.workspace_id and p.account_id=s.account_id and p.member_role=role_name
+    and p.generated_at>=t-interval '30 days'
+    and exists(select 1 from public.wm_room_entitlements e where e.workspace_id=p.workspace_id and e.enabled and e.plan='premium' and e.valid_until>t)
   union all
   select 'subscription:'||e.workspace_id||':'||extract(epoch from e.valid_until)::bigint,'subscription_expiring',e.workspace_id,null,e.valid_until
   from public.wm_room_entitlements e where e.workspace_id=s.workspace_id and e.enabled and role_name='promoteur' and e.valid_until between t and t+interval '72 hours'

@@ -53,15 +53,36 @@ private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("item
  }
  }}
 }
+@Composable private fun PeriodicReports(english:Boolean,gateway:AuthGateway,session:Session){
+ fun tr(fr:String,en:String)=if(english)en else fr
+ val scope=rememberCoroutineScope()
+ var data by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
+ suspend fun request(action:String,payload:JSONObject){busy=true;error=false;try{data=gateway.identity(session,"center-periodic-"+action,payload)}catch(e:CancellationException){throw e}catch(e:Exception){data=null;error=true}finally{busy=false}}
+ LaunchedEffect(Unit){request("list",JSONObject())}
+ Text(tr("Bilans automatiques","Automatic summaries"),style=MaterialTheme.typography.titleMedium)
+ Text(tr("Périodes calendaires Africa/Douala, chiffres au moment de la génération.","Africa/Douala calendar periods, figures at generation."))
+ TextButton(enabled=!busy,onClick={scope.launch{request("list",JSONObject())}}){Text(tr("Actualiser l’historique","Refresh history"))}
+ if(error)Text(tr("Bilans indisponibles ou accès refusé.","Reports unavailable or access denied."))
+ val frequencies=listOf("daily" to tr("Quotidien","Daily"),"weekly" to tr("Hebdomadaire","Weekly"),"monthly" to tr("Mensuel","Monthly"),"quarterly" to tr("Trimestriel","Quarterly"),"yearly" to tr("Annuel","Yearly"))
+ data?.let{d->
+ val prefs=d.getJSONArray("preferences")
+ for((k,label) in frequencies){val enabled=(0 until prefs.length()).any{i->prefs.getJSONObject(i).optString("cadence")==k&&prefs.getJSONObject(i).optBoolean("enabled")};Row{Checkbox(checked=enabled,enabled=!busy,onCheckedChange={checked->scope.launch{request("save",JSONObject().put("cadence",k).put("enabled",checked))}});Text(label,Modifier.padding(top=12.dp))}}
+ val reports=d.getJSONArray("items");Text(tr("Historique privé","Private history"),style=MaterialTheme.typography.titleSmall)
+ if(reports.length()==0)Text(tr("Aucun bilan généré pour le moment.","No generated summaries yet."))
+ for(i in 0 until reports.length()){val x=reports.getJSONObject(i);val m=x.getJSONObject("metrics");Text((frequencies.firstOrNull{it.first==x.optString("cadence")}?.second?:"")+" · "+x.optString("period_start")+" → "+x.optString("period_end"));for((k,label) in listOf("total" to tr("Réunions","Meetings"),"ended" to tr("Terminées","Ended"),"cancelled" to tr("Annulées","Cancelled"),"duration_minutes" to tr("Minutes planifiées","Planned minutes"),"polls_closed" to tr("Votes clôturés explicitement","Explicitly closed polls"),"tasks_done" to tr("Tâches approuvées","Approved tasks")))Text(label+": "+m.optLong(k))}
+ }
+}
 @Composable fun WorkspaceStatistics(english:Boolean,gateway:AuthGateway,session:Session){
  fun tr(fr:String,en:String)=if(english)en else fr
- var days by remember{mutableIntStateOf(30)};var data by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
- LaunchedEffect(days,session.deviceId){data=null;busy=true;error=false;try{data=gateway.identity(session,"center-statistics",JSONObject().put("days",days))}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}
+ var days by remember{mutableIntStateOf(30)};var refreshSeq by remember{mutableIntStateOf(0)};var data by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
+ LaunchedEffect(days,session.deviceId,session.accessToken,refreshSeq){data=null;busy=true;error=false;try{data=gateway.identity(session,"center-statistics",JSONObject().put("days",days))}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
  Text(tr("Bilan consolidé Premium","Premium consolidated summary"),style=MaterialTheme.typography.titleMedium)
  Text(tr("Période écoulée","Past period"));for(n in listOf(7,30,90,365))Row{RadioButton(selected=days==n,onClick={days=n});Text("$n "+tr("jours","days"),Modifier.padding(top=12.dp))}
+ TextButton(enabled=!busy,onClick={refreshSeq++}){Text(tr("Actualiser le bilan","Refresh summary"))}
  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
  if(error)Text(tr("Bilan consolidé non accessible avec vos droits actuels.","Consolidated summary unavailable with current permissions."))
  data?.let{d->Text(if(d.optString("scope")=="enterprise")tr("Toutes les réunions de votre entreprise","All meetings in your company")else tr("Réunions que vous organisez","Meetings you organize"));for((k,label) in listOf("total" to "Total","scheduled" to tr("Programmées","Scheduled"),"open" to tr("Ouvertes","Open"),"paused" to tr("En pause","Paused"),"ended" to tr("Terminées","Ended"),"cancelled" to tr("Annulées","Cancelled"),"duration_minutes" to tr("Minutes planifiées hors annulations","Planned minutes excluding cancellations"),"polls_closed" to tr("Votes clôturés explicitement","Explicitly closed polls"),"tasks_done" to tr("Tâches approuvées","Approved tasks")))Text(label+": "+d.getLong(k));Text(tr("Selon la date programmée, sans mesure de présence humaine.","Based on scheduled date, not human attendance."))}
+ key(session.accessToken){PeriodicReports(english,gateway,session)}
  }}
 }

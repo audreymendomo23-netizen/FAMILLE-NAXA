@@ -775,6 +775,19 @@ try{
  await hp.getByRole("heading",{name:"Bilan consolidé Premium",exact:true}).waitFor();
  const period=hp.getByRole("combobox",{name:"Période écoulée",exact:true});await period.selectOption("7");assert.equal(await period.inputValue(),"7");
  await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();await hp.getByText("Votes clôturés explicitement",{exact:true}).waitFor();await hp.getByText("Tâches approuvées",{exact:true}).waitFor();
+ await hp.getByRole("button",{name:"Actualiser le bilan",exact:true}).click();
+ await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();
+ assert.equal(await period.inputValue(),"7");
+ const periodicRegion=hp.getByRole("region",{name:"Bilans automatiques",exact:true});
+ const periodicToggle=periodicRegion.getByLabel("Hebdomadaire",{exact:true});await periodicToggle.waitFor();
+ await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&!x.disabled});
+ await periodicToggle.click();
+ await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&x.checked&&!x.disabled});
+ const periodic=await identity(hs.access_token,"center-periodic-list");assert.equal(periodic.timezone,"Africa/Douala");assert.ok(periodic.preferences.some(p=>p.cadence==="weekly"&&p.enabled===true));
+ await periodicToggle.click();await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&!x.checked&&!x.disabled});
+ assert.ok((await identity(hs.access_token,"center-periodic-list")).preferences.some(p=>p.cadence==="weekly"&&p.enabled===false));
+ pass("B4 periodic report real browser opt-in, disable and timezone");
+ pass("WAVE06 real authorized summary refresh retains selected period");
  pass("real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period");
  // B2 group UI is exercised in separate contexts and workspace to preserve existing fixtures.
  const b2contexts=await Promise.all([0,1,2].map(()=>browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"})));
