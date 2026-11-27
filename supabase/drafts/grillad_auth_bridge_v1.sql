@@ -123,13 +123,42 @@ create unique index grillad_central_pending_employee on grillad_private.central_
 create unique index grillad_central_pending_renewal on grillad_private.central_requests(org) where kind='renewal' and status='pending';
 alter table grillad_private.central_requests enable row level security;
 revoke all on grillad_private.central_requests from public,anon,authenticated;
-create function grillad_private.central_request(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+-- Narrow renewal scope for an expired subscription, never a business workspace.
+create function grillad_private.renewal_workspace() returns jsonb language sql stable security definer set search_path=pg_catalog as $$
+ select coalesce(jsonb_agg(to_jsonb(x) order by x.organization,x.site),'[]'::jsonb) from (
+ select distinct on(e.org) e.org,e.site,l.name,o.legal_name organization,'owner'::text role
+ from grillad_private.enabled_sites e join famille_core.locations l on l.id=e.site and l.organization_id=e.org
+ join famille_core.organizations o on o.id=e.org and o.status='active'
+ join famille_core.applications a on a.code='grillad' and a.id=famille_core.current_app_id() and a.status='active'
+ join famille_core.memberships m on m.user_id=auth.uid() and m.organization_id=e.org and m.app_id=a.id and m.status='active'
+ join famille_core.role_assignments ra on ra.membership_id=m.id and ra.app_id=a.id and ra.organization_id=e.org and ra.role_code='owner' and ra.location_id is null and ra.status='active' and ra.starts_at<=now() and (ra.expires_at is null or ra.expires_at>now())
+ join famille_core.client_app_access ca on ca.user_id=m.user_id and ca.app_id=a.id and ca.status='granted'
+ where e.enabled and coalesce(auth.jwt()->>'is_anonymous','false')<>'true'
+ and famille_core.can_access_outlet(e.org,a.id,e.site)
+ and exists(select 1 from famille_private.account_app_access g where g.user_id=auth.uid() and g.app_code='grillad' and g.organization_id=e.org and (g.location_id is null or g.location_id=e.site) and g.status='active' and g.starts_at<=now() and (g.ends_at is null or g.ends_at>now()))
+ and not famille_core.subscription_allows_workspace(e.org,a.id)
+ and exists(select 1 from famille_core.subscriptions s join famille_core.plans p on p.id=s.plan_id and p.app_id=s.app_id where s.organization_id=e.org and s.app_id=a.id and s.status in ('expired','past_due','active') and s.ends_at<now() and p.code in ('grillad_access_month','grillad_access_year','grillad_premium_month','grillad_premium_year'))
+ and not exists(select 1 from famille_core.subscriptions s where s.organization_id=e.org and s.app_id=a.id and s.status='suspended')
+ order by e.org,e.site)x
+$$;
+revoke all on function grillad_private.renewal_workspace() from public,anon,authenticated;
+grant execute on function grillad_private.renewal_workspace() to authenticated;
+create function public.grillad_renewal_workspace() returns jsonb language sql stable security invoker set search_path=pg_catalog as $$select grillad_private.renewal_workspace()$$;
+revoke all on function public.grillad_renewal_workspace() from public,anon,authenticated;
+grant execute on function public.grillad_renewal_workspace() to authenticated;
+create function grillad_private.renewal_guard(p_org uuid,p_site uuid) returns void language plpgsql stable security definer set search_path=pg_catalog as $$
+begin
+ if not exists(select 1 from jsonb_array_elements(grillad_private.renewal_workspace()) x where x->>'org'=p_org::text and x->>'site'=p_site::text) then raise exception 'GRILLAD_RENEWAL_DENIED' using errcode='42501';end if;
+end $$;
+revoke all on function grillad_private.renewal_guard(uuid,uuid) from public,anon,authenticated;
+create function grillad_private.central_request(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb,p_billing_only boolean default false) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare u uuid:=auth.uid();k text;d jsonb;phone text;desired text;why text;price bigint;r grillad_private.central_requests%rowtype;
 begin
- if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ if p_billing_only then perform grillad_private.renewal_guard(p_org,p_site);if p_action not in ('renewal_request','central_request_cancel') then raise exception 'GRILLAD_RENEWAL_DENIED' using errcode='42501';end if;
+ elsif grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
  perform pg_advisory_xact_lock(hashtextextended('grillad-network:'||p_org::text,0));
  if p_action='central_request_cancel' then
-  select * into r from grillad_private.central_requests where id=(p_payload->>'request')::uuid and org=p_org and site=p_site for update;
+  select * into r from grillad_private.central_requests where id=(p_payload->>'request')::uuid and org=p_org and (site=p_site or (p_billing_only and kind='renewal')) and (not p_billing_only or kind='renewal') for update;
   if not found then raise exception 'GRILLAD_REQUEST_DENIED' using errcode='42501';end if;
   why:=btrim(p_payload->>'reason');
   if r.status<>'pending' or why is null or length(why) not between 1 and 300 then raise exception 'GRILLAD_REQUEST_STATE' using errcode='22023';end if;
@@ -149,7 +178,29 @@ begin
  insert into grillad_private.central_requests(id,org,site,actor,kind,details) values(p_event,p_org,p_site,u,k,d);
  return jsonb_build_object('id',p_event,'status','pending','kind',k);
 end $$;
-revoke all on function grillad_private.central_request(uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+revoke all on function grillad_private.central_request(uuid,uuid,uuid,text,jsonb,boolean) from public,anon,authenticated;
+create function grillad_private.renewal_status(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+begin
+ perform grillad_private.renewal_guard(p_org,p_site);
+ return jsonb_build_object('central_requests',(select coalesce(jsonb_agg(jsonb_build_object('id',x.id,'kind',x.kind,'status',x.status,'label',x.details->>'plan','amount',x.details->'amount','created_at',x.created_at) order by x.created_at desc),'[]'::jsonb) from (select * from grillad_private.central_requests where org=p_org and kind='renewal' order by created_at desc limit 50)x));
+end $$;
+create function grillad_private.renewal_action(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare old grillad_private.events%rowtype;result jsonb;u uuid:=auth.uid();
+begin
+ perform grillad_private.renewal_guard(p_org,p_site);
+ if p_event is null or p_action is null or p_action not in ('renewal_request','central_request_cancel') or p_payload is null or jsonb_typeof(p_payload)<>'object' or octet_length(p_payload::text)>8192 then raise exception 'GRILLAD_RENEWAL_INPUT' using errcode='22023';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
+ perform grillad_private.renewal_guard(p_org,p_site);
+ select * into old from grillad_private.events where org=p_org and site=p_site and id=p_event;
+ if found then if old.actor<>u or old.action<>p_action or old.payload<>p_payload then raise exception 'GRILLAD_REPLAY_CONFLICT' using errcode='22023';end if;return old.result;end if;
+ result:=grillad_private.central_request(p_org,p_site,p_event,p_action,p_payload,true);
+ insert into grillad_private.events(org,site,id,actor,action,payload,result) values(p_org,p_site,p_event,u,p_action,p_payload,result);
+ return result;
+end $$;
+create function public.grillad_renewal_status(p_org uuid,p_site uuid) returns jsonb language sql stable security invoker set search_path=pg_catalog as $$select grillad_private.renewal_status(p_org,p_site)$$;
+create function public.grillad_renewal_action(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb) returns jsonb language sql security invoker set search_path=pg_catalog as $$select grillad_private.renewal_action(p_org,p_site,p_event,p_action,p_payload)$$;
+revoke all on function grillad_private.renewal_status(uuid,uuid),public.grillad_renewal_status(uuid,uuid),grillad_private.renewal_action(uuid,uuid,uuid,text,jsonb),public.grillad_renewal_action(uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+grant execute on function grillad_private.renewal_status(uuid,uuid),public.grillad_renewal_status(uuid,uuid),grillad_private.renewal_action(uuid,uuid,uuid,text,jsonb),public.grillad_renewal_action(uuid,uuid,uuid,text,jsonb) to authenticated;
 -- Central service integration contract. Only central service may read unmasked requests.
 create function public.grillad_central_queue(p_limit integer) returns jsonb language plpgsql security invoker set search_path=pg_catalog as $$
 begin

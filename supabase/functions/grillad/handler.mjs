@@ -20,6 +20,13 @@ export async function handle(request,env,fetcher=fetch){
  }
  function upstream(x){return x.ok?reply(200,{result:x.result}):reply(x.status===401?401:x.status===403||x.result?.code==='42501'?403:x.status===429?429:x.status>=500?503:400,{error:x.result?.code==='42501'?'ACCESS_DENIED':'OPERATION_REFUSED'});}
  try{
+  async function workspaceFor(token){
+   const w=await post('/rest/v1/rpc/grillad_workspace',{},token);
+   if(!w.ok||!Array.isArray(w.result))return null;
+   if(w.result.length)return {sites:w.result,renewal_only:false};
+   const b=await post('/rest/v1/rpc/grillad_renewal_workspace',{},token);
+   return b.ok&&Array.isArray(b.result)&&b.result.length?{sites:b.result,renewal_only:true}:null;
+  }
   if(body.action==='login'||body.action==='recovery'){
    if(!env.service)return reply(503,{error:'AUTH_NOT_CONFIGURED'});
    const phone=String(body.phone||'').replace(/[\s().-]/g,'');
@@ -36,9 +43,8 @@ export async function handle(request,env,fetcher=fetch){
    const s=x.result;if(!s?.access_token||!s?.refresh_token||!uuid.test(s.user?.id)||s.user?.app_metadata?.must_change_password)return reply(403,{error:'ACCOUNT_SETUP_REQUIRED'});
    let sid;try{sid=JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id}catch{return reply(403,{error:'SESSION'})}
    if(!uuid.test(sid)||!await control('grillad_auth_finish',{p_hash:hash,p_user:s.user.id,p_session:sid,p_installation:body.installation,p_platform:body.platform}))return reply(403,{error:'DEVICE_OR_GRANT_DENIED'});
-   const w=await post('/rest/v1/rpc/grillad_workspace',{},s.access_token);
-   if(!w.ok||!Array.isArray(w.result)||!w.result.length)return reply(403,{error:'NO_WORKSPACE'});
-   return reply(200,{result:{user_id:s.user.id,access:s.access_token,refresh:s.refresh_token,sites:w.result}});
+   const w=await workspaceFor(s.access_token);if(!w)return reply(403,{error:'NO_WORKSPACE'});
+   return reply(200,{result:{user_id:s.user.id,access:s.access_token,refresh:s.refresh_token,...w}});
   }
   if(body.action==='refresh'){
    if(typeof body.refresh!=='string'||body.refresh.length<10||body.refresh.length>8192)return reply(400,{error:'INVALID_REFRESH'});
@@ -46,9 +52,8 @@ export async function handle(request,env,fetcher=fetch){
    if(!x.ok)return upstream(x);const s=x.result;
    if(!s?.access_token||!s?.refresh_token)return reply(401,{error:'SESSION'});
    let uid=s.user?.id;try{uid=uid||JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).sub}catch{}if(!uuid.test(uid))return reply(401,{error:'SESSION'});
-   const w=await post('/rest/v1/rpc/grillad_workspace',{},s.access_token);
-   if(!w.ok||!Array.isArray(w.result)||!w.result.length)return reply(403,{error:'NO_WORKSPACE'});
-   return reply(200,{result:{user_id:uid,access:s.access_token,refresh:s.refresh_token,sites:w.result}});
+   const w=await workspaceFor(s.access_token);if(!w)return reply(403,{error:'NO_WORKSPACE'});
+   return reply(200,{result:{user_id:uid,access:s.access_token,refresh:s.refresh_token,...w}});
   }
   if(['connect_catalog','connect_submit','connect_status'].includes(body.action)){
    if(!env.service||typeof body.qr!=='string'||!/^[A-Za-z0-9_-]{32,128}$/.test(body.qr))return reply(403,{error:'PARTNER_UNAVAILABLE'});
@@ -70,6 +75,8 @@ export async function handle(request,env,fetcher=fetch){
    if(body.enabled&&(typeof body.token!=='string'||body.token.length<30||body.token.length>4096||!env.firebaseProject||body.project!==env.firebaseProject))return reply(400,{error:'PUSH_NOT_CONFIGURED'});
    return upstream(await post('/rest/v1/rpc/grillad_push_register',{...scope,p_token:body.enabled?body.token:null,p_project:body.enabled?body.project:null,p_enabled:body.enabled},token));
   }
+  if(body.action==='renewal_status')return upstream(await post('/rest/v1/rpc/grillad_renewal_status',scope,token));
+  if(body.action==='renewal_action'&&uuid.test(body.event)&&['renewal_request','central_request_cancel'].includes(body.operation)&&body.payload&&typeof body.payload==='object'&&!Array.isArray(body.payload))return upstream(await post('/rest/v1/rpc/grillad_renewal_action',{...scope,p_event:body.event,p_action:body.operation,p_payload:body.payload},token));
   if(body.action==='prediction')return upstream(await post('/rest/v1/rpc/grillad_prediction',scope,token));
   if(body.action==='security_list')return upstream(await post('/rest/v1/rpc/grillad_security_list',scope,token));
   if(body.action==='pilotage_status')return upstream(await post('/rest/v1/rpc/grillad_pilotage_status',scope,token));

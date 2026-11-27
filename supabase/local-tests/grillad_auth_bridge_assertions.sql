@@ -147,6 +147,23 @@ insert into famille_private.account_invites(id,request_id,user_id,token_hash,app
 set role service_role;
 do $$begin if not public.grillad_central_resolve('b8000000-0000-0000-0000-000000000003','processed','b8000000-0000-0000-0000-000000000004') then raise exception 'accepted employee evidence';end if;end $$;
 reset role;
+-- Expired subscription grants billing only; no access to transactions.
+update famille_core.subscriptions set status='expired',ends_at=now()-interval '1 hour' where organization_id='b2000000-0000-0000-0000-000000000001';
+set role authenticated;
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';e uuid:=gen_random_uuid();p jsonb:='{"plan":"grillad_premium_month"}';v jsonb;begin
+ if jsonb_array_length(public.grillad_workspace())<>0 or jsonb_array_length(public.grillad_renewal_workspace())<>1 then raise exception 'expired scope separation';end if;
+ begin perform public.grillad_snapshot(o,s,current_date,current_date);raise exception 'expired snapshot';exception when insufficient_privilege then null;end;
+ v:=public.grillad_renewal_action(o,s,e,'renewal_request',p);if v->>'status'<>'pending' or public.grillad_renewal_action(o,s,e,'renewal_request',p)<>v then raise exception 'renewal only replay';end if;
+ if not exists(select 1 from jsonb_array_elements(public.grillad_renewal_status(o,s)->'central_requests') x where x->>'id'=e::text and x->>'status'='pending') then raise exception 'renewal only status';end if;
+ perform public.grillad_renewal_action(o,s,gen_random_uuid(),'central_request_cancel',jsonb_build_object('request',e,'reason','Annulation'));
+end $$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000002',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000012","app_metadata":{}}',true);
+do $$begin if jsonb_array_length(public.grillad_renewal_workspace())<>0 then raise exception 'seller renewal leak';end if;end $$;
+reset role;
+update famille_core.subscriptions set status='active',ends_at=now()+interval '1 day' where organization_id='b2000000-0000-0000-0000-000000000001';
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
 -- Existing activated seller assignment to a second GRILLAD site, then revocation.
 set role authenticated;
 do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';s2 uuid:='b3000000-0000-0000-0000-000000000003';u uuid:='b1000000-0000-0000-0000-000000000002';e uuid:=gen_random_uuid();p jsonb:=jsonb_build_object('user',u,'role','seller','reason','Renfort');v jsonb;
