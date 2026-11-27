@@ -578,6 +578,8 @@ try{
  const deepContext=await browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"});
  try{
   const dp=await deepContext.newPage();
+  let releaseList;const delayedList=new Promise(r=>{releaseList=r});let listArrived=false;
+  await dp.route("**/widemeet-room/list",async route=>{if(!listArrived){listArrived=true;await delayedList}await route.continue()});
   await dp.goto("https://127.0.0.1:8443/#invite="+deepToken);
   await dp.getByLabel("Identifiant WideMeet",{exact:true}).fill(deepGuest.login);
   await dp.getByLabel("Mot de passe",{exact:true}).fill(deepGuest.password);
@@ -586,6 +588,7 @@ try{
   await field.waitFor({timeout:20000});
   assert.equal(await field.inputValue(),deepToken);
   assert.equal(await dp.evaluate(()=>location.hash),"");
+  try{const until=Date.now()+10000;while(!listArrived&&Date.now()<until)await wait(50);assert.equal(listArrived,true);assert.equal(await dp.getByRole("button",{name:"Rejoindre",exact:true}).isDisabled(),true)}finally{releaseList()}
   const redeemed=dp.waitForResponse(r=>r.url().endsWith("/widemeet-room/external-invite")&&r.request().method()==="POST");
   await dp.getByRole("button",{name:"Rejoindre",exact:true}).click();
   assert.equal((await redeemed).status(),200);

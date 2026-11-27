@@ -106,6 +106,7 @@ private fun RecordingAnnouncement(active: Boolean, english: Boolean) {
  }
  fun execute(action:String,body:JSONObject){if(busy)return;busy=true;error=false;scope.launch{try{val next=gateway.request(action,body,session) as JSONObject;require(next.has("id")&&next.has("revision"));room=next;mode="room";if(action=="create")creationPending=null;chat="";poll="";editing=false}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true;if(action=="command"){room=null;mode="list"}}finally{busy=false}}}
  fun seriesAction(action:String,body:JSONObject){if(busy)return;busy=true;error=false;scope.launch{try{gateway.request(action,body,session);seriesPending=null;room=null;mode="list";refresh()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
+ suspend fun openInvited(id:String):Boolean{if(busy)return false;busy=true;error=false;return try{val next=gateway.request("read",JSONObject().put("room_id",id),session) as JSONObject;require(next.optString("id")==id&&next.has("revision"));room=next;mode="room";chat="";poll="";editing=false;true}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true;false}finally{busy=false}}
  fun command(action:String,value:Any?=null,target:String?=null){val r=room?:return;execute("command",JSONObject().put("room_id",r.getString("id")).put("request_id",UUID.randomUUID().toString()).put("expected_revision",r.getLong("revision")).put("action",action).put("value",value?:JSONObject.NULL).put("target",target?:JSONObject.NULL))}
  fun displayName(id:String)=if(id==session.memberId)tr("Moi","Me") else contacts.firstOrNull{it.optString("member_id")==id}?.optString("display_name")?:tr("Participant","Participant")
  fun stateLabel(s:String)=when(s){"scheduled"->tr("Programmée","Scheduled");"open"->tr("Ouverte","Open");"paused"->tr("En pause","Paused");"ended"->tr("Terminée","Ended");else->tr("Indisponible","Unavailable")}
@@ -141,7 +142,7 @@ private fun RecordingAnnouncement(active: Boolean, english: Boolean) {
   if(center!="rooms"){Text(tr("État","Status"));for(s in listOf("all","scheduled","open","paused","ended"))Row{RadioButton(selected=filter==s,onClick={filter=s});Text(if(s=="all")tr("Tous","All")else stateLabel(s),Modifier.padding(top=12.dp))}}
   if(center=="statistics"&&!busy&&!error)for(s in listOf("scheduled","open","paused","ended"))Text(stateLabel(s)+": "+list.count{it.optString("status")==s})
  }
- if(center=="agenda"&&BuildConfig.WIDEMEET_EXTERNAL_ENABLED)ExternalInvite(english,gateway,session,onJoined={id->execute("read",JSONObject().put("room_id",id))})
+ if(center=="agenda"&&BuildConfig.WIDEMEET_EXTERNAL_ENABLED)ExternalInvite(english,gateway,session,parentBusy=busy,onJoined={id->openInvited(id)})
  visible.forEach{r->TextButton(enabled=!busy,onClick={execute("read",JSONObject().put("room_id",r.optString("id")))}){Text(r.optString("title",tr("Réunion","Meeting"))+" — "+stateLabel(r.optString("status")))}}
  if(!busy&&!error&&visible.isEmpty())Text(tr("Aucune réunion dans cet espace.","No meetings in this workspace."))
  }else{val r=room

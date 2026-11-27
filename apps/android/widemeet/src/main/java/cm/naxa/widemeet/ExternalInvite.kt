@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.security.SecureRandom
 import java.util.UUID
-@Composable fun ExternalInvite(english:Boolean,gateway:RoomGateway,session:Session,roomId:String?=null,onJoined:(String)->Unit={}){
+@Composable fun ExternalInvite(english:Boolean,gateway:RoomGateway,session:Session,roomId:String?=null,parentBusy:Boolean=false,onJoined:suspend (String)->Boolean={false}){
  fun tr(fr:String,en:String)=if(english)en else fr
  val scope=rememberCoroutineScope();val clipboard=LocalClipboardManager.current
  var login by remember{mutableStateOf("")};var token by remember{mutableStateOf("")};var issued by remember{mutableStateOf("")};var pending by remember{mutableStateOf<JSONObject?>(null)};var items by remember{mutableStateOf<List<JSONObject>>(emptyList())};var busy by remember{mutableStateOf(false)};var failure by remember{mutableStateOf(false)}
@@ -39,7 +39,7 @@ import java.util.UUID
  if(roomId==null){
   val scanPrompt=tr("Scannez le QR code de votre invitation","Scan your invitation QR code")
   TextButton(enabled=!busy,onClick={scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt(scanPrompt).setBeepEnabled(false).setBarcodeImageEnabled(false))}){Text(tr("Scanner une invitation","Scan invitation"))}
-  OutlinedTextField(token,{token=it.trim().substringAfter("#invite=")},label={Text(tr("Code d’invitation","Invitation code"))},modifier=Modifier.fillMaxWidth());Button(enabled=!busy&&Regex("^[a-f0-9]{64}$").matches(token),onClick={work{val x=req("redeem",JSONObject().put("token",token));token="";onJoined(x.getString("room_id"))}}){Text(tr("Rejoindre","Join"))}}
+  OutlinedTextField(token,{token=it.trim().substringAfter("#invite=")},enabled=!busy,label={Text(tr("Code d’invitation","Invitation code"))},modifier=Modifier.fillMaxWidth());Button(enabled=!busy&&!parentBusy&&Regex("^[a-f0-9]{64}$").matches(token),onClick={work{val x=req("redeem",JSONObject().put("token",token));require(onJoined(x.getString("room_id")));token=""}}){Text(tr("Rejoindre","Join"))}}
  else{OutlinedTextField(login,{login=it.take(70)},enabled=!busy&&pending==null,label={Text(tr("Identifiant WideMeet du destinataire","Recipient WideMeet ID"))},modifier=Modifier.fillMaxWidth());Button(enabled=!busy&&login.isNotBlank(),onClick={work{val d=pending?:JSONObject().put("room_id",roomId).put("invite_id",UUID.randomUUID().toString()).put("login_id",login.trim().uppercase()).put("token",ByteArray(32).also{SecureRandom().nextBytes(it)}.joinToString(""){"%02x".format(it.toInt() and 255)}).also{pending=it};req("issue",d);issued=d.getString("token");pending=null;login="";refresh()}}){Text(tr("Créer une invitation nominative","Create named invitation"))}
  if(issued.isNotEmpty()){
   val qr=remember(issued){BarcodeEncoder().encodeBitmap(issued,BarcodeFormat.QR_CODE,480,480).asImageBitmap()}
