@@ -22,6 +22,7 @@ internal val portalPages=listOf(PortalPage("hr","Absences et rémunérations","L
  var data by remember{mutableStateOf<JSONObject?>(null)};var values by remember{mutableStateOf<Map<String,String>>(emptyMap())}
  var selected by remember{mutableStateOf("")};var reply by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)};var msg by remember{mutableStateOf("")}
  var filterState by remember(session.member,site,page){mutableStateOf("all")};var search by remember(session.member,site,page){mutableStateOf("")}
+ var priorityFilter by remember(session.member,site,page){mutableStateOf("all")}
  var teamSearch by remember(session.member,site,page){mutableStateOf("")};var inboxFilter by remember(session.member,site,page){mutableStateOf("all")}
  val manage=data?.optBoolean("can_manage")==true;val allowed=session.permits(site)&&!busy
  fun v(k:String)=values[k].orEmpty()
@@ -71,12 +72,13 @@ internal val portalPages=listOf(PortalPage("hr","Absences et rémunérations","L
  Text(t("Historique","History"))
  OutlinedTextField(search,{search=it.take(160);selected=""},label={Text(t("Rechercher un dossier","Search records"))},enabled=allowed)
  PortalSelect(t("Statut du dossier","Record status"),listOf("all" to t("Tous","All"))+listOf("open","in_progress","done","cancelled").map{it to state(it)},filterState,allowed){filterState=it;selected=""}
- OutlinedButton(enabled=allowed,onClick={search="";filterState="all";selected=""}){Text(t("Réinitialiser la recherche","Reset search"))}
- val filtered=rows.filter{x->(filterState=="all"||x.optString("state")==filterState)&&listOf("title","detail","assignee","category").any{x.optString(it).contains(search.trim(),ignoreCase=true)}}
+ PortalSelect(t("Priorité du dossier","Record priority"),listOf("all" to t("Toutes","All"),"normal" to t("Normale","Normal"),"urgent" to t("Urgente","Urgent")),priorityFilter,allowed){priorityFilter=it;selected=""}
+ OutlinedButton(enabled=allowed,onClick={search="";filterState="all";priorityFilter="all";selected=""}){Text(t("Réinitialiser la recherche","Reset search"))}
+ val filtered=rows.filter{x->(filterState=="all"||x.optString("state")==filterState)&&(priorityFilter=="all"||x.optString("priority")==priorityFilter)&&listOf("title","detail","assignee","category").any{x.optString(it).contains(search.trim(),ignoreCase=true)}}
  Text(filtered.size.toString()+" / "+rows.size+" "+t("dossiers reçus (200 au maximum)","received records (up to 200)"))
  if(filtered.isEmpty())Text(t("Aucun dossier correspondant.","No matching records."))
  fun local(value:String)=runCatching{java.time.Instant.parse(value).atZone(ZoneId.of("Africa/Douala")).format(java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm"))}.getOrDefault(value)
- filtered.forEach{x->Text(x.optString("title")+" · "+state(x.optString("state")));Text(x.optString("detail")+" · "+x.optString("assignee"));if(!x.isNull("starts_at"))Text(t("Début : ","Start: ")+local(x.optString("starts_at")));if(!x.isNull("due_at"))Text(t("Échéance : ","Due: ")+local(x.optString("due_at")));OutlinedButton(enabled=allowed,onClick={selected=x.optString("id");reply=""}){Text(t("Ouvrir le dossier","Open record"))}}
+ filtered.forEach{x->Text(x.optString("title")+" · "+state(x.optString("state")));Text(x.optString("detail")+" · "+x.optString("assignee"));Text(t("Priorité : ","Priority: ")+when(x.optString("priority")){"urgent"->t("Urgente","Urgent");"normal"->t("Normale","Normal");else->"—"});if(!x.isNull("starts_at"))Text(t("Début : ","Start: ")+local(x.optString("starts_at")));if(!x.isNull("due_at"))Text(t("Échéance : ","Due: ")+local(x.optString("due_at")));OutlinedButton(enabled=allowed,onClick={selected=x.optString("id");reply=""}){Text(t("Ouvrir le dossier","Open record"))}}
  if(row!=null&&filtered.any{it.optString("id")==selected}){Text(row.optString("title"));row.rows("messages").forEach{Text(it.optString("author")+" · "+it.optString("body"))}
  val st=row.optString("state");if(st in listOf("open","in_progress")){OutlinedTextField(reply,{reply=it.take(1000)},label={Text(t("Message ou observation","Message or note"))},modifier=Modifier.fillMaxWidth(),enabled=allowed);Button(enabled=allowed&&reply.isNotBlank(),onClick={write("work_reply",JSONObject().put("work_id",selected).put("body",reply))}){Text(t("Envoyer","Send"))}
  if(manage)for(next in if(st=="open")listOf("in_progress","cancelled") else listOf("done","cancelled"))OutlinedButton(enabled=allowed,onClick={write("work_state",JSONObject().put("work_id",selected).put("expected_state",st).put("state",next))}){Text(state(next))}

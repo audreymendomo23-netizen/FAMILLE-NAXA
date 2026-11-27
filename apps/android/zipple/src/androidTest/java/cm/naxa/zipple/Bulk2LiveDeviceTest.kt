@@ -72,7 +72,7 @@ class Bulk2LiveDeviceTest {
    val p=(api("procurement_snapshot") as JSONObject).rows("purchases").single{it.getString("id")==purchase}
    assertEquals(3000L,p.getLong("received_milli"));assertEquals(1000L,p.getLong("paid_xaf"))
    val order=checkNotNull(nativePurchaseOrder(api("procurement_snapshot") as JSONObject,api("erp_snapshot") as JSONObject,purchase))
-   val text=nativePurchaseText(order,false);assertTrue(text.contains("NATIVE-PURCHASE"));assertTrue(text.contains("Farine ERP native - 3 kg - 3000 FCFA - Reçu : 3 kg"))
+   val text=nativePurchaseText(order,false);assertTrue(text.contains("NATIVE-PURCHASE"));assertTrue(text.contains("Farine ERP native - 3 kg - 3000 FCFA - Reçu : 3 kg - Reste : 0 kg"));assertTrue(nativePurchaseText(order.copy(lines=order.lines.map{it.copy(received=1000)}),false).contains("Reste : 2 kg"))
    val bytes=nativePurchasePdf(order,false);assertEquals("%PDF-",String(bytes.copyOfRange(0,5),Charsets.US_ASCII))
    val pdfFile=java.io.File.createTempFile("zipple-purchase-test-",".pdf",ctx.cacheDir);try{pdfFile.writeBytes(bytes);android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(pdfFile,android.os.ParcelFileDescriptor.MODE_READ_ONLY)).use{renderer->assertTrue(renderer.pageCount>=1);renderer.openPage(0).use{pg->assertEquals(595,pg.width)}}}finally{pdfFile.delete()}
    assertTrue(nativePurchaseWhatsApp(order,false)==null);val uri=checkNotNull(nativePurchaseWhatsApp(order.copy(phone="237600000001"),false));assertEquals("wa.me",uri.host);assertEquals("/237600000001",uri.path);assertEquals(text,uri.getQueryParameter("text"))
@@ -275,6 +275,7 @@ class Bulk2LiveDeviceTest {
   input("Nom de zone","Zone ERP native");input("Périmètre et consignes","Secteur test");input("Frais FCFA","500");click("Enregistrer la zone");awaitText("Opération enregistrée")
   click("Modifier la zone : Zone ERP native")
   step("replace existing zone fee"){val matcher=hasText("Frais FCFA",substring=false) and hasSetTextAction();compose.onNode(matcher).performScrollTo().performTextReplacement("750");compose.onNode(matcher).assert(hasText("750"))};click("Zone active dans le projet : Oui");click("Non");click("Enregistrer la zone");awaitText("Zone ERP native · 750 FCFA · Secteur test · Inactive")
+  click("Statut de la zone : Toutes");click("Configurées");step("inactive zone excluded"){compose.onNodeWithText("Zone ERP native · 750 FCFA · Secteur test · Inactive",substring=false).assertDoesNotExist()};click("Statut de la zone : Configurées");click("Inactives");awaitText("Zone ERP native · 750 FCFA · Secteur test · Inactive");click("Réinitialiser les zones");click("Nouvelle zone");
   click("Livreur de l'établissement : —");click("Profil ERP natif");click("Enregistrer le livreur");awaitText("Livreur affecté : Profil ERP natif")
   click("Retirer l’affectation : Profil ERP natif");awaitText("Opération enregistrée")
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_QA_CASE_PARTIAL B4-017 NATIVE_ZONE_AND_COURIER_PASS")

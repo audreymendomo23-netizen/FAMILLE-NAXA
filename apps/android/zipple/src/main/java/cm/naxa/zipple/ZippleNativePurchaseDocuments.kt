@@ -35,7 +35,7 @@ internal fun nativePurchaseText(order:NativePurchaseOrder,en:Boolean):String{
  fun qty(n:Long)=BigDecimal.valueOf(n,3).stripTrailingZeros().toPlainString()
  require(clean(order.reference).isNotBlank()&&clean(order.supplier).isNotBlank()&&order.lines.isNotEmpty()&&order.lines.size<=50)
  require(order.lines.all{clean(it.name).isNotBlank()&&clean(it.unit).isNotBlank()&&it.qty in 1L..1000000000L&&it.total in 1L..2147483647L&&it.received in 0L..it.qty})
- return (listOf("ZIPPLE - "+t("Bon de commande fournisseur","Supplier purchase order"),t("Référence : ","Reference: ")+clean(order.reference),t("Fournisseur : ","Supplier: ")+clean(order.supplier))+order.lines.map{clean(it.name)+" - "+qty(it.qty)+" "+clean(it.unit)+" - "+it.total+" FCFA - "+t("Reçu : ","Received: ")+qty(it.received)+" "+clean(it.unit)}+listOf(t("Total commande : ","Order total: ")+order.lines.sumOf{it.total}+" FCFA",t("Bon de commande, non une facture ni une preuve de paiement.","Purchase order, not an invoice or payment receipt."))).joinToString("\n")
+ return (listOf("ZIPPLE - "+t("Bon de commande fournisseur","Supplier purchase order"),t("Référence : ","Reference: ")+clean(order.reference),t("Fournisseur : ","Supplier: ")+clean(order.supplier))+order.lines.map{clean(it.name)+" - "+qty(it.qty)+" "+clean(it.unit)+" - "+it.total+" FCFA - "+t("Reçu : ","Received: ")+qty(it.received)+" "+clean(it.unit)+" - "+t("Reste : ","Remaining: ")+qty(it.qty-it.received)+" "+clean(it.unit)}+listOf(t("Total commande : ","Order total: ")+order.lines.sumOf{it.total}+" FCFA",t("Bon de commande, non une facture ni une preuve de paiement.","Purchase order, not an invoice or payment receipt."))).joinToString("\n")
 }
 internal fun nativePurchaseWhatsApp(order:NativePurchaseOrder,en:Boolean):Uri?=order.phone.takeIf{it.matches(Regex("[0-9]{9,15}"))}?.let{Uri.Builder().scheme("https").authority("wa.me").appendPath(it).appendQueryParameter("text",nativePurchaseText(order,en)).build()}
 internal fun nativePurchasePdf(order:NativePurchaseOrder,en:Boolean):ByteArray{
@@ -58,7 +58,7 @@ internal fun nativePurchasePdf(order:NativePurchaseOrder,en:Boolean):ByteArray{
 }
 @Composable internal fun NativePurchaseDocuments(data:ND,allowed:Boolean,en:Boolean){
  val t:(String,String)->String={fr,eng->if(en)eng else fr};val ctx=LocalContext.current;val scope=rememberCoroutineScope()
- var selected by remember{mutableStateOf("")};var message by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<ByteArray?>(null)}
+ var purchaseSearch by remember{mutableStateOf("")};var selected by remember{mutableStateOf("")};var message by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<ByteArray?>(null)}
  val snapshot=data.data["procurement_snapshot"]?:return;val stock=data.data["erp_snapshot"]?:return
  val order=remember(snapshot,stock,selected){nativePurchaseOrder(snapshot,stock,selected)}
  val save=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")){uri->
@@ -66,7 +66,10 @@ internal fun nativePurchasePdf(order:NativePurchaseOrder,en:Boolean):ByteArray{
   if(uri!=null&&bytes!=null&&allowed){busy=true;scope.launch{try{withContext(Dispatchers.IO){requireNotNull(ctx.contentResolver.openOutputStream(uri,"wt")).use{it.write(bytes)}};message=t("Bon enregistré","Purchase order saved")}catch(c:CancellationException){throw c}catch(_:Exception){message=t("Export non confirmé","Export unconfirmed")}finally{busy=false}}}
  }
  Text(t("Bons de commande fournisseur","Supplier purchase orders"))
- FloorChoice(t("Commande à exporter","Purchase to export"),snapshot.rows("purchases").map{it.optString("id") to it.optString("reference")},selected,allowed&&!busy&&pending==null){selected=it;message=""}
+ OutlinedTextField(purchaseSearch,{purchaseSearch=it.take(160);selected="";message=""},label={Text(t("Rechercher une référence","Search reference"))},enabled=allowed&&!busy&&pending==null)
+ val available=snapshot.rows("purchases").filter{it.optString("reference").contains(purchaseSearch.trim(),ignoreCase=true)}
+ if(available.isEmpty())Text(t("Aucune commande correspondante.","No matching purchase."))
+ FloorChoice(t("Commande à exporter","Purchase to export"),available.map{it.optString("id") to it.optString("reference")},selected,allowed&&!busy&&pending==null){selected=it;message=""}
  if(selected.isNotBlank()&&order==null)Text(t("Document indisponible : données incomplètes. Actualisez.","Document unavailable: incomplete data. Refresh."))
  if(order!=null){
  Text(nativePurchaseText(order,en))

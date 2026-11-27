@@ -15,6 +15,7 @@ internal val commercePages=listOf(PortalPage("loyalty","Fidélité et parrainage
 @Composable internal fun ZippleCommerceWorkspace(api:ZippleBusiness,session:Session,site:String,en:Boolean,page:String){
  val t:(String,String)->String={a,b->if(en)b else a};val scope=rememberCoroutineScope();val keys=remember{RequestKeys()};val loyal=page=="loyalty"
  var data by remember{mutableStateOf<JSONObject?>(null)};var values by remember{mutableStateOf<Map<String,String>>(emptyMap())};var busy by remember{mutableStateOf(false)};var msg by remember{mutableStateOf("")}
+ var zoneSearch by remember(session.member,site,page){mutableStateOf("")};var zoneFilter by remember(session.member,site,page){mutableStateOf("all")}
  fun v(k:String)=values[k].orEmpty()
  fun set(k:String,x:String){values=values+(k to x)}
  val allowed=session.permits(site)&&!busy;val owner=data?.optBoolean("can_configure")==true
@@ -60,6 +61,7 @@ internal val commercePages=listOf(PortalPage("loyalty","Fidélité et parrainage
  }
  "delivery"->{Text(if(d.optBoolean("restaurant"))t("Préparation des zones et livreurs ; commande externe non activée.","Prepare zones and couriers; external ordering not active.") else t("Snack-Bar : service sur place.","Snack-Bar: on-site service."))
  if(owner&&d.optBoolean("restaurant")){
+ OutlinedButton(enabled=allowed,onClick={values=values+mapOf("label" to "","instructions" to "","fee_xaf" to "","zone_enabled" to "yes")}){Text(t("Nouvelle zone","New zone"))}
  CommerceField(t("Nom de zone","Zone name"),v("label"),allowed){set("label",it)}
  CommerceField(t("Périmètre et consignes","Area and instructions"),v("instructions"),allowed){set("instructions",it)}
  CommerceField(t("Frais FCFA","Fee XAF"),v("fee_xaf"),allowed){set("fee_xaf",it)}
@@ -69,7 +71,10 @@ internal val commercePages=listOf(PortalPage("loyalty","Fidélité et parrainage
  CommerceChoice(t("Affectation préparée","Prepared assignment"),yesNo,v("courier_enabled").ifBlank{"yes"},allowed){set("courier_enabled",it)}
  Button(enabled=allowed&&v("member_id").isNotBlank(),onClick={write("courier_set",JSONObject().put("member_id",v("member_id")).put("enabled",v("courier_enabled")!="no"))}){Text(t("Enregistrer le livreur","Save courier"))}
  }
- d.rows("zones").forEach{x->
+ OutlinedTextField(zoneSearch,{zoneSearch=it.take(160)},label={Text(t("Rechercher une zone","Search zone"))},modifier=Modifier.fillMaxWidth(),enabled=allowed)
+ CommerceChoice(t("Statut de la zone","Zone status"),listOf("all" to t("Toutes","All"),"active" to t("Configurées","Configured"),"inactive" to t("Inactives","Inactive")),zoneFilter,allowed){zoneFilter=it}
+ OutlinedButton(enabled=allowed,onClick={zoneSearch="";zoneFilter="all"}){Text(t("Réinitialiser les zones","Reset zones"))}
+ d.rows("zones").filter{x->(zoneFilter=="all"||(if(zoneFilter=="active")x.optBoolean("active") else !x.optBoolean("active")))&&listOf("label","instructions").any{x.optString(it).contains(zoneSearch.trim(),ignoreCase=true)}}.forEach{x->
  Text(x.optString("label")+" · "+x.optString("fee_xaf")+" FCFA · "+x.optString("instructions")+" · "+if(x.optBoolean("active"))t("Configurée","Configured")else t("Inactive","Inactive"))
  if(owner&&d.optBoolean("restaurant"))OutlinedButton(enabled=allowed,onClick={values=values+mapOf("label" to x.optString("label"),"instructions" to x.optString("instructions"),"fee_xaf" to x.optString("fee_xaf"),"zone_enabled" to if(x.optBoolean("active"))"yes" else "no")}){Text(t("Modifier la zone","Edit zone")+" : "+x.optString("label"))}
  };d.rows("members").filter{it.optBoolean("enabled")}.forEach{x->
