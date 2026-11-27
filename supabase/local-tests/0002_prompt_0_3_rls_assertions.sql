@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP on
 begin;
 insert into auth.users(id,email) values ('10000000-0000-0000-0000-000000000001','owner-a@x.invalid'),('10000000-0000-0000-0000-000000000002','manager-a@x.invalid'),('10000000-0000-0000-0000-000000000003','owner-b@x.invalid'),('10000000-0000-0000-0000-000000000004','admin@x.invalid'),('10000000-0000-0000-0000-000000000005','commercial@x.invalid'),('10000000-0000-0000-0000-000000000006','partner@x.invalid') on conflict(id) do nothing;
-insert into famille_core.family_admins(user_id,status) values('10000000-0000-0000-0000-000000000004','active') on conflict(user_id) do update set status='active',revoked_at=null;
+-- The contextual schema resolves administrators through active memberships and platform_admin role assignments seeded below. The obsolete family_admins relation is not part of that schema. All authorization assertions remain unchanged.
 insert into famille_core.client_app_access(user_id,app_id,status)
  select x.uid,a.id,'granted' from (values
   ('10000000-0000-0000-0000-000000000001'::uuid,'kiosko'::text),

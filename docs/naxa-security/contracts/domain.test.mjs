@@ -8,3 +8,32 @@ const cases=[
 ["B5","maintenance draft",()=>assert.equal(workDraft(" pompe ","corrective").state,"draft")],["B5","empty subject",()=>assert.throws(()=>workDraft(" ","inspection"))],["B5","unknown kind",()=>assert.throws(()=>workDraft("x","other"))],["B5","long subject",()=>assert.throws(()=>workDraft("x".repeat(501),"preventive"))],
 ["B6","exact delegation",()=>assert.equal(delegatedRead(g,g,now),true)],["B6","cross site",()=>assert.equal(delegatedRead(g,{...g,site:"other"},now),false)],["B6","cross app",()=>assert.equal(delegatedRead(g,{...g,app:"bootik"},now),false)],["B6","expired",()=>assert.equal(delegatedRead(g,g,now+100),false)],["B6","write denied",()=>assert.equal(delegatedRead(g,{...g,operation:"write"},now),false)],["B6","revoked",()=>assert.equal(delegatedRead({...g,active:false},g,now),false)]];
 for(const [bulk,name,fn] of cases)if(!process.env.SECURITY_BULK||process.env.SECURITY_BULK===bulk)test(bulk+" "+name,fn);
+
+import {siteEligibility,deviceHealth,fireAlarmView,attendanceDraft,maintenanceClosure,subjectDelegatedRead} from "../../../apps/web/naxa-security/src/domain.mjs";
+const extra = [
+["B1","one site eligible",()=>assert.equal(siteEligibility("Essentiel",1),"eligible_pending_quotas")],
+["B1","essential rejects multisite",()=>assert.equal(siteEligibility("Essentiel",2),"denied")],
+["B1","business no invented quota",()=>assert.equal(siteEligibility("Business",2),"eligible_pending_quotas")],
+["B1","invalid site count",()=>assert.equal(siteEligibility("Professional",1.5),"denied")],
+["B2","verified fresh device",()=>assert.equal(deviceHealth({verified:true,observed:now,status:"online"},now),"online")],
+["B2","stale device unknown",()=>assert.equal(deviceHealth({verified:true,observed:now-120001,status:"online"},now),"unknown")],
+["B2","unverified device unknown",()=>assert.equal(deviceHealth({verified:false,observed:now,status:"online"},now),"unknown")],
+["B2","fault stays fault",()=>assert.equal(deviceHealth({verified:true,observed:now,status:"fault"},now),"fault")],
+["B3","ack leaves alarm active",()=>assert.equal(fireAlarmView({verified:true,source:"fire_panel",signal:"alarm",acknowledged:true}),"alarm_acknowledged")],
+["B3","restored needs inspection",()=>assert.equal(fireAlarmView({verified:true,source:"smoke_detector",signal:"restored"}),"restored_pending_inspection")],
+["B3","unverified alarm unknown",()=>assert.equal(fireAlarmView({verified:false,source:"fire_panel",signal:"alarm"}),"unknown")],
+["B3","evacuation active",()=>assert.equal(fireAlarmView({verified:true,source:"fire_panel",signal:"evacuation"}),"alarm_active")],
+["B4","valid arrival remains pending",()=>assert.equal(attendanceDraft("arrival",p,now),"pending_server_review")],
+["B4","mock departure rejected",()=>assert.equal(attendanceDraft("departure",{...p,mock:true},now),"rejected")],
+["B4","unknown action rejected",()=>assert.equal(attendanceDraft("approve",p,now),"rejected")],
+["B4","missing position rejected",()=>assert.equal(attendanceDraft("arrival",null,now),"rejected")],
+["B5","report required",()=>assert.equal(maintenanceClosure({completionConfirmed:true,report:" "}),"incomplete")],
+["B5","confirmation required",()=>assert.equal(maintenanceClosure({completionConfirmed:false,report:"Inspection"}),"incomplete")],
+["B5","report enters review only",()=>assert.equal(maintenanceClosure({completionConfirmed:true,report:"Inspection"}),"ready_for_authorized_review")],
+["B5","null order incomplete",()=>assert.equal(maintenanceClosure(null),"incomplete")],
+["B6","subject scoped grant",()=>assert.equal(subjectDelegatedRead({...g,subject:"u",startsAt:now},{...g,subject:"u"},now),true)],
+["B6","different subject denied",()=>assert.equal(subjectDelegatedRead({...g,subject:"u",startsAt:now},{...g,subject:"v"},now),false)],
+["B6","future grant denied",()=>assert.equal(subjectDelegatedRead({...g,subject:"u",startsAt:now+1},{...g,subject:"u"},now),false)],
+["B6","missing subject denied",()=>assert.equal(subjectDelegatedRead({...g,startsAt:now},g,now),false)]
+];
+for (const [bulk,name,fn] of extra) if (!process.env.SECURITY_BULK || process.env.SECURITY_BULK===bulk) test(bulk+" "+name,fn);

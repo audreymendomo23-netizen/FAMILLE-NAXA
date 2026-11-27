@@ -8,3 +8,36 @@ export function patrolProgress(required,confirmed){if(!Array.isArray(required)||
 export function workDraft(subject,kind){const s=typeof subject==="string"?subject.trim():"";if(!s||s.length>500||!["preventive","corrective","inspection"].includes(kind))throw Error("INVALID_WORK");return {subject:s,kind,state:"draft"}}
 export function incidentDraft(subject,priority){const s=typeof subject==="string"?subject.trim():"";if(!s||s.length>500||!["P2","P3","P4"].includes(priority))throw Error("INVALID_REPORT");return {subject:s,priority,state:"draft"}}
 export function delegatedRead(grant,request,now){return !!grant&&!!request&&Number.isFinite(now)&&Number.isFinite(grant.expires)&&now<grant.expires&&grant.active===true&&["app","organization","site","resource"].every(k=>typeof grant[k]==="string"&&grant[k].length>0&&grant[k]===request[k])&&request.operation==="read"&&grant.operation==="read"}
+
+/** Local eligibility preview, not an entitlement or authorization decision. */
+export function siteEligibility(plan, count) {
+  if (!Object.hasOwn(plans, plan) || !Number.isSafeInteger(count) || count < 1) return "denied";
+  if (plan === "Essentiel" && count !== 1) return "denied";
+  return "eligible_pending_quotas";
+}
+/** Never treat stale or unverified telemetry as operational availability. */
+export function deviceHealth(report, now) {
+  if (!report || report.verified !== true || freshness(report.observed, now) !== "fresh") return "unknown";
+  return ["online", "offline", "fault"].includes(report.status) ? report.status : "unknown";
+}
+/** Read-only representation; acknowledgement cannot silence a local alarm. */
+export function fireAlarmView(report) {
+  if (!report || report.verified !== true || !["fire_panel", "smoke_detector"].includes(report.source)) return "unknown";
+  if (["alarm", "evacuation"].includes(report.signal)) return report.acknowledged === true ? "alarm_acknowledged" : "alarm_active";
+  if (report.signal === "restored") return report.inspected === true ? "restored_inspected" : "restored_pending_inspection";
+  if (["fault", "prealarm"].includes(report.signal)) return "review";
+  return "unknown";
+}
+/** A locally valid attendance draft remains pending until the server verifies it. */
+export function attendanceDraft(action, position, now) {
+  return ["arrival", "departure"].includes(action) && positionEvidence(position, now) === "pending_review" ? "pending_server_review" : "rejected";
+}
+/** Closing a work order requires a nonempty intervention report and confirmed completion. */
+export function maintenanceClosure(record) {
+  return !!record && record.completionConfirmed === true && typeof record.report === "string" && record.report.trim().length > 0 ? "ready_for_authorized_review" : "incomplete";
+}
+/** Preview of subject-scoped delegation; enforcement remains server-side. */
+export function subjectDelegatedRead(grant, request, now) {
+  return delegatedRead(grant, request, now) && typeof grant.subject === "string" && grant.subject.trim().length > 0 &&
+    grant.subject === request.subject && Number.isFinite(grant.startsAt) && grant.startsAt <= now;
+}

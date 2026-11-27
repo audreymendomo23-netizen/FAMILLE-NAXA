@@ -145,12 +145,8 @@ jobs:
           gradle-version: "9.5.0"
       - name: Installer le SDK Android API 37
         uses: android-actions/setup-android@v3
-      - name: Installer les plateformes et outils Android ciblés
-        shell: bash
-        run: |
-          set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager --install "platforms;android-37" "build-tools;36.0.0" "platform-tools"
+        with:
+          packages: 'platform-tools platforms;android-37 build-tools;36.0.0'
       - name: Générer et vérifier le Gradle Wrapper 9.5.0
         shell: bash
         run: |
