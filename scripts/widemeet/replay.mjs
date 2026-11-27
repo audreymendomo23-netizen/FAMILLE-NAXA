@@ -154,6 +154,11 @@ try{
  assert.equal((await centerReq(gs.access_token,"statistics",{days:30})).status,403);
  const consolidated=await centerOk(hs.access_token,"statistics",{days:30});assert.equal(consolidated.scope,"enterprise");assert.ok(Number.isInteger(consolidated.polls_closed)&&consolidated.polls_closed>=0);assert.ok(Number.isInteger(consolidated.tasks_done)&&consolidated.tasks_done>=0);
  assert.equal((await centerReq(hs.access_token,"statistics",{days:999})).status,403);
+ for(const period of ["daily","weekly","monthly","quarterly","yearly"]){const m=await centerOk(hs.access_token,"statistics",{period});assert.equal(m.period,period);assert.ok(Number.isSafeInteger(m.start_ms)&&m.start_ms<=m.end_ms);assert.ok(m.polls_effectively_closed>=m.polls_closed);}
+ assert.equal((await centerReq(gs.access_token,"statistics",{period:"monthly"})).status,403);
+ assert.equal((await centerReq(hs.access_token,"statistics",{period:"invalid"})).status,403);
+ assert.equal((await centerReq(hs.access_token,"statistics",{period:"weekly",days:7})).status,403);
+ pass("B4 actual calendar statistics and scope");
  pass("workspace private chat exact retry, peer/tenant denial, search, explicit read acknowledgement and role-scoped summary");
 
  // Dedicated support agents, no implicit rights for a tenant promoter.
