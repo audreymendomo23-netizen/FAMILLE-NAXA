@@ -1073,9 +1073,11 @@ jobs:
             const bootPassword='Qa7!'+randomBytes(18).toString('hex'),bootLogin='NS-'+randomBytes(5).toString('hex').toUpperCase();
             const bootUser=await success(base+'/auth/v1/admin/users',{email:bootEmail,password:bootPassword,email_confirm:true,app_metadata:{app_code:'naxa-services'}});
             const template=await readFile('docs/naxa-services/operations/bootstrap-first-promoter.sql','utf8');
-            const bootstrap=(alias)=>template.replaceAll('00000000-0000-0000-0000-000000000000',bootUser.id)
-              .replaceAll("v_alias text := 'ns-replace@example.invalid'","v_alias text := '"+alias+"'")
-              .replaceAll("v_login text := 'NS-REPLACE'","v_login text := '"+bootLogin+"'");
+            const bootstrap=(alias)=>template.replace("v_auth uuid := '00000000-0000-0000-0000-000000000000'","v_auth uuid := '"+bootUser.id+"'")
+              .replace("v_alias text := 'ns-replace@example.invalid'","v_alias text := '"+alias+"'")
+              .replace("v_login text := 'NS-REPLACE'","v_login text := '"+bootLogin+"'");
+            assert.ok(bootstrap(bootEmail).includes("if v_auth = '00000000-0000-0000-0000-000000000000'"),'bootstrap sentinel guard must remain unchanged');
+            assert.ok(bootstrap(bootEmail).includes("v_auth uuid := '"+bootUser.id+"'"),'only the initialization value must change');
             const executeBootstrap=sql=>execFileSync('psql',[process.env.DB_URL,'-X','-v','ON_ERROR_STOP=1','-q'],{input:sql,stdio:['pipe','pipe','pipe']});
             assert.throws(()=>executeBootstrap(bootstrap('ns-wrong@example.test')),e=>String(e.stderr).includes('DEDICATED_CONFIRMED_AUTH_USER_REQUIRED'));
             assert.equal((await success(base+'/rest/v1/ns_accounts?select=id',undefined,admin,admin,'GET')).length,0);
