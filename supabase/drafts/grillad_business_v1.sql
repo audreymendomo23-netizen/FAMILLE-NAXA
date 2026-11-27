@@ -181,7 +181,7 @@ begin
  return jsonb_build_object('role',r,'items',v_items,'sales',v_sales,'finance',v_finance,'cash',v_cash,'from',p_from,'to',p_to,'generated_at',now());
 end $$;
 -- Server-derived workspace list. No arbitrary organization/site values from login.
-create function grillad_private.workspace() returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $
+create function grillad_private.workspace() returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
 declare s record;r text;out jsonb:='[]'::jsonb;
 begin
  if auth.uid() is null or not exists(select 1 from famille_core.applications where code='grillad' and id=famille_core.current_app_id()) then raise exception 'GRILLAD_SCOPE' using errcode='42501';end if;
@@ -189,8 +189,8 @@ begin
   begin r:=grillad_private.scope(s.org,s.site);out:=out||jsonb_build_array(jsonb_build_object('org',s.org,'site',s.site,'name',s.name,'organization',s.legal_name,'role',r));exception when insufficient_privilege then null;end;
  end loop;
  return out;
-end $;
-create function public.grillad_workspace() returns jsonb language sql stable security invoker set search_path=pg_catalog as $select grillad_private.workspace()$;
+end $$;
+create function public.grillad_workspace() returns jsonb language sql stable security invoker set search_path=pg_catalog as $$select grillad_private.workspace()$$;
 -- Explicit narrow public RPCs are invoker wrappers. All authorization lives inside private functions.
 create function public.grillad_action(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb)
 returns jsonb language sql security invoker set search_path=pg_catalog as $$select grillad_private.run(p_org,p_site,p_event,p_action,p_payload)$$;

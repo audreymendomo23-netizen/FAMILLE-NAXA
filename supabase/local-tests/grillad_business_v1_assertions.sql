@@ -56,11 +56,11 @@ update famille_core.subscriptions set plan_id=(select id from famille_core.plans
 set role authenticated;
 select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000001',true);
 select set_config('request.jwt.claims',jsonb_build_object('session_id','91000000-0000-0000-0000-000000000011','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.app')))::text,true);
-do $begin if jsonb_array_length(public.grillad_workspace())<>0 then raise exception 'ACCESS must reject two enabled sites';end if;end $;
+do $$begin if jsonb_array_length(public.grillad_workspace())<>0 then raise exception 'ACCESS must reject two enabled sites';end if;end $$;
 reset role;
 update grillad_private.enabled_sites set enabled=false where site='93000000-0000-0000-0000-000000000002';
 set role authenticated;
-do $begin if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'ACCESS must allow only explicit site';end if;end $;
+do $$begin if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'ACCESS must allow only explicit site';end if;end $$;
 reset role;
 delete from auth.sessions where id='91000000-0000-0000-0000-000000000012';
 set role authenticated;
