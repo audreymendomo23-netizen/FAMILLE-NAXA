@@ -1,5 +1,7 @@
 package cm.naxa.widemeet
 import androidx.compose.foundation.layout.*
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import android.app.Activity
 import android.view.WindowManager
 import androidx.compose.ui.platform.LocalContext
@@ -18,6 +20,28 @@ import java.time.ZoneId
 
 private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0 until a.length()).mapNotNull{a.optJSONObject(it)}
 
+@Composable
+private fun RecordingAnnouncement(active: Boolean, english: Boolean) {
+    val context = LocalContext.current.applicationContext
+    var ready by remember { mutableStateOf(false) }
+    var engine by remember { mutableStateOf<TextToSpeech?>(null) }
+    DisposableEffect(context) {
+        val speech = TextToSpeech(context) { status -> ready = status == TextToSpeech.SUCCESS }
+        engine = speech
+        onDispose { speech.stop(); speech.shutdown() }
+    }
+    val message = if (active) {
+        if (english) "Audio recording is active." else "L’enregistrement audio est en cours."
+    } else {
+        if (english) "Audio recording has been requested." else "Un enregistrement audio a été demandé."
+    }
+    LaunchedEffect(engine, ready, message) {
+        val speech = engine
+        if (speech != null && ready && speech.setLanguage(if (english) Locale.ENGLISH else Locale.FRENCH) >= 0) {
+            speech.speak(message, TextToSpeech.QUEUE_FLUSH, null, "widemeet-recording")
+        }
+    }
+}
 @Composable fun RoomPanel(english:Boolean,gateway:RoomGateway,session:Session,workspace:Workspace,initialCreate:Boolean=false){
  fun tr(fr:String,en:String)=if(english)en else fr
  val hostRole=workspace.role in setOf("owner","promoteur","manager")
@@ -151,6 +175,10 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  Text(tr("Consentement audio","Audio consent"));Text(tr("Autorisez-vous la capture et la conservation de votre voix pour cette réunion ? Vous pouvez retirer votre accord à tout moment.","Do you authorize recording and retention of your voice for this meeting? You may withdraw consent at any time."));Text(if(r.optBoolean("consent"))tr("Votre accord est enregistré.","Your consent is recorded.")else tr("Votre accord n’est pas donné.","Your consent has not been given."))
  TextButton(enabled=!busy,onClick={command("consent",true)}){Text(tr("Donner mon accord","Give consent"))}
  TextButton(enabled=!busy,onClick={command("consent",false)}){Text(tr("Retirer mon accord","Withdraw consent"))}
+ val capturePhase=r.optJSONObject("recordingStatus")?.optString("phase")
+ if(capturePhase=="active" || (r.optString("recording")=="requested" && capturePhase !in setOf("stopping","complete","discarded"))){
+     key(r.getString("id")){RecordingAnnouncement(capturePhase=="active",english)}
+ }
  when(r.optJSONObject("recordingStatus")?.optString("phase")){
  "active"->Text(tr("● Enregistrement audio en cours","● Audio recording active"),color=MaterialTheme.colorScheme.error)
  "stopping"->Text(tr("Arrêt de la capture en cours","Stopping recording"))
