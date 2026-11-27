@@ -97,3 +97,10 @@ export async function recoverWithKey(base,{identifier,key,password,requestId,sup
  const j=await r.json();if(j?.recovered!==true||j.reconnect!==true)throw Error("RECOVERY_UNCONFIRMED");
  setRememberPreference(false);return true;
 }
+
+export async function requestSupervisedRecovery(base,identifier,key,fetcher=fetch,device=installationId){
+ const id=identifier.trim().toUpperCase(),code=key.trim().toLowerCase();
+ if(!/^WM-[A-Z0-9]{8,24}$/.test(id)||!/^[a-f0-9]{64}$/.test(code))throw Error("INVALID_REQUEST");
+ const r=await fetcher(endpoint(base,"request-recovery"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"WIDEMEET",identifier:id,recovery_key:code,supervised:true,installation_id:device(),platform:"web"}),cache:"no-store",redirect:"error",credentials:"omit"});
+ if(!r.ok)throw Error("RECOVERY_REJECTED");const j=await r.json();if(!UUID.test(j?.case_id??""))throw Error("RECOVERY_UNCONFIRMED");return j.case_id;
+}
