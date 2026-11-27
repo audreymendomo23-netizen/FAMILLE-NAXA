@@ -1,0 +1,1088 @@
+[
+  {
+    "id": "B1.01",
+    "title": "Splash Screen",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.02",
+    "title": "Bienvenue",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.03",
+    "title": "Connexion",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.04",
+    "title": "Création de compte",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.05",
+    "title": "Récupération de compte",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.06",
+    "title": "Configuration PIN",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.07",
+    "title": "Déverrouillage",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.08",
+    "title": "Configuration initiale",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.09",
+    "title": "Sélection d’espace",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.10",
+    "title": "Organisations",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.11",
+    "title": "Sites et bâtiments",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.12",
+    "title": "Utilisateurs",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.13",
+    "title": "Rôles et permissions",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.14",
+    "title": "Profil",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.15",
+    "title": "Paramètres",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.16",
+    "title": "Langues",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.17",
+    "title": "Abonnements",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.18",
+    "title": "Comparateur d’offres",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.19",
+    "title": "Extensions",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.20",
+    "title": "Paiements",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.21",
+    "title": "Historique financier",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.22",
+    "title": "Renouvellement",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.23",
+    "title": "Sessions et appareils",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.24",
+    "title": "Synchronisation",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B1.25",
+    "title": "CGU et confidentialité",
+    "tab": "Profil",
+    "bulk": "B1"
+  },
+  {
+    "id": "B2.01",
+    "title": "Video Wall",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.02",
+    "title": "Direct caméra",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.03",
+    "title": "Contrôle PTZ",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.04",
+    "title": "Enregistrements",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.05",
+    "title": "Chronologie vidéo",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.06",
+    "title": "Clips vidéo",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.07",
+    "title": "Export vidéo",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.08",
+    "title": "Favoris",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.09",
+    "title": "Programmation",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.10",
+    "title": "Centre audio",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.11",
+    "title": "Écoute audio",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.12",
+    "title": "Interphonie",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.13",
+    "title": "Diffusion sonore",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.14",
+    "title": "Inventaire des appareils",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.15",
+    "title": "Ajout d’équipement",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.16",
+    "title": "Découverte réseau",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.17",
+    "title": "Fiche équipement",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.18",
+    "title": "Configuration des connecteurs",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.19",
+    "title": "Catalogue de compatibilité",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.20",
+    "title": "Vérification de compatibilité",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.21",
+    "title": "Centre NAXA EDGE",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.22",
+    "title": "Installation EDGE",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.23",
+    "title": "Diagnostic réseau",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.24",
+    "title": "Configuration du stockage vidéo",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B2.25",
+    "title": "Santé des flux",
+    "tab": "Surveillance",
+    "bulk": "B2"
+  },
+  {
+    "id": "B3.01",
+    "title": "Accueil Control 360",
+    "tab": "Accueil",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.02",
+    "title": "Supervision multisite",
+    "tab": "Accueil",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.03",
+    "title": "Centre d’alertes",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.04",
+    "title": "Détail d’alerte",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.05",
+    "title": "Alertes critiques",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.06",
+    "title": "Escalade",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.07",
+    "title": "Intrusion",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.08",
+    "title": "Sabotage",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.09",
+    "title": "Centre des alarmes",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.10",
+    "title": "Actions distantes",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.11",
+    "title": "Confirmation de commande",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.12",
+    "title": "Historique des commandes",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.13",
+    "title": "Centre fumée",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.14",
+    "title": "Centre incendie",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.15",
+    "title": "Zones incendie",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.16",
+    "title": "Fiche détecteur",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.17",
+    "title": "Préalertes fumée",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.18",
+    "title": "Alarmes incendie",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.19",
+    "title": "Plan de bâtiment",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.20",
+    "title": "Chronologie incendie",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.21",
+    "title": "Tests et maintenance incendie",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.22",
+    "title": "Centre environnemental",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.23",
+    "title": "IA Security",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.24",
+    "title": "Zones intelligentes",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.25",
+    "title": "Corrélation des événements",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.26",
+    "title": "Analyse des alertes IA",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.27",
+    "title": "Centre des incidents",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.28",
+    "title": "Dossier incident",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.29",
+    "title": "Intervention",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B3.30",
+    "title": "Clôture d’incident",
+    "tab": "Alertes",
+    "bulk": "B3"
+  },
+  {
+    "id": "B4.01",
+    "title": "Carte générale GPS",
+    "tab": "Surveillance",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.02",
+    "title": "Localisation individuelle",
+    "tab": "Surveillance",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.03",
+    "title": "Historique des déplacements",
+    "tab": "Surveillance",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.04",
+    "title": "Geofencing",
+    "tab": "Surveillance",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.05",
+    "title": "Alertes GPS",
+    "tab": "Surveillance",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.06",
+    "title": "Gestion des traceurs",
+    "tab": "Surveillance",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.07",
+    "title": "Centre de présence",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.08",
+    "title": "Pointage",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.09",
+    "title": "Pointage QR",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.10",
+    "title": "Pointage GPS",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.11",
+    "title": "Pointage NFC/RFID/BLE",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.12",
+    "title": "Historique de présence",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.13",
+    "title": "Anomalies de pointage",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.14",
+    "title": "Centre des rondes",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.15",
+    "title": "Création de ronde",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.16",
+    "title": "Checkpoints",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.17",
+    "title": "Exécution d’une ronde",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.18",
+    "title": "Anomalies de ronde",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.19",
+    "title": "Rapport de ronde",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.20",
+    "title": "Centre de contrôle d’accès",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.21",
+    "title": "Profils d’accès",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.22",
+    "title": "Badges et identifiants",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.23",
+    "title": "Journal des accès",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.24",
+    "title": "Centre des visiteurs",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.25",
+    "title": "Enregistrement visiteur",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.26",
+    "title": "QR visiteur",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.27",
+    "title": "Centre des véhicules",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.28",
+    "title": "Fiche véhicule",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.29",
+    "title": "Accès véhicules",
+    "tab": "Gestion",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.30",
+    "title": "Centre SOS",
+    "tab": "Alertes",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.31",
+    "title": "Travailleur isolé",
+    "tab": "Alertes",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.32",
+    "title": "Sécurité personnelle",
+    "tab": "Alertes",
+    "bulk": "B4"
+  },
+  {
+    "id": "B4.33",
+    "title": "Historique SOS",
+    "tab": "Alertes",
+    "bulk": "B4"
+  },
+  {
+    "id": "B5.01",
+    "title": "Dashboard ERP",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.02",
+    "title": "Portefeuille clients",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.03",
+    "title": "Fiche client",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.04",
+    "title": "Gestion des contrats",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.05",
+    "title": "Gestion des équipes",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.06",
+    "title": "Fiche collaborateur",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.07",
+    "title": "Planning",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.08",
+    "title": "Affectations",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.09",
+    "title": "Permutations et remplacements",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.10",
+    "title": "Suivi des heures",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.11",
+    "title": "Centre des interventions",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.12",
+    "title": "Ordres de travail",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.13",
+    "title": "Calendrier des interventions",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.14",
+    "title": "Inventaire des actifs",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.15",
+    "title": "Fiche actif",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.16",
+    "title": "Maintenance préventive",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.17",
+    "title": "Maintenance corrective",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.18",
+    "title": "Diagnostic des appareils",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.19",
+    "title": "Garanties et licences",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.20",
+    "title": "Pièces et consommables",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.21",
+    "title": "Fournisseurs",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.22",
+    "title": "Installateurs",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.23",
+    "title": "Partenaires",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.24",
+    "title": "Contrats de maintenance",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.25",
+    "title": "Documents",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.26",
+    "title": "Coûts opérationnels",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.27",
+    "title": "Budgets et engagements",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.28",
+    "title": "Rapports de sécurité",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.29",
+    "title": "Rapports de présence",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.30",
+    "title": "Rapports techniques",
+    "tab": "Gestion",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.31",
+    "title": "Analyse multisite",
+    "tab": "Accueil",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.32",
+    "title": "Indicateurs de pilotage",
+    "tab": "Accueil",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.33",
+    "title": "Centre des exports",
+    "tab": "Accueil",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.34",
+    "title": "Assistant IA",
+    "tab": "Accueil",
+    "bulk": "B5"
+  },
+  {
+    "id": "B5.35",
+    "title": "Recommandations IA",
+    "tab": "Accueil",
+    "bulk": "B5"
+  },
+  {
+    "id": "B6.01",
+    "title": "Centre de notifications",
+    "tab": "Alertes",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.02",
+    "title": "Préférences de notifications",
+    "tab": "Alertes",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.03",
+    "title": "Configuration des escalades",
+    "tab": "Alertes",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.04",
+    "title": "Centre Livecare",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.05",
+    "title": "FAQ",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.06",
+    "title": "Chatbot",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.07",
+    "title": "Livechat humain",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.08",
+    "title": "Appel audio",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.09",
+    "title": "Appel vidéo",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.10",
+    "title": "Partage d’écran",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.11",
+    "title": "Création de ticket",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.12",
+    "title": "Suivi des tickets",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.13",
+    "title": "Historique support",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.14",
+    "title": "Satisfaction client",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.15",
+    "title": "Administration centrale",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.16",
+    "title": "Administration des comptes",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.17",
+    "title": "Administration commerciale",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.18",
+    "title": "Administration technique",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.19",
+    "title": "Journal d’audit",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.20",
+    "title": "Historique des consultations",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.21",
+    "title": "Sécurité des sessions",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.22",
+    "title": "Centre des preuves",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.23",
+    "title": "Partage sécurisé",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.24",
+    "title": "Politique de conservation",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.25",
+    "title": "Gestion du stockage",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.26",
+    "title": "Centre de sauvegarde",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.27",
+    "title": "Restauration",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.28",
+    "title": "Applications connectées",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.29",
+    "title": "Autorisations d’intégration",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.30",
+    "title": "Journal des intégrations",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.31",
+    "title": "Confidentialité des données",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.32",
+    "title": "Diagnostic système",
+    "tab": "Profil",
+    "bulk": "B6"
+  },
+  {
+    "id": "B6.33",
+    "title": "Versions et mises à jour",
+    "tab": "Profil",
+    "bulk": "B6"
+  }
+]

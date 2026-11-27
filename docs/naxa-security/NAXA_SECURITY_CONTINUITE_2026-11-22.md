@@ -369,3 +369,6 @@ Ne pas retarder le cadrage technique déjà approuvé, mais ne pas déclarer la 
 ---
 
 **Fin du document de continuité NAXA SECURITY 360°.**
+
+## Reprise navigation B1–B6
+Registre de 181 écrans (25/25/30/33/35/33), cinq onglets et navigation Compose/Web, recherche et retour, liens internes. Voir REGISTRE_ECRANS_B1_B6.md. État : interface de préparation uniquement, aucun parcours métier réel ni authentification, aucune commande matérielle. Recettes de registre ajoutées, compilation et E2E à constater. Palette provisoire, logo officiel ouvert. Aucun autre produit modifié.
