@@ -28,7 +28,7 @@ class ZippleSyncWorker(context:Context,params:WorkerParameters):CoroutineWorker(
     if(dao.blocked(session.organization,session.member,site.id)>0)continue
     for(event in dao.queued(session.organization,session.member,site.id)){
      if(ZippleSyncSession.current!==session||!session.permits(site.id))return Result.success()
-     val state=if(event.aggregateType in setOf("erp_produce","erp_lot_receive","erp_expense_record","erp_count_lot")){
+     val state=if(event.aggregateType in setOf("erp_produce","erp_lot_receive","erp_expense_record","erp_expense_submit","erp_count_lot")){
       val business=ZippleBusiness(BuildConfig.ZIPPLE_BUSINESS_API_URL,BuildConfig.DEBUG)
       val payload=org.json.JSONObject().put("organization_id",session.organization).put("member_id",session.member).put("event_id",event.eventId).put("action",event.aggregateType.removePrefix("erp_")).put("payload",org.json.JSONObject(event.payloadJson))
       val receipt=business.call(session,site.id,"offline_erp_apply",payload) as? org.json.JSONObject?:error("INVALID_RECEIPT")

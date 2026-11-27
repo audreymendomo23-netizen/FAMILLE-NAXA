@@ -17,6 +17,7 @@ internal fun evidenceHash(bytes:ByteArray):String=MessageDigest.getInstance("SHA
  val tr:(String,String)->String={fr,eng->if(en)eng else fr}
  val ctx=LocalContext.current;val scope=rememberCoroutineScope();val keys=remember{RequestKeys()}
  var data by remember{mutableStateOf<JSONObject?>(null)};var source by remember{mutableStateOf("")};var label by remember{mutableStateOf("")};var mime by remember{mutableStateOf("")};var bytes by remember{mutableStateOf<ByteArray?>(null)};var download by remember{mutableStateOf<ByteArray?>(null)}
+ var reason by remember{mutableStateOf("")}
  var busy by remember{mutableStateOf(false)};var msg by remember{mutableStateOf("")};var open by remember{mutableStateOf(false)}
  val allowed=session.role in setOf("promoteur","manager")&&session.permits(site)
  suspend fun load(){data=api.call(session,site,"finance_documents_snapshot") as? JSONObject?:error("UNAVAILABLE")}
@@ -49,9 +50,17 @@ internal fun evidenceHash(bytes:ByteArray):String=MessageDigest.getInstance("SHA
   api.call(session,site,"finance_document_add",keys.apply("finance_document_add",payload));keys.confirmed("finance_document_add")
   bytes=null;label="";msg=tr("Justificatif joint","Document attached");load()
  }}){Text(tr("Joindre le justificatif","Attach document"))}
+ if(data?.optBoolean("can_review")==true)OutlinedTextField(reason,{reason=it.take(500)},label={Text(tr("Motif du contrôle manuel (pas une analyse antivirus)","Manual review reason (not a malware scan)"))},modifier=Modifier.fillMaxWidth(),enabled=!busy)
  data?.rows("documents")?.forEach{x->
   Text(x.optString("label")+" · "+x.optString("created_at"))
-  OutlinedButton(enabled=allowed&&!busy&&download==null,onClick={run{
+  Text(tr("Contrôle manuel","Manual review")+": "+x.optString("review_state")+" · "+tr("Téléchargements","Downloads")+": "+x.optInt("download_count"))
+  if(data?.optBoolean("can_review")==true)for(decision in listOf("reviewed","blocked")){
+   OutlinedButton(enabled=allowed&&!busy&&reason.trim().length>=5,onClick={run{
+    val payload=JSONObject().put("document_id",x.getString("id")).put("decision",decision).put("reason",reason.trim())
+    api.call(session,site,"finance_document_review",keys.apply("finance_document_review",payload));keys.confirmed("finance_document_review");reason="";load()
+   }}){Text(if(decision=="reviewed")tr("Marquer contrôlé","Mark reviewed") else tr("Bloquer","Block"))}
+  }
+  OutlinedButton(enabled=allowed&&!busy&&download==null&&x.optString("review_state")!="blocked",onClick={run{
    val result=api.call(session,site,"finance_document_read",JSONObject().put("document_id",x.getString("id"))) as? JSONObject?:error("DOCUMENT")
    require(result.getString("id")==x.getString("id")&&result.getString("mime")==x.getString("mime")&&result.getString("sha256_hex")==x.getString("sha256_hex"))
    val ext=when(result.getString("mime")){"application/pdf"->"pdf";"image/jpeg"->"jpg";"image/png"->"png";else->error("DOCUMENT")}

@@ -12,7 +12,7 @@ create function public.zp_offline_erp_apply(p_access text,p_site uuid,p_org uuid
 declare m public.zp_members;old public.zp_erp_sync_receipts;st text:='acknowledged';outcome jsonb;v int;item uuid;servings int;begin
  m:=public.zp_erp_actor(p_access,p_site);
  if m.org_id is distinct from p_org or m.id is distinct from p_member then raise exception 'DENIED';end if;
- if p_event is null or (p_action is null or p_action not in ('produce','lot_receive','expense_record','count_lot')) or p_payload is null or jsonb_typeof(p_payload)<>'object' or length(p_payload::text)>2000 then raise exception 'INVALID_INPUT';end if;
+ if p_event is null or (p_action is null or p_action not in ('produce','lot_receive','expense_record','expense_submit','count_lot')) or p_payload is null or jsonb_typeof(p_payload)<>'object' or length(p_payload::text)>2000 then raise exception 'INVALID_INPUT';end if;
  perform 1 from public.zp_site_modes where site_id=p_site for update;
  select * into old from public.zp_erp_sync_receipts where event_id=p_event;
  if old.event_id is not null then
@@ -29,6 +29,8 @@ declare m public.zp_members;old public.zp_erp_sync_receipts;st text:='acknowledg
   outcome:=public.zp_produce(p_access,p_site,item,p_event,servings);
   elsif p_action='lot_receive' then
    outcome:=jsonb_build_object('id',public.zp_receive_lot(p_access,p_site,(p_payload->>'ingredient_id')::uuid,p_event,p_payload->>'label',p_payload->>'supplier',(p_payload->>'qty_milli')::bigint,(p_payload->>'cost_xaf')::bigint,(p_payload->>'expires_on')::date));
+  elsif p_action='expense_submit' then
+   outcome:=jsonb_build_object('id',public.zp_expense_submit(p_access,p_site,p_event,p_payload->>'category',p_payload->>'label',(p_payload->>'amount_xaf')::bigint,p_payload->>'method',p_payload->>'reference',(p_payload->>'expense_date')::date));
   elsif p_action='expense_record' then
    outcome:=jsonb_build_object('id',public.zp_record_expense(p_access,p_site,p_event,p_payload->>'category',p_payload->>'label',(p_payload->>'amount_xaf')::bigint,p_payload->>'method',p_payload->>'reference',(p_payload->>'expense_date')::date));
   elsif p_action='count_lot' then

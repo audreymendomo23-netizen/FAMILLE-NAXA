@@ -494,6 +494,12 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const proof=await scalar("select zp_finance_document_read($1,$2,$3)",[b.access,b.site,proofId]);assert.equal(proof.base64,proofPng);assert.equal(proof.sha256_hex.length,64);
  await assert.rejects(scalar("select zp_finance_document_read($1,$2,$3)",[a.access,a.site,proofId]),/DENIED/);
  const proofSnap=await scalar("select zp_finance_documents_snapshot($1,$2)",[b.access,b.site]);assert.ok(proofSnap.documents.some(x=>x.id===proofId&&!x.base64&&!x.content));
+ const reviewDoc=(decision,key)=>scalar("select zp_finance_document_review($1,$2,$3,$4,$5,'Manual evidence check')",[b.access,b.site,proofId,key,decision]);
+ const dkey=uid(),dreview=await reviewDoc("blocked",dkey);assert.equal(await reviewDoc("blocked",dkey),dreview);
+ await assert.rejects(scalar("select zp_finance_document_read($1,$2,$3)",[b.access,b.site,proofId]),/DOCUMENT_BLOCKED/);
+ await reviewDoc("reviewed",uid());assert.equal((await scalar("select zp_finance_document_read($1,$2,$3)",[b.access,b.site,proofId])).base64,proofPng);
+ const reviewedDoc=(await scalar("select zp_finance_documents_snapshot($1,$2)",[b.access,b.site])).documents.find(x=>x.id===proofId);assert.equal(reviewedDoc.review_state,"reviewed");assert.equal(Number(reviewedDoc.download_count),2);
+ console.log("ZIPPLE_BULK3_DOCUMENT_REVIEW_AUDIT_PASS");
  console.log("ZIPPLE_BULK3_SCOPED_DOCUMENT_EVIDENCE_PASS");
  const thirdLedgerAccount=await scalar("select zp_ledger_account_add($1,$2,'TEST-S','Caisse test','Trésorerie')",[b.access,b.site]);
  const splitExpense=await scalar("select zp_record_expense($1,$2,$3,'rent','Loyer ventilé',900,'bank','SPLIT-REF',(now() at time zone 'Africa/Douala')::date)",[b.access,b.site,uid()]);
@@ -809,6 +815,11 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(Number(await scalar("select received_milli from zp_purchases where id=$1",[cp])),1000);
  const ek=uid(),ea=[ctoken,ctl.site,ek];
  await assert.rejects(scalar("select zp_record_expense($1,$2,$3,'rent','Rent',2000,'bank','CTL-EXP',current_date)",ea),/EXPENSE_APPROVAL_REQUIRED/);
+ const offExpenseKey=uid(),offExpensePayload={category:"rent",label:"Offline approval",amount_xaf:2200,method:"bank",reference:"CTL-OFF",expense_date:new Date().toISOString().slice(0,10)};
+ const offSubmit=()=>scalar("select zp_offline_erp_apply($1,$2,$3,$4,$5,'expense_submit',$6)",[ctoken,ctl.site,ctl.org,cm,offExpenseKey,JSON.stringify(offExpensePayload)]);
+ const pendingExpense=await offSubmit();assert.equal(pendingExpense.state,"acknowledged");assert.deepEqual(await offSubmit(),pendingExpense);
+ await assert.rejects(scalar("select zp_expense_apply($1,$2,$3)",[ctoken,ctl.site,pendingExpense.outcome.id]),/EXPENSE_APPROVAL_REQUIRED/);
+ console.log("ZIPPLE_BULK3_OFFLINE_EXPENSE_SUBMISSION_PASS");
  const er=await scalar("select zp_expense_submit($1,$2,$3,'rent','Rent',2000,'bank','CTL-EXP',current_date)",ea);
  await assert.rejects(scalar("select zp_expense_apply($1,$2,$3)",[ctoken,ctl.site,er]),/EXPENSE_APPROVAL_REQUIRED/);
  await scalar("select zp_expense_decide($1,$2,$3,'approved','Verified invoice')",[ctl.access,ctl.site,er]);

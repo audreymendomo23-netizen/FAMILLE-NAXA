@@ -154,6 +154,9 @@ internal class RequestKeys{
     OutlinedButton(enabled=canWrite&&title.isNotBlank()&&reference.trim().length>=4&&(ZippleErpNumbers.integer(cost)?:0)>0&&runCatching{LocalDate.parse(date)}.isSuccess,onClick={run{
      queue("expense_record",JSONObject().put("label",title.trim()).put("category",category).put("method",method).put("amount_xaf",ZippleErpNumbers.integer(cost)).put("reference",reference.trim()).put("expense_date",date));title="";cost="";reference=""
     }}){Text(tr("Mettre la dépense en attente","Queue expense"))}
+    OutlinedButton(enabled=canWrite&&title.isNotBlank()&&reference.trim().length>=4&&(ZippleErpNumbers.integer(cost)?:0)>0&&runCatching{LocalDate.parse(date)}.isSuccess,onClick={run{
+     queue("expense_submit",JSONObject().put("label",title.trim()).put("category",category).put("method",method).put("amount_xaf",ZippleErpNumbers.integer(cost)).put("reference",reference.trim()).put("expense_date",date));title="";cost="";reference=""
+    }}){Text(tr("Soumettre pour approbation hors connexion","Queue for offline approval"))}
     data?.rows("expenses")?.forEach{Text(it.optString("label")+" · "+it.optLong("amount_xaf")+" FCFA")}
    }
   }
