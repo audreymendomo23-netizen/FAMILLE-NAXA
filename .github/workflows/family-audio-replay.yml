@@ -1,5 +1,11 @@
 name: Family media — isolated audio recording
 on:
+  push:
+    branches: [test/widemeet-wave02-b3-20261127]
+    paths:
+      - 'packages/media-core/widemeet-live-captions.mjs'
+      - 'scripts/widemeet/media-product-replay.mjs'
+      - '.github/workflows/family-audio-replay.yml'
   pull_request:
     branches: [test/widemeet-qualification-20261126]
     types: [opened, synchronize, reopened]
