@@ -274,7 +274,7 @@ class Bulk2LiveDeviceTest {
   click("Livraison Restaurant");awaitText("Préparation des zones et livreurs ; commande externe non activée.")
   input("Nom de zone","Zone ERP native");input("Périmètre et consignes","Secteur test");input("Frais FCFA","500");click("Enregistrer la zone");awaitText("Opération enregistrée")
   click("Modifier la zone : Zone ERP native")
-  input("Frais FCFA","750");click("Zone active dans le projet : Oui");click("Non");click("Enregistrer la zone");awaitText("Zone ERP native · 750 FCFA · Secteur test · Inactive")
+  step("replace existing zone fee"){val matcher=hasText("Frais FCFA",substring=false) and hasSetTextAction();compose.onNode(matcher).performScrollTo().performTextReplacement("750");compose.onNode(matcher).assert(hasText("750"))};click("Zone active dans le projet : Oui");click("Non");click("Enregistrer la zone");awaitText("Zone ERP native · 750 FCFA · Secteur test · Inactive")
   click("Livreur de l'établissement : —");click("Profil ERP natif");click("Enregistrer le livreur");awaitText("Livreur affecté : Profil ERP natif")
   click("Retirer l’affectation : Profil ERP natif");awaitText("Opération enregistrée")
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_QA_CASE_PARTIAL B4-017 NATIVE_ZONE_AND_COURIER_PASS")
