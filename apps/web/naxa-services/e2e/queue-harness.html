@@ -4,14 +4,15 @@
 <body>
   <main><h1>IndexedDB queue test harness</h1><p id="ready">Loading</p></main>
   <script type="module">
-    import { enqueue, listAppEvents, listQueued, acquireDueBatch, applySyncPage, getSyncCursor, listSyncChanges } from "@famille/offline-web";
+    import { applyServerReceipt, enqueue, listAppEvents, listQueued, acquireDueBatch, applySyncPage, getSyncCursor, listSyncChanges } from "@famille/offline-web";
 
     window.__naxaQueueHarness = Object.freeze({
       enqueue: (item) => enqueue(item),
-      listAppEvents: (appId, deviceId, organizationId) => listAppEvents(appId, deviceId, organizationId),
+      listAppEvents: (appId, deviceId, organizationId, memberId) => listAppEvents(appId, deviceId, organizationId, memberId),
+      receipt: (eventId, receipt, appId, lease) => applyServerReceipt(eventId,receipt,appId,lease),
       listQueued: (appId, deviceId, organizationId) => listQueued(appId, deviceId, organizationId),
-      acquire: (appId, deviceId, organizationId) => acquireDueBatch(10, Date.now(), 60_000, appId, deviceId, organizationId),
-      applyPage: (appId, deviceId, page, organizationId) => applySyncPage(appId, deviceId, page, organizationId),
+      acquire: (appId, deviceId, organizationId,memberId) => acquireDueBatch(10, Date.now(), 60_000, appId, deviceId, organizationId,memberId),
+      applyPage: (appId, deviceId, page, organizationId,memberId) => applySyncPage(appId, deviceId, page, organizationId,memberId),
       cursor: (appId, deviceId, organizationId, memberId) => getSyncCursor(appId, deviceId, organizationId, memberId),
       changes: (appId, deviceId, organizationId, memberId) => listSyncChanges(appId, deviceId, organizationId, memberId),
     });

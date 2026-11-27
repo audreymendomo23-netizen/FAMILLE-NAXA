@@ -29,6 +29,7 @@ on:
       - 'supabase/drafts/naxa_services_v20_activity_field_parity.sql'
       - 'supabase/tests/drafts/naxa_services_activity_field_matrix.sql'
       - 'apps/web/naxa-services/src/**'
+      - 'packages/offline-web/**'
       - 'supabase/functions/naxa-services-auth/**'
       - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/SecureLocalDatabase.kt'
       - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/auth/**'
@@ -584,6 +585,15 @@ jobs:
                   await p.getByRole('button',{name:'Enregistrer',exact:true}).click();
                   await p.getByText(/enregistré hors connexion/i).waitFor();
                   assert.equal((await records(owner.org.id)).length,0);
+                  const protectedRow=await p.evaluate(async marker=>{
+                    const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('famille-naxa-offline',3);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+                    try{
+                      const rows=await new Promise((resolve,reject)=>{const r=db.transaction('events').objectStore('events').getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+                      const scoped=rows.filter(x=>x.appId==='naxa-services-web');
+                      return scoped.length>0&&scoped.every(x=>x.payload===''&&x.sealedPayload?.ciphertext instanceof ArrayBuffer&&!JSON.stringify(x).includes(marker));
+                    }finally{db.close();}
+                  },name);
+                  assert.equal(protectedRow,true,'real authenticated offline customer must be encrypted before browser shutdown');
                   await isolated.close();
                   isolated=await launch();
                   p=await open(foreign);await clients(p);

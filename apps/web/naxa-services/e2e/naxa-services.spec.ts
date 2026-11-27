@@ -444,6 +444,64 @@ test("IndexedDB real browser: tenant partitions, atomic two-tab leases and indep
   await Promise.all([pageA.close(), pageB.close()]);
 });
 
+test("NAXA SERVICES Web: AES-GCM raw storage, legacy migration, receipt and projection integrity",async({context})=>{
+  const page=await context.newPage();
+  await page.goto("/e2e/queue-harness.html");
+  await page.waitForFunction(()=>document.querySelector("#ready")?.textContent==="ready");
+  const outcome=await page.evaluate(async()=>{
+    const h=(window as any).__naxaQueueHarness,appId="naxa-services-web",deviceId=crypto.randomUUID(),organizationId=crypto.randomUUID(),memberId=crypto.randomUUID(),foreign=crypto.randomUUID();
+    const scope={appId,deviceId,organizationId,memberId};
+    const marker="SENSITIVE-NAXA-FIXTURE-"+crypto.randomUUID();
+    const id=crypto.randomUUID();
+    const row={...scope,eventId:id,payload:JSON.stringify({org_id:organizationId,display_name:marker}),state:"queued",createdAt:Date.now()};
+    const fail=async(fn:()=>Promise<unknown>)=>{try{await fn();return false;}catch{return true;}};
+    await h.enqueue(row);
+    const db2=await new Promise<IDBDatabase>((resolve,reject)=>{const r=indexedDB.open("famille-naxa-offline",3);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    const get=(store:string,key:string)=>new Promise<any>((resolve,reject)=>{const r=db2.transaction(store).objectStore(store).get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    const put=(store:string,value:any)=>new Promise<void>((resolve,reject)=>{const t=db2.transaction(store,"readwrite");t.objectStore(store).put(value);t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error);});
+    try{
+      const raw=await get("events",id);
+      const noClear=raw.payload===""&&raw.sealedPayload.ciphertext instanceof ArrayBuffer&&!JSON.stringify(raw).includes(marker);
+      const key=await get("meta","naxa-services-web:aes-gcm:v1");
+      const keyProtected=key.value instanceof CryptoKey&&key.value.extractable===false&&key.value.algorithm.name==="AES-GCM";
+      await h.enqueue(row);
+      const conflict=await fail(()=>h.enqueue({...row,payload:JSON.stringify({org_id:organizationId,display_name:"changed"})}));
+      const leaseRows=await h.acquire(appId,deviceId,organizationId,memberId);
+      const item=leaseRows.find((x:any)=>x.eventId===id);
+      const exact=item?.payload===row.payload&&leaseRows.length===1;
+      const foreignEmpty=(await h.listAppEvents(appId,deviceId,organizationId,foreign)).length===0;
+      await h.receipt(id,{event_id:id,status:"applied",detail:marker},appId,{memberId,deviceId,organizationId,attemptCount:item.attemptCount,leaseUntil:item.leaseUntil});
+      const receiptRaw=await get("events",id);
+      const receiptEncrypted=receiptRaw.serverReceipt===undefined&&receiptRaw.sealedReceipt.ciphertext instanceof ArrayBuffer;
+      const legacy={...row,eventId:crypto.randomUUID(),deviceSequence:12,payload:JSON.stringify({org_id:organizationId,display_name:marker+" legacy"})};
+      await put("events",legacy);
+      const read=await h.listAppEvents(appId,deviceId,organizationId,memberId);
+      const legacyRaw=await get("events",legacy.eventId);
+      const migrated=legacyRaw.payload===""&&legacyRaw.deviceSequence===12&&read.some((x:any)=>x.eventId===legacy.eventId&&x.payload===legacy.payload);
+      const receiptRoundtrip=read.some((x:any)=>x.eventId===id&&x.serverReceipt?.detail===marker&&x.state==="acknowledged");
+      const projection={cursor:1,event_id:crypto.randomUUID(),source_device_id:deviceId,origin_site_id:null,site_id:null,visible_site_ids:[],workstation_id:null,aggregate_type:"customer",aggregate_id:id,action_code:"customer.created",aggregate_version:1,payload:{org_id:organizationId,display_name:marker},recorded_at:new Date().toISOString()};
+      await h.applyPage(appId,deviceId,{changes:[projection],next_cursor:1,has_more:false},organizationId,memberId);
+      const changeKey=JSON.stringify([appId,deviceId,organizationId,memberId,1]);
+      const storedChange=await get("changes",changeKey);
+      const projectionEncrypted=storedChange.payload===undefined&&storedChange.sealedChange.ciphertext instanceof ArrayBuffer;
+      const projected=await h.changes(appId,deviceId,organizationId,memberId);
+      const projectionRoundtrip=projected.length===1&&projected[0].payload.display_name===marker;
+      const flipped=new Uint8Array(receiptRaw.sealedPayload.ciphertext.slice(0));flipped[0]^=1;
+      await put("events",{...receiptRaw,sealedPayload:{...receiptRaw.sealedPayload,ciphertext:flipped.buffer}});
+      const tamperDenied=await fail(()=>h.listAppEvents(appId,deviceId,organizationId,memberId));
+      await put("events",receiptRaw);
+      await put("events",{...receiptRaw,memberId:foreign});
+      const movedDenied=await fail(()=>h.listAppEvents(appId,deviceId,organizationId,foreign));
+      await put("events",receiptRaw);
+      const sibling={...row,appId:"sibling-unmodified",eventId:crypto.randomUUID()};
+      await h.enqueue(sibling);
+      const compatible=(await get("events",sibling.eventId)).payload===sibling.payload;
+      return {noClear,keyProtected,conflict,exact,foreignEmpty,receiptEncrypted,migrated,receiptRoundtrip,projectionEncrypted,projectionRoundtrip,tamperDenied,movedDenied,compatible};
+    }finally{db2.close();}
+  });
+  expect(outcome).toEqual({noClear:true,keyProtected:true,conflict:true,exact:true,foreignEmpty:true,receiptEncrypted:true,migrated:true,receiptRoundtrip:true,projectionEncrypted:true,projectionRoundtrip:true,tamperDenied:true,movedDenied:true,compatible:true});
+});
+
 test("PWA: production service worker keeps the app shell available after offline navigation", async ({ context }) => {
   const page = await context.newPage();
   await page.goto("http://127.0.0.1:4174/");
