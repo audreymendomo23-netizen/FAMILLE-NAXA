@@ -1,6 +1,6 @@
 // Only public key and short-lived access token supplied by the dedicated SECURITY auth boundary.
 export const SECURITY_URL="https://idupfjbkwjcavyisxteo.supabase.co";
-export const resources=["sec_organizations","sec_sites","sec_devices","sec_incidents","sec_work_orders","sec_attendance_drafts"] as const;
+export const resources=["sec_organizations","sec_sites","sec_devices","sec_incidents","sec_work_orders","sec_attendance_drafts","sec_module_requests"] as const;
 export type Resource=typeof resources[number];
 export type SecuritySession={accessToken:string;publicKey:string;userId:string};
 export async function request(session:SecuritySession,resource:Resource,options:{method?:"GET"|"POST";body?:Record<string,unknown>;site?:string;organization?:string;record?:string;requestId?:string}={},transport:typeof fetch=fetch){
