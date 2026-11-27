@@ -25,6 +25,9 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  const secondItem=await ok("menu_add",{name:"Montant natif",post:"kitchen",price_xaf:800,qty:1});
  const secondOrder=await ok("order_create",{channel:"counter",request_id:id(),lines:[{item_id:secondItem,qty:1}]});
  for(const next of ["preparing","ready","served"])await ok("line_advance",{order_id:secondOrder.id,item_id:secondItem,next});
+ const mixedItem=await ok("menu_add",{name:"Multi-règlement natif",post:"kitchen",price_xaf:1000,qty:1});
+ const mixedOrder=await ok("order_create",{channel:"counter",request_id:id(),lines:[{item_id:mixedItem,qty:1}]});
+ for(const next of ["preparing","ready","served"])await ok("line_advance",{order_id:mixedOrder.id,item_id:mixedItem,next});
  // A fixed local HTTPS bridge forwards only the two isolated gateways. No production endpoint or credentials.
  server=createServer({key:await readFile(process.env.ZIPPLE_TLS_KEY),cert:await readFile(process.env.ZIPPLE_TLS_CERT)},async(req,res)=>{
   try{const path=new URL(req.url,"https://127.0.0.1:4443").pathname,m=path.match(/^\/(gateway|zipple-business)\/([a-z_]+)$/);
@@ -37,8 +40,8 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
   }catch{res.writeHead(503).end()}
  });
  await new Promise((ok,fail)=>{server.once("error",fail);server.listen(4443,"127.0.0.1",ok)});
- const firstNo=await scalar("select service_number from zp_orders where id=$1",[order.id]),secondNo=await scalar("select service_number from zp_orders where id=$1",[secondOrder.id]);
- await new Promise((resolve,reject)=>{const proc=spawn("gradle",["--no-daemon",":zipple:connectedDebugAndroidTest","-PZIPPLE_API_URL=https://127.0.0.1:4443/gateway","-PZIPPLE_BUSINESS_API_URL=https://127.0.0.1:4443/zipple-business","-Pandroid.testInstrumentationRunnerArguments.class=cm.naxa.zipple.Bulk2LiveDeviceTest","-Pandroid.testInstrumentationRunnerArguments.zippleBulk2Local=1","-Pandroid.testInstrumentationRunnerArguments.zippleFixtureLogin="+login,"-Pandroid.testInstrumentationRunnerArguments.zippleFixturePassword="+password,"-Pandroid.testInstrumentationRunnerArguments.zippleSplitNumber="+firstNo,"-Pandroid.testInstrumentationRunnerArguments.zippleAmountNumber="+secondNo],{stdio:"inherit"});proc.on("error",reject);proc.on("exit",code=>code===0?resolve():reject(Error("Android real business recipe failed: "+code)))});
+ const firstNo=await scalar("select service_number from zp_orders where id=$1",[order.id]),secondNo=await scalar("select service_number from zp_orders where id=$1",[secondOrder.id]),mixedNo=await scalar("select service_number from zp_orders where id=$1",[mixedOrder.id]);
+ await new Promise((resolve,reject)=>{const proc=spawn("gradle",["--no-daemon",":zipple:connectedDebugAndroidTest","-PZIPPLE_API_URL=https://127.0.0.1:4443/gateway","-PZIPPLE_BUSINESS_API_URL=https://127.0.0.1:4443/zipple-business","-Pandroid.testInstrumentationRunnerArguments.class=cm.naxa.zipple.Bulk2LiveDeviceTest","-Pandroid.testInstrumentationRunnerArguments.zippleBulk2Local=1","-Pandroid.testInstrumentationRunnerArguments.zippleFixtureLogin="+login,"-Pandroid.testInstrumentationRunnerArguments.zippleFixturePassword="+password,"-Pandroid.testInstrumentationRunnerArguments.zippleSplitNumber="+firstNo,"-Pandroid.testInstrumentationRunnerArguments.zippleAmountNumber="+secondNo,"-Pandroid.testInstrumentationRunnerArguments.zippleMixedNumber="+mixedNo],{stdio:"inherit"});proc.on("error",reject);proc.on("exit",code=>code===0?resolve():reject(Error("Android real business recipe failed: "+code)))});
  assert.ok(lostRequest);assert.equal(Number(await scalar("select count(*) from zp_credit_payments where request_id=$1",[lostRequest])),1);
  for(const [oid,expected,count] of [[order.id,3000,2],[secondOrder.id,800,2]]){
  assert.equal(Number(await scalar("select count(*) from zp_cash_receipts where order_id=$1",[oid])),1);
@@ -46,7 +49,9 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  assert.equal(Number(await scalar("select count(*) from zp_credit_payments p join zp_credit_sales s on s.id=p.sale_id where s.order_id=$1",[oid])),count);
  assert.equal(await scalar("select zp_credit_status($1)",[oid]),"paid");
  }
- const closed=await ok("cash_close",{cash_id:cash,counted_xaf:3900});assert.equal(closed.variance_xaf,0);
+ assert.equal(Number(await scalar("select count(*) from zp_cash_tenders t join zp_cash_receipts r on r.id=t.receipt_id where r.order_id=$1",[mixedOrder.id])),3);
+ assert.equal(Number(await scalar("select sum(t.amount_xaf) from zp_cash_tenders t join zp_cash_receipts r on r.id=t.receipt_id where r.order_id=$1",[mixedOrder.id])),1000);
+ const closed=await ok("cash_close",{cash_id:cash,counted_xaf:4900});assert.equal(closed.variance_xaf,0);
  console.log("ZIPPLE_BULK2_ANDROID_REAL_EDGE_SPLIT_QUANTITY_AMOUNT_AND_CASH_PASS");
  }finally{if(server)await new Promise(ok=>server.close(ok));await db.end()}
 });

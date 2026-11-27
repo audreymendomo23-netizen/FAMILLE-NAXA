@@ -753,6 +753,9 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const amountTicket=await order(splitTenant,"counter",[{item_id:splitProduct,qty:2}]);
  for(const state of ["preparing","ready","served"])await scalar("select zp_advance_line($1,$2,$3,$4,$5)",[splitTenant.access,splitTenant.site,amountTicket.id,splitProduct,state]);
  await collectSplit(uid(),"Premier montant",500,[],"cash",null,amountTicket.id);
+ const usedSplitRef=await scalar("select reference from zp_credit_payments where sale_id=$1 and method='mtn_momo'",[splitSaleId]);
+ await assert.rejects(collectSplit(uid(),"Référence déjà utilisée",500,[],"mtn_momo",usedSplitRef,amountTicket.id),/SPLIT_REFERENCE_USED/);
+ const finishedSplit=(await scalar("select zp_split_snapshot($1,$2)",[splitTenant.access,splitTenant.site])).orders.find(x=>x.id===splitTicket.id);assert.equal(finishedSplit.balance_xaf,0);assert.equal(finishedSplit.parts.length,2);
  await assert.rejects(collectSplit(uid(),"Trop perçu",1501,[],"cash",null,amountTicket.id),/SPLIT_EXCEEDS_BALANCE/);
  const amountPart=await collectSplit(uid(),"Solde",1500,[],"orange_money","SPLIT-"+uid(),amountTicket.id);assert.equal(amountPart.balance_xaf,0);
  const splitClose=await scalar("select zp_close_cash($1,$2,$3,1600)",[splitTenant.access,splitTenant.site,splitDrawer]);assert.equal(splitClose.expected_xaf,1600);assert.equal(splitClose.variance_xaf,0);

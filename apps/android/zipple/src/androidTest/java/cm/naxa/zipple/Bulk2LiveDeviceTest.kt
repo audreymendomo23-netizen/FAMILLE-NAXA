@@ -17,7 +17,7 @@ class Bulk2LiveDeviceTest {
   assumeTrue("Dedicated disposable business recipe",args.getString("zippleBulk2Local")=="1")
   assertEquals("https://127.0.0.1:4443/zipple-business",BuildConfig.ZIPPLE_BUSINESS_API_URL)
   val password=requireNotNull(args.getString("zippleFixturePassword"));val login=requireNotNull(args.getString("zippleFixtureLogin"))
-  val itemNo=requireNotNull(args.getString("zippleSplitNumber"));val amountNo=requireNotNull(args.getString("zippleAmountNumber"))
+  val itemNo=requireNotNull(args.getString("zippleSplitNumber"));val amountNo=requireNotNull(args.getString("zippleAmountNumber"));val mixedNo=requireNotNull(args.getString("zippleMixedNumber"))
   fun awaitText(text:String){compose.waitUntil(30000){compose.onAllNodesWithText(text,substring=false).fetchSemanticsNodes().isNotEmpty()}}
   fun click(text:String){awaitText(text);compose.onNodeWithText(text,substring=false).performScrollTo().performClick()}
   fun input(text:String,value:String){awaitText(text);compose.onNodeWithText(text,substring=false).performScrollTo().performTextInput(value)}
@@ -36,6 +36,8 @@ class Bulk2LiveDeviceTest {
   click("Confirmer le règlement partiel reçu");awaitText("Règlement confirmé — solde : 500 FCFA")
   input("Personne ou groupe","Groupe B");input("Montant partiel FCFA","500")
   click("Confirmer le règlement partiel reçu");awaitText("Règlement confirmé — solde : 0 FCFA")
+  click("#"+mixedNo+" · 1000 FCFA");click("Paiement complet multi-moyens")
+  input("Montant du règlement 1","200");input("Montant du règlement 2","300");click("Ajouter un règlement");input("Montant du règlement 3","500");click("Confirmer le paiement complet reçu");awaitText("Règlement confirmé — solde : 0 FCFA")
   click("Déconnexion")
   awaitText("Se connecter")
  }
