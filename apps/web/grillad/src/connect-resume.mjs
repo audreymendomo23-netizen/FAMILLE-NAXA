@@ -1,0 +1,7 @@
+// Tab-local resume for public QR orders. No QR token, customer identity or payment data stored.
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export async function resumeKey(qr){if(!/^[A-Za-z0-9_-]{32,128}$/.test(qr))throw Error('QR invalide');const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(qr));return 'grillad-connect-v1:'+Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('')}
+export function validResume(v){if(!v||!uuid.test(v.order||'')||!['pending','confirmed'].includes(v.state))throw Error('Commande locale invalide');if(v.state==='pending'&&(!Array.isArray(v.lines)||v.lines.length<1||v.lines.length>20||!v.lines.every(l=>uuid.test(l.item||'')&&Number.isInteger(l.qty)&&l.qty>=1&&l.qty<=1000)))throw Error('Panier local invalide');return v}
+export function getResume(key,storage=sessionStorage){const raw=storage.getItem(key);return raw?validResume(JSON.parse(raw)):null}
+export function saveResume(key,v,storage=sessionStorage){const next=validResume(v);const previous=getResume(key,storage);if(previous&&previous.order!==v.order)throw Error('Une commande existe déjà');storage.setItem(key,JSON.stringify(next.state==='confirmed'?{state:next.state,order:next.order}:{state:next.state,order:next.order,lines:next.lines.map(l=>({item:l.item,qty:l.qty}))}))}
+export function clearResume(key,order,storage=sessionStorage){const previous=getResume(key,storage);if(previous&&previous.order!==order)throw Error('Commande différente');storage.removeItem(key)}
