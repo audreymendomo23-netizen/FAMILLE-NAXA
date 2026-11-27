@@ -8,6 +8,7 @@
 - [Continuité générale](CONTINUITE.md)
 - [Continuité Famille NAXA](CONTINUITE_FAMILLE_NAXA.md)
 
+- [GRILLAD — Continuité de construction et audit transversal](grillad/GRILLAD_CONTINUITE.md)
 - [Continuité GRILLAD — audit, décisions et passation](passations/GRILLAD_CONTINUITE_2026-11-21.md)
 - [Cahier des charges GRILLAD V1.3 — tarifs validés et architecture multi-points](cahiers-des-charges/GRILLAD_V1_3.md)
 - [Cahier GRILLAD V1.2 — version historique remplacée](cahiers-des-charges/GRILLAD_V1_2.md)
