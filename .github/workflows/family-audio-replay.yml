@@ -8,6 +8,7 @@ on:
       - 'scripts/widemeet/media-product-replay.mjs'
       - 'scripts/widemeet/local-asr.py'
       - 'scripts/widemeet/asr-preflight.mjs'
+      - 'scripts/widemeet/live-caption-worker.mjs'
       - 'scripts/widemeet/asr-requirements.txt'
       - 'packages/media-core/**'
       - 'supabase/drafts/widemeet_*.sql'
@@ -27,6 +28,8 @@ jobs:
       - name: Test B3 durable consumer loop
         run: |
           node --check scripts/widemeet/asr-worker.mjs
+          node --check scripts/widemeet/live-caption-worker.mjs
+          node --check packages/media-core/widemeet-live-captions.mjs
           node --test packages/media-core/widemeet-asr-loop.test.mjs
       - name: Prepare isolated recording dependencies
         run: |
@@ -176,7 +179,7 @@ jobs:
           set -a; source "$RUNNER_TEMP/wm-recording.env"; set +a
           [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
           export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
-          export WM_AUTH_QUALIFIED=true WM_ROOM_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_MEDIA_QUALIFIED=true WM_RECORDING_QUALIFIED=true WM_RECORDING_STORAGE_QUALIFIED=true WM_TRANSCRIPTION_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
+          export WM_AUTH_QUALIFIED=true WM_ROOM_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_MEDIA_QUALIFIED=true WM_RECORDING_QUALIFIED=true WM_RECORDING_STORAGE_QUALIFIED=true WM_TRANSCRIPTION_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_LIVE_CAPTIONS_QUALIFIED=true WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
           export WM_LIVEKIT_URL=wss://127.0.0.1:7881 WM_LIVEKIT_API_KEY="$LK_TEST_KEY" WM_LIVEKIT_API_SECRET="$LK_TEST_SECRET"
           node scripts/widemeet/media-product-replay.mjs
       - name: Stop isolated recording database
