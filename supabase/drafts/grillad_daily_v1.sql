@@ -32,7 +32,7 @@ begin
  if hi>now() then raise exception 'GRILLAD_SERVICE_OPEN' using errcode='22023';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
  select * into old from grillad_private.daily_summary where org=p_org and site=p_site and service_day=p_day order by version desc limit 1;
- select jsonb_build_object('ca',coalesce(sum(s.total),0),'sales_count',count(*),'sold',coalesce(sum(s.qty),0),
+ select jsonb_build_object('ca',coalesce(sum(s.total),0),'sales_count',count(*) filter(where s.source='direct')+count(distinct s.connect_order) filter(where s.source='connect'),'sold',coalesce(sum(s.qty),0),
  'cost',case when count(*) filter(where s.cost is null)>0 then null else coalesce(sum(s.qty*s.cost),0) end,
  'expenses',(select coalesce(sum(e.value),0) from grillad_private.expenses e where e.org=p_org and e.site=p_site and e.created_at>=lo and e.created_at<hi),
  'prepared',(select coalesce(sum(a.qty),0) from grillad_private.preparations a where a.org=p_org and a.site=p_site and a.created_at>=lo and a.created_at<hi),
@@ -40,7 +40,7 @@ begin
  'open_cash_count',(select count(*) from grillad_private.cash c where c.org=p_org and c.site=p_site and c.opened_at<hi and (c.closed_at is null or c.closed_at>=hi)),
  'unpaired_arrivals',(select count(*) from grillad_private.attendance a where a.org=p_org and a.site=p_site and a.kind='arrival' and a.captured_at<hi and a.captured_at>=lo and not exists(select 1 from grillad_private.attendance b where b.paired_arrival=a.id and b.captured_at<hi)),
  'target',(select amount from grillad_private.targets where org=p_org and site=p_site and day=p_day),
- 'basis','server_confirmed_only') into v from grillad_private.sales s where s.org=p_org and s.site=p_site and s.created_at>=lo and s.created_at<hi and s.cancelled_at is null;
+ 'direct_ca',coalesce(sum(s.total) filter(where s.source='direct'),0),'connect_ca',coalesce(sum(s.total) filter(where s.source='connect'),0),'basis','server_confirmed_only') into v from grillad_private.sales s where s.org=p_org and s.site=p_site and s.created_at>=lo and s.created_at<hi and s.cancelled_at is null;
  if old.version is not null and old.data=v and old.starts_at=lo and old.ends_at=hi then return jsonb_build_object('version',old.version,'changed',false);end if;
  n:=coalesce(old.version,0)+1;
  insert into grillad_private.daily_summary(org,site,service_day,version,starts_at,ends_at,data) values(p_org,p_site,p_day,n,lo,hi,v);

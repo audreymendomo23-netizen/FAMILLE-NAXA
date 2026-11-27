@@ -105,6 +105,7 @@ do $$
 declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';v jsonb;notice text;
 begin
  v:=public.grillad_daily_list(o,s);if jsonb_array_length(v)<1 then raise exception 'missing daily';end if;
+ v:=public.grillad_prediction(o,s);if v->'ca_estimate'<>'null'::jsonb or v->'items'->0->>'quality'<>'insufficient' then raise exception 'insufficient forecast must be explicit';end if;
  v:=public.grillad_notice_feed(o,s);select x->>'id' into notice from jsonb_array_elements(v->'items') x where x->>'category'='daily' limit 1;
  if notice is null then raise exception 'missing notice';end if;
  perform public.grillad_notice_ack(o,s,notice);perform public.grillad_notice_ack(o,s,notice);

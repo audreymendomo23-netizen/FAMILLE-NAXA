@@ -116,4 +116,5 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_pilotage_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_security_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_push_v1.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_prediction_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_auth_bridge_assertions.sql
