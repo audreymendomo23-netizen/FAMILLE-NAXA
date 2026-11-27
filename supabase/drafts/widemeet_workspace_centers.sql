@@ -245,7 +245,7 @@ begin
   select coalesce(jsonb_agg(to_jsonb(c) order by c.published_at,c.id),'[]'::jsonb) into v from (
    select x.id,x.sender_id,x.kind,x.mime,x.name,x.bytes,x.sha256,x.published_at from public.wm_chat_media x
    where x.workspace_id=a.workspace_id and x.state='ready' and
-   ((gid is not null and x.group_id=gid and x.published_at>=joined)
+   ((gid is not null and x.group_id=gid and x.created_at>=joined and x.published_at>=joined)
     or (peer is not null and x.group_id is null and ((x.sender_id=a.account_id and x.peer_id=peer) or (x.sender_id=peer and x.peer_id=a.account_id))))
    order by x.published_at desc,x.id desc limit 100
   ) c;return jsonb_build_object('items',v);

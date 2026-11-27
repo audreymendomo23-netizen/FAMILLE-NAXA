@@ -25,7 +25,7 @@ class AuthGateway(private val context:Context,private val base:String){
  private fun endpoint(action:String):URI{
   val u=URI(base)
   require(u.scheme=="https" && !u.host.isNullOrBlank() && u.userInfo==null && u.query==null && u.fragment==null && u.path.trimEnd('/').endsWith("/widemeet-auth"))
-  require(action in setOf("login","logout","switch-workspace","request-recovery","change-password","identity","register","refresh","recovery-enroll","recover-key"))
+  require(action in setOf("login","logout","switch-workspace","request-recovery","change-password","identity","register","refresh","recovery-enroll","recover-key","chat-media"))
   return URI(base.trimEnd('/')+"/"+action)
  }
  private fun installation():String{
@@ -43,7 +43,8 @@ class AuthGateway(private val context:Context,private val base:String){
    c.outputStream.use{it.write(body.toString().toByteArray(Charsets.UTF_8))}
    require(c.responseCode in 200..299){"request_rejected"}
    if(c.responseCode==204)return JSONObject()
-   val raw=c.inputStream.bufferedReader().use{it.readText()};require(raw.length<=131072);return JSONObject(raw)
+   val limit=if(action=="chat-media")1405000 else 131072
+   val raw=c.inputStream.bufferedReader().use{reader->val out=StringBuilder();val buf=CharArray(8192);while(true){val n=reader.read(buf);if(n<0)break;require(out.length+n<=limit);out.append(buf,0,n)};out.toString()};return JSONObject(raw)
   }finally{c.disconnect()}
  }
  suspend fun login(identifier:String,password:String,keep:Boolean=false,pin:String=""):Session=withContext(Dispatchers.IO){lifecycle.withLock{
@@ -101,6 +102,7 @@ class AuthGateway(private val context:Context,private val base:String){
   val result=request("change-password",JSONObject().put("app_id","WIDEMEET").put("current_password",current).put("new_password",next).put("request_id",requestId),s.accessToken)
   require(result.optBoolean("changed",false)&&result.optBoolean("reconnect",false));clearLocalSession()
  }
+ suspend fun chatMedia(s:Session,action:String,data:JSONObject):JSONObject=withContext(Dispatchers.IO){require(action in setOf("list","upload","download","revoke"));request("chat-media",JSONObject().put("app_id","WIDEMEET").put("action",action).put("data",data),s.accessToken)}
  suspend fun identity(s:Session,action:String,data:JSONObject=JSONObject()):JSONObject=withContext(Dispatchers.IO){
   require(activeWorkspace(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())!=null)
   request("identity",JSONObject().put("app_id","WIDEMEET").put("action",action).put("data",data),s.accessToken)

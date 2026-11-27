@@ -46,6 +46,7 @@ private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("item
  for(m in messages){val mine=m.getString("sender_id")==session.memberId;Text(if(mine)tr("Moi","Me")else c.getString("display_name"),style=MaterialTheme.typography.labelLarge);Text(m.getString("body"));Text(m.optString("created_at")+(if(!m.isNull("read_at"))" · "+tr("Consultation déclarée","Marked seen")else ""),style=MaterialTheme.typography.bodySmall);if(!mine&&m.isNull("read_at"))TextButton(enabled=!busy&&pending==null,onClick={work{req("seen",JSONObject().put("peer_id",id).put("message_id",m.getString("id")));thread(id,query)}}){Text(tr("Marquer comme lu","Mark seen"))}}
  OutlinedTextField(body,{body=it.take(2000)},enabled=!busy&&pending==null,label={Text(tr("Votre message","Your message"))},modifier=Modifier.fillMaxWidth())
  Button(enabled=!busy&&body.isNotBlank(),onClick={work{val p=pending?:JSONObject().put("peer_id",id).put("message_id",UUID.randomUUID().toString()).put("body",body.trim()).also{pending=it};req("send",p);pending=null;body="";query="";thread(id);refresh()}}){Text(tr("Envoyer","Send"))}
+ if(BuildConfig.WIDEMEET_CHAT_MEDIA_ENABLED)key(id){ChatMediaPanel(english,gateway,session,peerId=id)}
  }
  }}
 }

@@ -544,7 +544,7 @@ try{
  }catch{res.writeHead(502);res.end();}
  });
  await new Promise((r,reject)=>{server.once("error",reject);server.listen(8443,"127.0.0.1",r)});
- browser=await chromium.launch({headless:true});
+ browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream"]});
  const hc=await browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"}),gc=await browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"}),hp=await hc.newPage(),gp=await gc.newPage();
  async function sign(page,f,remember=false,workspaceName="Replay A"){
  await page.goto("https://127.0.0.1:8443");
@@ -670,9 +670,28 @@ try{
   for(const p of [b2owner,b2first,b2second])await p.getByText("B2 browser group content",{exact:true}).waitFor({timeout:20000});
   await b2first.getByRole("button",{name:"Marquer comme lu",exact:true}).click();
   await b2first.getByRole("button",{name:"Marquer comme lu",exact:true}).waitFor({state:"detached"});
+  // Real Web file upload/download and microphone recording with explicit user actions.
+  const mpanel=p=>p.getByRole("region",{name:"Fichiers et messages vocaux",exact:true});
+  const uiPdf=Buffer.from("%PDF-1.4\nB2 UI fixture\n%%EOF");
+  await mpanel(b2owner).getByLabel("Choisir une pièce jointe",{exact:true}).setInputFiles({name:"b2-ui.pdf",mimeType:"application/pdf",buffer:uiPdf});
+  await mpanel(b2owner).getByRole("button",{name:"Envoyer le fichier",exact:true}).click();
+  await mpanel(b2first).getByText(/b2-ui\.pdf/).waitFor({timeout:20000});
+  const [dl]=await Promise.all([b2first.waitForEvent("download"),mpanel(b2first).getByRole("button",{name:"Télécharger",exact:true}).click()]);
+  assert.deepEqual(await readFile(await dl.path()),uiPdf);
+  await b2contexts[0].grantPermissions(["microphone"]);
+  await mpanel(b2owner).getByRole("button",{name:"Enregistrer un message vocal",exact:true}).click();
+  await mpanel(b2owner).getByRole("button",{name:"Terminer l’enregistrement",exact:true}).waitFor();
+  await wait(1200);
+  await mpanel(b2owner).getByRole("button",{name:"Terminer l’enregistrement",exact:true}).click();
+  await mpanel(b2owner).getByRole("button",{name:"Envoyer le fichier",exact:true}).click();
+  await mpanel(b2first).getByRole("button",{name:"Écouter",exact:true}).waitFor({timeout:20000});
+  await mpanel(b2first).getByRole("button",{name:"Écouter",exact:true}).click();
+  await b2first.waitForFunction(()=>{const a=document.querySelector("audio");return a&&a.readyState>=2},{},{timeout:15000});
+  pass("B2 Web group actual attachment upload/download and synthetic microphone voice capture, delivery and decoded playback");
   const g2=(await groupOk(b2ghs.access_token,"list")).items.find(x=>x.name==="B2 UI group");assert.ok(g2);
   await groupOk(b2ghs.access_token,"remove",{group_id:g2.id,member_id:b2gc.id});
   await b2second.getByText("B2 browser group content",{exact:true}).waitFor({state:"detached",timeout:20000});
+  await mpanel(b2second).getByText(/b2-ui\.pdf/).waitFor({state:"detached",timeout:20000});
   await b2first.getByText("B2 browser group content",{exact:true}).waitFor();
   pass("B2 three browser group creation, message delivery, read and revoked member purge");
  }finally{await Promise.all(b2contexts.map(c=>c.close()))}

@@ -58,6 +58,7 @@ private fun groupRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items
  for(m in messages){Text(m.getString("display_name"),style=MaterialTheme.typography.labelLarge);Text(m.getString("body"));Text(m.optString("created_at"));if(m.getString("sender_id")!=session.memberId&&m.isNull("read_at"))TextButton(enabled=!busy,onClick={work{req("seen",JSONObject().put("group_id",id).put("message_id",m.getString("id")));thread(id,query)}}){Text(tr("Marquer comme lu","Mark seen"))}}
  OutlinedTextField(body,{body=it.take(2000)},enabled=!busy&&pending==null,label={Text(tr("Message de groupe","Group message"))})
  Button(enabled=!busy&&body.isNotBlank(),onClick={work{val p=pending?:JSONObject().put("group_id",id).put("message_id",UUID.randomUUID().toString()).put("body",body.trim()).also{pending=it};req("send",p);pending=null;body="";query="";thread(id)}}){Text(tr("Envoyer au groupe","Send to group"))}
+ if(BuildConfig.WIDEMEET_CHAT_MEDIA_ENABLED)key(id){ChatMediaPanel(english,gateway,session,groupId=id)}
  }
  }}
 }
