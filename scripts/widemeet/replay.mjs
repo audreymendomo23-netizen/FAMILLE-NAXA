@@ -659,8 +659,14 @@ try{
  await hp.getByRole("button",{name:"Créer",exact:true}).click();
  await hp.getByRole("heading",{name:"Replay browser room",exact:true}).waitFor();
  await sign(gp,g);await gp.getByRole("button",{name:/Replay browser room/}).click();
- await gp.getByRole("button",{name:"Accepter",exact:true}).click();
- await hp.getByRole("button",{name:"Actualiser",exact:true}).click();await hp.getByRole("button",{name:"Ouvrir la salle",exact:true}).click();
+ // Do not race the guest RSVP against the host's expected room revision.
+ const roomCommandResponse=(page,action)=>page.waitForResponse(r=>new URL(r.url()).pathname.endsWith("/widemeet-room/command")&&r.request().method()==="POST"&&r.request().postDataJSON()?.action===action);
+ const [rsvpResponse]=await Promise.all([roomCommandResponse(gp,"respond"),gp.getByRole("button",{name:"Accepter",exact:true}).click()]);
+ assert.equal(rsvpResponse.status(),200);const rsvpState=await rsvpResponse.json();assert.equal(rsvpState.response,"accepted");
+ const [hostRead]=await Promise.all([hp.waitForResponse(r=>new URL(r.url()).pathname.endsWith("/widemeet-room/read")&&r.request().method()==="POST"),hp.getByRole("button",{name:"Actualiser",exact:true}).click()]);
+ assert.equal(hostRead.status(),200);assert.ok((await hostRead.json()).revision>=rsvpState.revision);
+ const [opened]=await Promise.all([roomCommandResponse(hp,"start"),hp.getByRole("button",{name:"Ouvrir la salle",exact:true}).click()]);
+ assert.equal(opened.status(),200);assert.equal((await opened.json()).status,"open");
  await hp.getByText("Audio et vidéo indisponibles pour le moment.",{exact:true}).waitFor();
  await gp.getByRole("button",{name:"Actualiser",exact:true}).click();await gp.getByLabel("Message",{exact:true}).fill("Bonjour réel");
  await gp.getByRole("button",{name:"Envoyer",exact:true}).click();await gp.getByText(/Bonjour réel/).waitFor();
