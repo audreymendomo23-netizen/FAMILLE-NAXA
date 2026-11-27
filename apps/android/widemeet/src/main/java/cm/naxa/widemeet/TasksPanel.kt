@@ -21,8 +21,8 @@ private fun taskRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() els
  var evidence by remember{mutableStateOf<Map<String,String>>(emptyMap())};var pending by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var query by remember{mutableStateOf("")};var filter by remember{mutableStateOf("all")}
  suspend fun req(action:String,data:JSONObject=JSONObject())=gateway.request("tasks",JSONObject().put("action",action).put("data",data),session) as JSONObject
  suspend fun refresh(){try{items=taskRows(req("list").getJSONArray("items"))}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();throw e}}
- fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block();refresh()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
- LaunchedEffect(session.deviceId,roomId,versionId){busy=true;try{refresh()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}
+ fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block();refresh()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();error=true}finally{busy=false}}}
+ LaunchedEffect(session.deviceId,roomId,versionId){busy=true;try{refresh()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();error=true}finally{busy=false}}
  fun mutate(x:JSONObject,action:String){work{val id=x.getString("id");req(action,JSONObject().put("id",id).put("expected_revision",x.getInt("revision")).apply{if(action=="submit")put("evidence",evidence[id]?.trim())});evidence=evidence-id}}
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
  Text(tr("Décisions et tâches","Decisions and tasks"),style=MaterialTheme.typography.titleLarge)
@@ -48,6 +48,9 @@ private fun taskRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() els
  val id=x.getString("id");val state=x.optString("state")
  Text(x.optString("title"),style=MaterialTheme.typography.titleMedium)
  Text(x.optString("meeting_title")+" · "+x.optString("assignee_name")+" · "+x.optString("due_at").take(16)+" · "+when(state){"assigned"->tr("À faire","Assigned");"submitted"->tr("À valider","Submitted");"done"->tr("Terminée","Done");"cancelled"->tr("Annulée","Cancelled");else->tr("Indisponible","Unavailable")})
+ if(x.optBoolean("overdue"))Text(tr("Échéance dépassée","Overdue"),color=MaterialTheme.colorScheme.error)
+ var showHistory by remember(id){mutableStateOf(false)}
+ if(taskRows(x.optJSONArray("history")).isNotEmpty()){TextButton(onClick={showHistory=!showHistory}){Text(tr("Historique","History"))};if(showHistory)for(h in taskRows(x.optJSONArray("history")))Text(h.optString("at").take(16)+" · "+when(h.optString("state")){"assigned"->tr("À faire","Assigned");"submitted"->tr("À valider","Submitted");"done"->tr("Terminée","Done");"cancelled"->tr("Annulée","Cancelled");else->tr("Indisponible","Unavailable")})}
  if(!x.isNull("evidence"))Text(x.getString("evidence"))
  if(x.optString("assignee_id")==session.memberId&&state=="assigned"){
  OutlinedTextField(evidence[id]?:"",{evidence=evidence+(id to it.take(2000))},label={Text(tr("Preuve de réalisation","Completion evidence"))},modifier=Modifier.fillMaxWidth())
