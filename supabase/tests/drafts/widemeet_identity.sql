@@ -295,5 +295,30 @@ begin
 end $wm$;
 reset role;
 
+
+-- Offline recovery: synthetic credentials only, single-use operation, no public RPC.
+do $wm$ begin
+ if has_table_privilege('authenticated','public.wm_recovery_keys','SELECT') or has_function_privilege('anon','public.wm_begin_key_recovery(text,text,uuid,text)','EXECUTE') or has_function_privilege('authenticated','public.wm_finish_key_recovery(uuid,text,uuid,text)','EXECUTE') then raise exception 'recovery ACL leak';end if;
+end $wm$;
+set local role service_role;
+do $wm$ declare
+ a uuid:='10000000-0000-4000-8000-000000000001'; w uuid:='20000000-0000-4000-8000-000000000001';
+ h text:=repeat('d',62)||'71'; k text:=repeat('e',64); c text:=repeat('f',64); req uuid:=gen_random_uuid(); j jsonb; ep bigint;
+begin
+ select credential_epoch into ep from public.wm_accounts where id=a;
+ perform public.wm_issue_verified_session(a,gen_random_uuid(),w,h,ep);
+ if not public.wm_enroll_recovery_key(h,k,ep) then raise exception 'enrollment failed';end if;
+ if public.wm_begin_key_recovery('WM-FIXTURE1',repeat('a',64),req,c) is not null then raise exception 'wrong recovery key';end if;
+ j:=public.wm_begin_key_recovery('WM-FIXTURE1',k,req,c);
+ if j->>'mode' is distinct from 'start' then raise exception 'recovery begin failed';end if;
+ if exists(select 1 from public.wm_session_context(h)) then raise exception 'recovery failed to revoke sessions';end if;
+ if public.wm_begin_key_recovery('WM-FIXTURE1',k,req,repeat('a',64)) is not null then raise exception 'changed password commitment accepted';end if;
+ if not public.wm_prepare_key_recovery_write(a,k,req,c) then raise exception 'write reservation failed';end if;
+ if public.wm_prepare_key_recovery_write(a,k,req,c) then raise exception 'second write reservation';end if;
+ if public.wm_begin_key_recovery('WM-FIXTURE1',k,req,c)->>'mode' is distinct from 'verify' then raise exception 'retry must verify only';end if;
+ if not public.wm_finish_key_recovery(a,k,req,c) then raise exception 'finish failed';end if;
+ if public.wm_begin_key_recovery('WM-FIXTURE1',k,req,c) is not null then raise exception 'consumed recovery key reused';end if;
+end $wm$;
+reset role;
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';
