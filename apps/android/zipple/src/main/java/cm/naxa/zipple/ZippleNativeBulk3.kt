@@ -171,7 +171,10 @@ internal fun bulk3Body(form:NA,data:ND,values:Map<String,String>,repeated:List<M
 @Composable internal fun ZippleNativeBulk3(api:ZippleBusiness,session:Session,site:String,en:Boolean,initialGroup:String="purchases"){
  Bulk3Screen(session.role,session.permits(site),en,{action,body->api.call(session,site,action,body)},initialGroup)
 }
-@Composable internal fun Bulk3Screen(role:String,allowed:Boolean,en:Boolean,call:suspend(String,JSONObject)->Any?,initialGroup:String="purchases"){
+@Composable internal fun Bulk3Screen(role:String,allowed:Boolean,en:Boolean,call:suspend(String,JSONObject)->Any?){
+ Bulk3Screen(role,allowed,en,call,"purchases")
+}
+@Composable private fun Bulk3Screen(role:String,allowed:Boolean,en:Boolean,call:suspend(String,JSONObject)->Any?,initialGroup:String){
  val tr:(String,String)->String={fr,eng->if(en)eng else fr}
  val scope=rememberCoroutineScope();val groups=bulk3Groups.filter{!it.owner||role=="promoteur"}
  var groupId by remember(initialGroup){mutableStateOf(initialGroup)};var formIndex by remember{mutableStateOf(0)}
