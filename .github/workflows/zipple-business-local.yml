@@ -159,6 +159,13 @@ jobs:
           target: google_apis
           disable-animations: true
           script: bash docs/apps/zipple/n2-n5/local-business-device.sh
+      - name: Preserve sanitized diagnostics from failed business qualification
+        if: failure()
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/zipple-workspace-evidence"
+          python3 docs/apps/zipple/n2-n5/local-diagnostics.py > "$RUNNER_TEMP/zipple-workspace-evidence/local-diagnostics.txt"
+          cat "$RUNNER_TEMP/zipple-workspace-evidence/local-diagnostics.txt"
       - name: Preserve workspace screenshots
         if: always()
         uses: actions/upload-artifact@v4
