@@ -65,6 +65,38 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  for(const [i,from,to] of [[1,'received','in_progress'],[2,'in_progress','ready'],[3,'ready','picked_up']]) await applied(a,event(a,'pressing_order.status_changed:'+to,pressing,{order_id:pressing,from_status:from,expected_version:i,reason:'Recette pressing'}));
  pass('B4 profile pressing: receipt through collection');
 
+
+ const customer=randomUUID();
+ await applied(a,event(a,'customer.created',customer,{customer_id:customer,display_name:'Client fidélité B4',contact_consent:false}));
+ const program=randomUUID();
+ await applied(a,event(a,'loyalty_program.updated',program,{program_id:program,activity_profile:'autre',program_code:'visits',name:'Deux visites',metric_code:'visits',unit_amount_xaf:1,target_value:2,reward_description:'Récompense recette',window_days:0,active:true},null));
+ const activity=(session)=>{const id=randomUUID();return event(session,'loyalty_activity.recorded',id,{activity_event_id:id,program_id:program,customer_id:customer,amount_xaf:1000});};
+ const v1=activity(a);await applied(a,v1);assert.equal((await applied(a,v1)).idempotent,true);
+ const earned=await applied(b,activity(b));assert.equal(earned.result.rewards_earned,1);assert.equal(earned.result.reward_events.length,1);
+ const reward=earned.result.reward_events[0].event_id;
+ const redeem=event(a,'loyalty_reward.redeemed',reward,{reward_event_id:reward,program_id:program,customer_id:customer,wave_number:1});
+ await applied(a,redeem);assert.equal((await applied(a,redeem)).idempotent,true);
+ await denied(b,event(b,'loyalty_reward.redeemed',reward,{reward_event_id:reward,program_id:program,customer_id:customer,wave_number:1}));
+ const [rw]=await rows('ns_loyalty_events','id=eq.'+reward+'&select=reward_status');assert.equal(rw.reward_status,'redeemed');
+ pass('B4 loyalty: real customer visits on two devices, one reward, one redemption and retry');
+ const [dest]=await success(base+'/rest/v1/ns_sites',{org_id:org,code:'B4DEST',name:'Destination recette'});
+ const stock=randomUUID(),sku='B4-'+stock;
+ await applied(a,event(a,'inventory_item.created',stock,{inventory_item_id:stock,sku,name:'Article transfert',unit:'piece',reorder_level:1}));
+ const mv=randomUUID();
+ await applied(a,event(a,'inventory_movement.created',mv,{movement_id:mv,inventory_item_id:stock,movement_type:'in',quantity_delta:10,reason:'Stock initial B4'}));
+ const transfer=randomUUID(),tp={transfer_id:transfer,source_site_id:site,destination_site_id:dest.id,inventory_item_id:stock,sku_snapshot:sku,unit:'piece',quantity:4,reference:'B4-TRANSFER',requested_at:new Date().toISOString()};
+ await applied(a,event(a,'inventory_transfer.requested',transfer,tp));
+ const excess=randomUUID();await denied(a,event(a,'inventory_transfer.requested',excess,{...tp,transfer_id:excess,reference:'B4-EXCESS',quantity:7}));
+ const approval={...transition(transfer,'inventory_transfer','open','approved',1),source_site_id:site,destination_site_id:dest.id};
+ await applied(b,event(b,'inventory_transfer.status_changed',transfer,approval));
+ const received=event(a,'inventory_transfer.received_at_destination',transfer,{...tp,expected_version:2,reason:'Réception B4',received_at:new Date().toISOString()},dest.id);
+ await denied(a,event(a,'inventory_transfer.received_at_destination',transfer,{...tp,expected_version:2,reason:'Mauvais site',received_at:new Date().toISOString()},site));
+ await applied(a,received);assert.equal((await applied(a,received)).idempotent,true);
+ const items=await rows('ns_inventory_items','org_id=eq.'+org+'&sku=eq.'+sku+'&select=site_id,quantity');
+ assert.equal(items.length,2);assert.equal(Number(items.find(r=>r.site_id===site).quantity),6);assert.equal(Number(items.find(r=>r.site_id===dest.id).quantity),4);
+ const [tr]=await rows('ns_inventory_transfers','id=eq.'+transfer+'&select=status,revision');assert.equal(tr.status,'received');assert.equal(tr.revision,3);
+ pass('B4 stock transfer: reservation prevents excess, approved reception at destination, conserved quantities and exact retry');
+
  const peer=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:a.device_id,p_after_cursor:0,p_limit:200},a.access_token,anon);
  assert.ok(Array.isArray(peer.changes));assert.ok(peer.changes.some(x=>x.aggregate_id===invoice&&x.action_code==='invoice.status_changed'));
  pass('B4 peer sync: second device settlement visible through authenticated pull');
