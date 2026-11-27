@@ -262,6 +262,7 @@ jobs:
           unset FCM_SERVICE_ACCOUNT_JSON NS_FIREBASE_PROJECT_ID
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
+          import { runB4 } from './scripts/naxa-services/b4-real-erp-recipe.mjs';
           import {randomUUID,randomBytes} from 'node:crypto';
           import {spawn,execFileSync} from 'node:child_process';
           import {chromium} from '@playwright/test';
@@ -1186,6 +1187,7 @@ jobs:
             pass('expired staged attendance rejected and service-only cleanup leaves no confirmed clock');
             await act('logout',{device:pendingFixture.device},pendingAuth.access_token);
             pass('Bulk B real stage retry immutable UUID/time, no confirmed clock, foreign/modified/expired/missing GPS denied');
+            await runB4({fixture,login,json,success,base,anon,admin,pass});
             const browserFailures=await browserReplay(await fixture('WEB'));
             let r=await upload(A,a.access_token);assert.ok(r.ok,'own Storage upload HTTP '+r.status);
             r=await read(A,a.access_token);assert.ok(r.ok,'own Storage read HTTP '+r.status);assert.deepEqual(Buffer.from(await r.arrayBuffer()),png);

@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
+ const f=await fixture('B4-REAL','multi_site_network'), a=await login(f), b=await login({...f,device:{...f.device,installation_id:randomUUID()}});
+ const org=f.org.id,site=f.site.id,seq=new Map(),url=base+'/rest/v1/rpc/ns_apply_sync_event';
+ function event(session,action,id,payload,scope=site){const n=(seq.get(session.device_id)||0)+1;seq.set(session.device_id,n);return {p_org_id:org,p_site_id:scope,p_workstation_id:null,p_device_id:session.device_id,p_event_id:randomUUID(),p_device_sequence:n,p_aggregate_type:action.split('.')[0],p_aggregate_id:id,p_action_code:action,p_payload:{...payload,org_id:org,site_id:scope}};}
+ const send=(session,e)=>json(url,e,session.access_token,anon);
+ async function applied(session,e){const r=await send(session,e);assert.equal(r.status,200,JSON.stringify(r.data));assert.equal(r.data.status,'applied');return r.data;}
+ async function denied(session,e){const r=await send(session,e);assert.ok(r.status>=400,JSON.stringify(r.data));}
+ const rows=(table,query)=>success(base+'/rest/v1/'+table+'?'+query,undefined,admin,admin,'GET');
+ const document=(id,kind,amount=1000,paid=0,status='open')=>({record_id:id,record_type:kind,reference:'B4-'+id,title:'B4 recette',counterparty:'Client recette',amount_xaf:amount,paid_xaf:paid,status,metadata_json:{}});
+ const transition=(id,kind,from,to,version,delta={})=>({record_id:id,record_type:kind,from_status:from,to_status:to,expected_version:version,reason:'Recette B4',metadata_json_delta:delta,transitioned_at:new Date().toISOString()});
+ const invoice=randomUUID();
+ await applied(a,event(a,'invoice.created',invoice,document(invoice,'invoice')));
+ await denied(a,event(a,'invoice.status_changed',invoice,transition(invoice,'invoice','open','paid',1)));
+ const part=event(a,'invoice.status_changed',invoice,transition(invoice,'invoice','open','partial',1,{paid_xaf:400}));
+ const receipt=await applied(a,part);assert.equal(receipt.result.paid_xaf,400);
+ assert.equal((await applied(a,part)).idempotent,true);
+ await denied(b,event(b,'invoice.status_changed',invoice,transition(invoice,'invoice','open','paid',1,{paid_xaf:1000})));
+ await denied(a,event(a,'invoice.status_changed',invoice,transition(invoice,'invoice','partial','paid',2,{paid_xaf:1200})));
+ await denied(a,event(a,'invoice.status_changed',invoice,transition(invoice,'invoice','partial','cancelled',2)));
+ await applied(b,event(b,'invoice.status_changed',invoice,transition(invoice,'invoice','partial','paid',2,{paid_xaf:1000})));
+ const [record]=await rows('ns_management_records','id=eq.'+invoice+'&select=paid_xaf,amount_xaf,status,revision');assert.equal(record.paid_xaf,1000);assert.equal(record.amount_xaf,1000);assert.equal(record.status,'paid');assert.equal(record.revision,3);
+ assert.equal((await rows('ns_management_record_events','record_id=eq.'+invoice+'&select=id')).length,3);
+ for(const kind of ['refund_due','customer_receivable']){const id=randomUUID();await applied(a,event(a,kind+'.created',id,document(id,kind,800,200,'partial')));await applied(b,event(b,kind+'.status_changed',id,transition(id,kind,'partial','paid',1,{paid_xaf:800})));assert.equal((await rows('ns_management_records','id=eq.'+id+'&select=paid_xaf'))[0].paid_xaf,800);}
+ for(const kind of ['quote','credit_note']){const id=randomUUID();await denied(a,event(a,kind+'.created',id,document(id,kind,1000,1000,'paid')));await applied(a,event(a,kind+'.created',id,document(id,kind)));await applied(b,event(b,kind+'.status_changed',id,transition(id,kind,'open','approved',1)));await denied(a,event(a,kind+'.status_changed',id,transition(id,kind,'approved','paid',2,{paid_xaf:1000})));}
+ pass('B4 finance: five document types, cumulative balance, exact retry, concurrent stale revision, overpayment and cancellation denied');
+ const charge=randomUUID(),due='2027-01-10T00:00:00.000Z';
+ await applied(a,event(a,'recurring_charge.saved',charge,{charge_id:charge,name:'Loyer recette',category:'rent',amount_xaf:1000,recurrence:'monthly',next_due_at:due,active:true}));
+ const pay=(session,amount,date)=>event(session,'recurring_charge.payment_recorded',charge,{charge_id:charge,payment_id:randomUUID(),amount_xaf:amount,reference_due_at:date,payment_method:'manual',payment_reference:'B4'});
+ const half=pay(a,400,due);await applied(a,half);assert.equal((await applied(a,half)).idempotent,true);
+ await denied(b,pay(b,700,due));await applied(b,pay(b,600,due));await denied(a,pay(a,100,due));await denied(a,pay(a,100,null));
+ const [chargeRow]=await rows('ns_recurring_charges','id=eq.'+charge+'&select=next_due_at');assert.equal(new Date(chargeRow.next_due_at).toISOString(),'2027-02-10T00:00:00.000Z');
+ const payments=await rows('ns_charge_payments','charge_id=eq.'+charge+'&select=amount_xaf');assert.equal(payments.length,2);assert.equal(payments.reduce((s,x)=>s+x.amount_xaf,0),1000);
+ pass('B4 charges: partial/full payment, idempotency, cycle advancement, old/missing due date rejected');
+ const appointment=(id)=>({appointment_id:id,customer_reference_or_name:'Client B4',service_reference_or_name:'Service B4',assigned_member_id:f.member.id,starts_at:'2027-03-04T09:00:00Z',ends_at:'2027-03-04T10:00:00Z',deposit_xaf:0,status:'booked'});
+ const ap1=randomUUID(),ap2=randomUUID(),concurrent=await Promise.all([send(a,event(a,'appointment.created',ap1,appointment(ap1))),send(b,event(b,'appointment.created',ap2,appointment(ap2)))]);
+ assert.equal(concurrent.filter(r=>r.status===200&&r.data.status==='applied').length,1,JSON.stringify(concurrent));assert.equal(concurrent.filter(r=>r.status>=400).length,1);
+ pass('B4 appointments: simultaneous reservation of one provider and interval, one acceptance only');
+ const peer=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:a.device_id,p_after_cursor:0,p_limit:200},a.access_token,anon);
+ assert.ok(Array.isArray(peer.changes));assert.ok(peer.changes.some(x=>x.aggregate_id===invoice&&x.action_code==='invoice.status_changed'));
+ pass('B4 peer sync: second device settlement visible through authenticated pull');
+}
