@@ -1,6 +1,7 @@
 // WideMeet internal login candidate. Adapted from NS internal aliases and ZIPPLE opaque sessions.
 // No deployment until disposable Replay and rate-limit qualification; default disabled.
 import {chatMedia} from "./chat-media.ts";
+import {encryptToken,validPushToken,serviceAccount,accessToken,dispatchPush} from "../../../packages/widemeet-domain/push-delivery.mjs";
 const url=(Deno.env.get("SUPABASE_URL")??"").replace(/\/$/,"");
 const service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
 const anon=Deno.env.get("SUPABASE_ANON_KEY")??"";
@@ -225,6 +226,30 @@ Deno.serve(async request=>{
  const finished=await rest("rpc/wm_finish_password_change",{method:"POST",body:JSON.stringify({p_hash,p_request:requestId})});
  if(finished!==true)return send(409,{error:"change_unconfirmed"});
  return send(200,{changed:true,reconnect:true},{"Set-Cookie":clearCookie});
+ }
+ if(action==="push"||action==="push-worker"){
+ if(Deno.env.get("WM_PUSH_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ const encryptionKey=Deno.env.get("WM_PUSH_ENCRYPTION_KEY")??"";
+ if(!/^[a-f0-9]{64}$/.test(encryptionKey))return send(503,{error:"unavailable"});
+ const rpc=(name:string,args:Record<string,unknown>)=>rest("rpc/"+name,{method:"POST",body:JSON.stringify(args)});
+ if(action==="push-worker"){
+  const secret=Deno.env.get("WM_PUSH_WORKER_SECRET")??"";
+  const presented=request.headers.get("authorization")??"";
+  if(origin||secret.length<64||presented.length!==secret.length+7||await digest(presented)!==await digest("Bearer "+secret))return send(403,{error:"scope"});
+  const project=Deno.env.get("WM_FIREBASE_PROJECT_ID")??"";
+  const account=serviceAccount(Deno.env.get("WM_FCM_SERVICE_ACCOUNT_JSON")??"",project);
+  const access=await accessToken(account);
+  return send(200,await dispatchPush({rpc,encryptionKey,project,access,limit:25}));
+ }
+ const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
+ if(!/^[a-f0-9]{64}$/.test(access)||!["register","status","revoke"].includes(body.action))return send(400,{error:"invalid_request"});
+ let data:Record<string,unknown>={};
+ if(body.action==="register"){
+  if(!validPushToken(body.token)||!["android","web"].includes(body.platform))return send(400,{error:"invalid_request"});
+  data={...await encryptToken(body.token,encryptionKey),platform:body.platform};
+ }
+ const v=await rpc("wm_push_device_action",{p_hash:await digest(access),p_action:body.action,p_data:data});
+ return v?send(200,v):send(403,{error:"scope"});
  }
  if(action==="chat-media"){
  if(Deno.env.get("WM_CHAT_MEDIA_QUALIFIED")!=="true"||Deno.env.get("WM_WORKSPACE_CENTERS_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
