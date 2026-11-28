@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
  }
  SecurityOperationalPanel(screen.id)
  SecurityModulePanel(screen.id)
+ SecurityNativeCaseReport(screen.id)
  if(screen.id in listOf("B4.08","B4.10"))SecurityAttendanceCapture(screen.id)
  Text("Consultation préparatoire. Aucune commande ni validation possible.",style=MaterialTheme.typography.bodySmall)
  }}

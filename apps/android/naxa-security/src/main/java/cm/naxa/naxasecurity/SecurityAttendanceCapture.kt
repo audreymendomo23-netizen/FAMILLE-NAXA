@@ -49,15 +49,18 @@ internal fun SecurityAttendanceCapture(id:String){
  var busy by remember(id){mutableStateOf(false)}
  var message by remember(id){mutableStateOf("")}
  var proof by remember(id){mutableStateOf<Location?>(null)}
- var action by remember(id){mutableStateOf("clock_in")}
+ val native=LocalSecurityNative.current;val generation=native.generation
+ var action by remember(id,generation){mutableStateOf("arrival")}
+ var pending by remember(id,generation){mutableStateOf("")}
+ LaunchedEffect(generation){proof=null;message="";pending=""}
  fun capture(){if(busy)return;busy=true;proof=null;message="";scope.launch{
-  try{val p=securityFreshLocation(context);proof=p;message="Preuve GPS capturée — en attente de validation serveur."}
+  try{val p=securityFreshLocation(context);if(native.generation==generation){proof=p;pending=UUID.randomUUID().toString();message="Preuve GPS capturée — non transmise."}}
   catch(c:CancellationException){throw c}catch(_:Exception){message="Capture indisponible ou précision insuffisante."}finally{busy=false}
  }}
  val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){granted->if(granted[Manifest.permission.ACCESS_FINE_LOCATION]==true)capture()else message="Autorisation GPS précise nécessaire."}
  Text("Capture ponctuelle — aucun suivi permanent")
- listOf("clock_in","break_start","break_end","clock_out").forEach{v->FilterChip(selected=action==v,onClick={action=v;proof=null;message=""},label={Text(when(v){"clock_in"->"Prise de service";"break_start"->"Début de pause";"break_end"->"Fin de pause";else->"Fin de service"})})}
+ listOf("arrival","departure").forEach{v->FilterChip(selected=action==v,enabled=!busy,onClick={action=v;proof=null;pending="";message=""},label={Text(if(v=="arrival")"Arrivée" else "Départ")})}
  Button(enabled=!busy,onClick={if(ContextCompat.checkSelfPermission(context,Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)capture()else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION))}){Text("Capturer ma position")}
- proof?.let{Text("Précision : "+it.accuracy+" m");Text("État : preuve locale non confirmée")}
+ proof?.let{p->Text("Précision : "+p.accuracy+" m");Text("État : preuve locale non confirmée");val s=native.session;val site=native.site;if(s!=null&&site!=null)Button(enabled=!busy&&pending.isNotBlank(),onClick={busy=true;val rid=pending;val a=action;scope.launch{try{check(!p.isFromMockProvider);val ok=SecurityNativeApi.submitAttendance(s,site,a,p.latitude,p.longitude,p.accuracy,p.time,rid);if(native.generation==generation){message=if(ok)"Preuve reçue — statut à consulter." else "Réception non confirmée.";if(ok){proof=null;pending=""}}}catch(e:CancellationException){throw e}catch(_:Exception){if(native.generation==generation)message="Réception non confirmée ou preuve expirée."}finally{busy=false}}}){Text("Transmettre la preuve GPS")}}
  Text(message)
 }

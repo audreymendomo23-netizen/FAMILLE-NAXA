@@ -17,7 +17,7 @@ internal class SecurityNativeState {
  fun reset(){generation++;session=null;site=null}
  fun select(v:SecurityNativeSite){if(v!=site){generation++;site=v}}
 }
-private val LocalSecurityNative=staticCompositionLocalOf<SecurityNativeState>{error("SECURITY scope unavailable")}
+internal val LocalSecurityNative=staticCompositionLocalOf<SecurityNativeState>{error("SECURITY scope unavailable")}
 @Composable internal fun SecurityNativeWorkspace(content:@Composable ()->Unit){
  val state=remember{SecurityNativeState()}
  val session=state.session
