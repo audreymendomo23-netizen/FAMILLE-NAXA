@@ -9,7 +9,7 @@ export async function request(session:SecuritySession,resource:Resource,options:
  const url=new URL("/rest/v1/"+resource,SECURITY_URL);
  if(options.site){if(!/^[0-9a-f-]{36}$/i.test(options.site))throw Error("INVALID_SITE");url.searchParams.set("site_id","eq."+options.site)}
  for(const [field,value] of [["organization_id",options.organization],["id",options.record],["request_id",options.requestId]] as const){if(value&&!(resource==="sec_organizations"&&field==="organization_id")){if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw Error("INVALID_SCOPE");url.searchParams.set(field,"eq."+value)}}
- if(options.method!=="POST"){url.searchParams.set("select","*");url.searchParams.set("limit","100");if(options.order){if(!["created_at.desc","observed_at.desc","recorded_at.desc","provider_confirmed_at.desc"].includes(options.order))throw Error("INVALID_ORDER");url.searchParams.set("order",options.order)}}
+ if(options.method!=="POST"){url.searchParams.set("select","*");url.searchParams.set("limit","100");if(options.order){if(!["created_at.desc","observed_at.desc","recorded_at.desc","provider_confirmed_at.desc","occurred_at.desc"].includes(options.order))throw Error("INVALID_ORDER");url.searchParams.set("order",options.order)}}
  const r=await transport(url,{method:options.method??"GET",headers:{apikey:session.publicKey,Authorization:"Bearer "+session.accessToken,"Content-Type":"application/json",Prefer:"return=representation"},body:options.body?JSON.stringify(options.body):undefined,cache:"no-store",credentials:"omit",redirect:"error"});
  if(!r.ok)throw Error("SECURITY_HTTP_"+r.status);return await r.json();
 }

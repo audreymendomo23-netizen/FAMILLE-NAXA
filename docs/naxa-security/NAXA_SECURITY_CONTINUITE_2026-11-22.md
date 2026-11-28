@@ -489,3 +489,6 @@ API native autorisée pour lecture des dossiers/notes Livecare et incidents, RPC
 
 ### Reporting multisite et recette réelle
 Rapport organisation par RPC invoker, agrégation des sites explicitement autorisés au manager/propriétaire, liste des sources et totaux, export CSV aplati dans Web et Android, contrôles de périmètre côté clients. Nouveau scénario Chromium/PostgreSQL vérifie la récupération des 110 incidents sans troncature, exclusion du site non autorisé, et calcul multisite. Le test navigateur n'utilise ni authentification hébergée ni PostgREST réel. Qualification à constater.
+
+### Recette dossier incident de bout en bout
+Extension du même adaptateur local à la création et aux transitions du dossier (client, responsable, assignation, attente, reprise, résolution et clôture, huit notes réellement persistées). Tri des dossiers et notes par dates pour éviter qu'une nouvelle entrée soit invisible derrière 100 anciennes ; liaison de preuve native. Recette cible 110 incidents préexistants puis nouveau dossier. Toujours aucune preuve d'usage production ou d'émulateur Android connecté.
