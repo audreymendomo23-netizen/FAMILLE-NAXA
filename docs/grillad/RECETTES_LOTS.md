@@ -67,3 +67,6 @@ Passe challenge : 2 tests unitaires Web catalogue/lot, 2 tests identité central
 Complément QR commun : 1 test API nommé, assertions SQL autorisation/révocation de paire. Total 206 unités (201 tests nommés + 4 suites SQL + 1 drill), lots indicatifs 50/50/47/50/9.
 
 Dernier relevé : sept campagnes 14/14 ; dernière campagne 46089210628, quatre suites SQL vertes, vérifier le reste. 206 unités distinctes du nombre de jobs.
+
+## Reprise challenge — section 32
+4 tests nommés B1/B4 (UUID/autorevue, baux média et GPS) et 1 test API B5 (capture Admin sans dossier explicite) ajoutés ; assertions SQL de rapprochement par référence enrichies. Total 211 unités : 206 tests nommés + 4 suites SQL + 1 drill ; lots 50/50/47/50/14. Runs 46089210628 (relance), 46090190513, 46090290325 : chacun 14/14 SUCCESS. Migration 20261128005431 grillad_capture_match_a239147 réellement appliquée. Les 39 REC produit restent à certifier en environnement réel autorisé ; voir §32 de continuité.
