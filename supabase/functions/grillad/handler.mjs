@@ -42,7 +42,7 @@ export async function handle(request,env,fetcher=fetch){
   }
   if(body.action==='signup_complete'){
    const email=emailOf(body.email),proof=proofOf(body.verification);if(!email||!proof||!validProfile(body)||!uuid.test(body.installation)||!['web','android'].includes(body.platform)||!env.service)return reply(400,{error:'SIGNUP_INPUT'});
-   const x=await post('/auth/v1/verify',{email,...proof,type:'signup'});const s=x.result;
+   const x=await post('/auth/v1/verify',{...(proof.token_hash?proof:{email,...proof}),type:'signup'});const s=x.result;
    if(!x.ok||!s?.access_token||!s?.refresh_token||!uuid.test(s.user?.id)||emailOf(s.user.email)!==email||!s.user.email_confirmed_at)return reply(400,{error:'SIGNUP_VERIFICATION_REQUIRED'});
    let sid;try{sid=JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id}catch{return reply(403,{error:'SESSION'})}
    if(!uuid.test(sid))return reply(403,{error:'SESSION'});
@@ -59,7 +59,7 @@ export async function handle(request,env,fetcher=fetch){
   }
   if(body.action==='recovery_complete'){
    const email=emailOf(body.email),proof=proofOf(body.verification);if(!email||!proof||!strong(body.password))return reply(400,{error:'SIGNUP_INPUT'});
-   const x=await post('/auth/v1/verify',{email,...proof,type:'recovery'});const s=x.result;
+   const x=await post('/auth/v1/verify',{...(proof.token_hash?proof:{email,...proof}),type:'recovery'});const s=x.result;
    if(!x.ok||!s?.access_token||emailOf(s.user?.email)!==email)return reply(400,{error:'SIGNUP_VERIFICATION_REQUIRED'});
    const u=await fetcher(base+'/auth/v1/user',{method:'PUT',headers:{apikey:env.key,Authorization:'Bearer '+s.access_token,'Content-Type':'application/json'},body:JSON.stringify({password:body.password}),redirect:'error',signal:AbortSignal.timeout(15000)});
    if(!u.ok)return reply(400,{error:'OPERATION_REFUSED'});

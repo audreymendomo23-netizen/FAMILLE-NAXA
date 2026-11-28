@@ -847,3 +847,6 @@ Inscription e-mail Supabase, preuve de vérification obligatoire avant provision
 
 ### 91.2. Raccordement Web/Android
 Ajout des interfaces inscription, vérification e-mail, récupération e-mail, confirmation mot de passe, consentement et accès au workspace après activation. Connexion existante compatible e-mail et téléphone, invitation salariés conservée. Traductions EN et ff-CM candidates. Le mot de passe est choisi avant confirmation (contrat Auth), identifiant e-mail, nom complet. Résumé CGU/PC candidat seulement ; validation juridique et configuration SMTP/templates nécessaires. Compteur UI persistant, reprise après confirmation déjà consommée, parité NAXA exhaustive et recette authentifiée hébergée restent non démontrés. Aucun déploiement ni migration hébergée. Ne pas livrer l'APK commercial avant qualification et disponibilité du backend.
+
+### 91.3. Recette ciblée inscrite à la matrice
+Ajout de @signup : navigateur Chromium et Auth GoTrue local avec confirmation e-mail et Mailpit local uniquement, essai 72 h, rôle owner, ouverture de caisse, refus inter-tenant, absence d'intention de paiement, RPC direct interdit, refus métier et renouvellement après expiration simulée en base de recette. Ce scénario ne prouve pas encore l'acheminement SMTP hébergé ni la parité Android authentifiée. Le résultat doit être relevé sur le SHA final.

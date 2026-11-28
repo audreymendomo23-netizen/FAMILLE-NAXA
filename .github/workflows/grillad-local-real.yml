@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [journey, identity, catalogue, cash, read-models, resilience, manager, zipple, security, billing-recovery, push, device, finance-review, attendance-review, push-worker, zipple-mobile, central-review, transverse]
+        suite: [journey, identity, catalogue, cash, read-models, resilience, manager, zipple, security, billing-recovery, push, device, finance-review, attendance-review, push-worker, zipple-mobile, central-review, transverse, signup]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -43,6 +43,8 @@ jobs:
         with:
           version: '2.122.1'
       - name: Local Supabase and real isolated test identities
+        env:
+          GRILLAD_SIGNUP_RECIPE: ${{ matrix.suite == 'signup' && '1' || '0' }}
         run: bash scripts/grillad/local-real-setup.sh
       - run: npm install --workspace @famille/grillad-web --include-workspace-root=false --ignore-scripts
       - run: npx --workspace @famille/grillad-web playwright install --with-deps chromium
