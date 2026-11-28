@@ -28,61 +28,45 @@ export async function handle(request,env,fetcher=fetch){
    const b=await post('/rest/v1/rpc/grillad_renewal_workspace',{},token);
    return b.ok&&Array.isArray(b.result)&&b.result.length?{sites:b.result,renewal_only:true}:null;
   }
-  const emailOf=v=>typeof v==='string'&&v.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())?v.trim().toLowerCase():null;
+  const usernameOf=v=>typeof v==='string'&&/^[a-z][a-z0-9_.-]{3,31}$/.test(v.trim().toLowerCase())?v.trim().toLowerCase():null;
   const hashOf=async v=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode('grillad:'+v))),x=>x.toString(16).padStart(2,'0')).join('');
-  const proofOf=v=>{const s=String(v||'').trim();if(/^\d{6,8}$/.test(s))return {token:s};try{const u=new URL(s);if(u.origin!==base||u.pathname!=='/auth/v1/verify')return null;const t=u.searchParams.get('token');return t&&/^[A-Za-z0-9_-]{20,128}$/.test(t)?{token_hash:t}:null}catch{return null}};
-  const validProfile=b=>typeof b.name==='string'&&b.name.trim().length>=2&&b.name.length<=80&&typeof b.organization==='string'&&b.organization.trim().length>=2&&b.organization.length<=160&&typeof b.site_name==='string'&&b.site_name.trim().length>=2&&b.site_name.length<=160&&/^\+[1-9]\d{7,14}$/.test(String(b.phone||''))&&b.terms==='grillad-2026-11-28-v1';
+  const aliasOf=async username=>'grillad-'+(await hashOf('internal:'+username)).slice(0,48)+'@accounts.grillad.invalid';
+  const validProfile=b=>typeof b.name==='string'&&b.name.trim().length>=2&&b.name.length<=80&&typeof b.organization==='string'&&b.organization.trim().length>=2&&b.organization.length<=160&&typeof b.site_name==='string'&&b.site_name.trim().length>=2&&b.site_name.length<=160&&/^\+[1-9]\d{7,14}$/.test(String(b.phone||''))&&b.terms==='grillad-2026-11-28-v1'&&!/[\x00-\x1f\x7f]/.test(b.name+b.organization+b.site_name);
   const strong=v=>typeof v==='string'&&v.length>=10&&v.length<=128&&/[A-Za-z]/.test(v)&&/\d/.test(v)&&/[^A-Za-z0-9]/.test(v);
-  if(body.action==='signup_start'){
-   const email=emailOf(body.email);if(!email||!strong(body.password)||!validProfile(body))return reply(400,{error:'SIGNUP_INPUT'});
-   const x=await post('/auth/v1/signup',{email,password:body.password});
-   if(!x.ok)return reply(x.status===429?429:400,{error:'SIGNUP_REFUSED'});
-   if(x.result?.access_token)return reply(503,{error:'SIGNUP_VERIFICATION_REQUIRED'});
-   return reply(200,{result:{verification_required:true}});
-  }
-  if(body.action==='signup_complete'){
-   const email=emailOf(body.email),proof=proofOf(body.verification);if(!email||!proof||!validProfile(body)||!uuid.test(body.installation)||!['web','android'].includes(body.platform)||!env.service)return reply(400,{error:'SIGNUP_INPUT'});
-   const x=await post('/auth/v1/verify',{...(proof.token_hash?proof:{email,...proof}),type:'signup'});const s=x.result;
-   if(!x.ok||!s?.access_token||!s?.refresh_token||!uuid.test(s.user?.id)||emailOf(s.user.email)!==email||!s.user.email_confirmed_at)return reply(400,{error:'SIGNUP_VERIFICATION_REQUIRED'});
+  if(body.action==='signup_internal'){
+   const username=usernameOf(body.username);if(!env.service||!username||!strong(body.password)||!validProfile(body)||!uuid.test(body.installation)||!['web','android'].includes(body.platform))return reply(400,{error:'SIGNUP_INPUT'});
+   const hash=await hashOf('internal:'+username),email=await aliasOf(username);
+   const guard=await post('/rest/v1/rpc/grillad_auth_begin',{p_hash:hash,p_recovery:false},env.service);if(!guard.ok||guard.result!==true)return reply(429,{error:'TEMPORARILY_LOCKED'});
+   const deviceGuard=await post('/rest/v1/rpc/grillad_auth_begin',{p_hash:await hashOf('signup-device:'+body.installation),p_recovery:false},env.service);if(!deviceGuard.ok||deviceGuard.result!==true)return reply(429,{error:'TEMPORARILY_LOCKED'});
+   // Reserved Auth alias only; no message or claim of verified external contact.
+   const created=await fetcher(base+'/auth/v1/admin/users',{method:'POST',headers:{apikey:env.service,Authorization:'Bearer '+env.service,'Content-Type':'application/json'},body:JSON.stringify({email,password:body.password,email_confirm:true,app_metadata:{grillad_internal:true,grillad_username:username}}),redirect:'error',signal:AbortSignal.timeout(15000)});
+   if(!created.ok&&![400,409,422].includes(created.status))return reply(503,{error:'SIGNUP_REFUSED'});
+   const x=await post('/auth/v1/token?grant_type=password',{email,password:body.password});const s=x.result;
+   if(!x.ok||!s?.access_token||!s?.refresh_token||!uuid.test(s.user?.id)||s.user?.email!==email||s.user?.app_metadata?.grillad_internal!==true||s.user?.app_metadata?.grillad_username!==username)return reply(400,{error:'SIGNUP_REFUSED'});
    let sid;try{sid=JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id}catch{return reply(403,{error:'SESSION'})}
    if(!uuid.test(sid))return reply(403,{error:'SESSION'});
-   const p=await post('/rest/v1/rpc/grillad_self_trial',{p_user:s.user.id,p_session:sid,p_email:email,p_name:body.name,p_phone:body.phone,p_org:body.organization,p_site:body.site_name,p_terms:body.terms},env.service);
-   if(!p.ok)return upstream(p);
-   const bound=await post('/rest/v1/rpc/grillad_auth_finish',{p_hash:await hashOf(email),p_user:s.user.id,p_session:sid,p_installation:body.installation,p_platform:body.platform},env.service);
-   if(!bound.ok||bound.result!==true)return reply(403,{error:'DEVICE_OR_GRANT_DENIED'});
+   const p=await post('/rest/v1/rpc/grillad_self_trial',{p_user:s.user.id,p_session:sid,p_email:email,p_name:body.name,p_phone:body.phone,p_org:body.organization,p_site:body.site_name,p_terms:body.terms},env.service);if(!p.ok)return upstream(p);
+   const bound=await post('/rest/v1/rpc/grillad_auth_finish',{p_hash:hash,p_user:s.user.id,p_session:sid,p_installation:body.installation,p_platform:body.platform},env.service);if(!bound.ok||bound.result!==true)return reply(403,{error:'DEVICE_OR_GRANT_DENIED'});
    const w=await workspaceFor(s.access_token);if(!w)return reply(403,{error:'NO_WORKSPACE'});
    return reply(200,{result:{user_id:s.user.id,access:s.access_token,refresh:s.refresh_token,trial_ends_at:p.result?.trial_ends_at,...w}});
   }
-  if(body.action==='recovery_email'){
-   const email=emailOf(body.email);if(!email)return reply(400,{error:'INVALID_EMAIL'});
-   const x=await post('/auth/v1/recover',{email});return x.status===429?reply(429,{error:'TEMPORARILY_LOCKED'}):reply(200,{result:{received:true}});
-  }
-  if(body.action==='recovery_complete'){
-   const email=emailOf(body.email),proof=proofOf(body.verification);if(!email||!proof||!strong(body.password))return reply(400,{error:'SIGNUP_INPUT'});
-   const x=await post('/auth/v1/verify',{...(proof.token_hash?proof:{email,...proof}),type:'recovery'});const s=x.result;
-   if(!x.ok||!s?.access_token||emailOf(s.user?.email)!==email)return reply(400,{error:'SIGNUP_VERIFICATION_REQUIRED'});
-   const u=await fetcher(base+'/auth/v1/user',{method:'PUT',headers:{apikey:env.key,Authorization:'Bearer '+s.access_token,'Content-Type':'application/json'},body:JSON.stringify({password:body.password}),redirect:'error',signal:AbortSignal.timeout(15000)});
-   if(!u.ok)return reply(400,{error:'OPERATION_REFUSED'});
-   const out=await post('/auth/v1/logout?scope=global',{},s.access_token);
-   return reply(200,{result:{updated:true,sessions_revoked:out.ok}});
-  }
   if(body.action==='login'||body.action==='recovery'){
    if(!env.service)return reply(503,{error:'AUTH_NOT_CONFIGURED'});
-   const email=body.action==='login'?emailOf(body.phone):null;
+   const username=usernameOf(body.phone);const email=username?await aliasOf(username):null;
    const phone=String(body.phone||'').replace(/[\s().-]/g,'');
    if(!email&&!/^\+[1-9]\d{7,14}$/.test(phone))return reply(400,{error:'INVALID_PHONE'});
    const recovery=body.action==='recovery';
    if(!recovery&&(typeof body.password!=='string'||body.password.length<1||body.password.length>256||!uuid.test(body.installation)||!['web','android'].includes(body.platform)))return reply(400,{error:'INVALID_LOGIN'});
    const hasInvite=!recovery&&(body.request!=null||body.invite!=null);
    if(hasInvite&&(email||!uuid.test(body.request)||typeof body.invite!=='string'||!/^[A-Za-z0-9_-]{32,128}$/.test(body.invite)))return reply(400,{error:'INVALID_INVITATION'});
-   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('grillad:'+(email||phone)));const hash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
+   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('grillad:'+(username?'internal:'+username:phone)));const hash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
    async function control(path,data){const r=await fetcher(base+'/rest/v1/rpc/'+path,{method:'POST',headers:{apikey:env.service,Authorization:'Bearer '+env.service,'Content-Type':'application/json'},body:JSON.stringify(data),redirect:'error',signal:AbortSignal.timeout(15000)});return r.ok&&await r.json()===true}
    const allowed=await control('grillad_auth_begin',{p_hash:hash,p_recovery:recovery});
    if(recovery)return reply(200,{result:{received:true}}); // uniform response; not proof of delivery or account existence
    if(!allowed)return reply(429,{error:'TEMPORARILY_LOCKED'});
    const x=await post('/auth/v1/token?grant_type=password',{...(email?{email}:{phone}),password:body.password});
    if(!x.ok)return reply(401,{error:'INVALID_CREDENTIALS'});
-   const s=x.result;if(!s?.access_token||!s?.refresh_token||!uuid.test(s.user?.id)||s.user?.app_metadata?.must_change_password)return reply(403,{error:'ACCOUNT_SETUP_REQUIRED'});
+   const s=x.result;if(!s?.access_token||!s?.refresh_token||!uuid.test(s.user?.id)||s.user?.app_metadata?.must_change_password||(username&&(s.user?.app_metadata?.grillad_internal!==true||s.user?.app_metadata?.grillad_username!==username)))return reply(403,{error:'ACCOUNT_SETUP_REQUIRED'});
    let sid;try{sid=JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id}catch{return reply(403,{error:'SESSION'})}
    if(hasInvite){const accepted=await post('/rest/v1/rpc/grillad_employee_accept',{p_request:body.request,p_token:body.invite},s.access_token);if(!accepted.ok||accepted.result?.status!=='processed')return reply(403,{error:'INVITATION_DENIED'});}
    if(!uuid.test(sid)||!await control('grillad_auth_finish',{p_hash:hash,p_user:s.user.id,p_session:sid,p_installation:body.installation,p_platform:body.platform}))return reply(403,{error:'DEVICE_OR_GRANT_DENIED'});

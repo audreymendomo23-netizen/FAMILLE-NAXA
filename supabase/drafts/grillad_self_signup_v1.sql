@@ -1,12 +1,12 @@
 begin;
--- An explicitly free trial, never a payment. Service-only entry point, verified session and email.
+-- An explicitly free trial, never a payment. Service-only entry point, authenticated internal identity; no verified external contact claimed.
 create table grillad_private.signup_trials(
  user_id uuid primary key references auth.users(id) on delete restrict,
  email_hash text not null unique check(email_hash~'^[0-9a-f]{64}$'),
  org uuid not null unique references famille_core.organizations(id),
  site uuid not null references famille_core.locations(id),
  subscription uuid not null unique references famille_core.subscriptions(id),
- contact_phone text not null, terms_version text not null,
+ contact_phone text not null unique, terms_version text not null,
  starts_at timestamptz not null, ends_at timestamptz not null,
  check(ends_at=starts_at+interval '72 hours')
 );
@@ -17,13 +17,14 @@ language plpgsql security definer set search_path=pg_catalog as $fn$
 declare a uuid;pl uuid;o uuid;s uuid;m uuid;sub uuid;t timestamptz:=now();h text;old grillad_private.signup_trials%rowtype;
 begin
  if p_user is null or p_session is null or p_email is null or p_terms is distinct from 'grillad-2026-11-28-v1' or p_phone is null or p_phone!~'^\+[1-9][0-9]{7,14}$' or length(coalesce(btrim(p_name),'')) not between 2 and 80 or length(coalesce(btrim(p_org),'')) not between 2 and 160 or length(coalesce(btrim(p_site),'')) not between 2 and 160 or concat(p_name,p_org,p_site)~'[[:cntrl:]]' then raise exception 'GRILLAD_SIGNUP_INPUT' using errcode='22023';end if;
- if not exists(select 1 from auth.users u where u.id=p_user and lower(u.email)=lower(p_email) and to_jsonb(u)->>'email_confirmed_at' is not null and coalesce(to_jsonb(u)->>'is_anonymous','false')='false') or not exists(select 1 from auth.sessions where id=p_session and user_id=p_user and (tag is null or tag='famille:grillad')) then raise exception 'GRILLAD_IDENTITY_UNVERIFIED' using errcode='42501';end if;
+ if not exists(select 1 from auth.users u where u.id=p_user and lower(u.email)=lower(p_email) and p_email ~ '^grillad-[0-9a-f]{48}@accounts[.]grillad[.]invalid$' and (to_jsonb(u)->'raw_app_meta_data'->>'grillad_internal')='true' and coalesce(to_jsonb(u)->>'is_anonymous','false')='false') or not exists(select 1 from auth.sessions where id=p_session and user_id=p_user and (tag is null or tag='famille:grillad')) then raise exception 'GRILLAD_IDENTITY_UNVERIFIED' using errcode='42501';end if;
  h:=encode(sha256(convert_to('grillad-trial:'||lower(p_email),'UTF8')),'hex');
  perform pg_advisory_xact_lock(hashtextextended('grillad-central:'||p_user::text,0));
  perform pg_advisory_xact_lock(hashtextextended('grillad-trial:'||h,0));
+ perform pg_advisory_xact_lock(hashtextextended('grillad-trial-contact:'||p_phone,0));
  select * into old from grillad_private.signup_trials where user_id=p_user;
  if found then return jsonb_build_object('org',old.org,'site',old.site,'trial_ends_at',old.ends_at);end if;
- if exists(select 1 from grillad_private.signup_trials where email_hash=h) then raise exception 'GRILLAD_TRIAL_USED' using errcode='42501';end if;
+ if exists(select 1 from grillad_private.signup_trials where email_hash=h or contact_phone=p_phone) then raise exception 'GRILLAD_TRIAL_USED' using errcode='42501';end if;
  select id into a from famille_core.applications where code='grillad' and status in ('planned','active') for update;
  select id into pl from famille_core.plans where app_id=a and code='grillad_premium_month' and status='active';
  if pl is null then raise exception 'GRILLAD_PLAN' using errcode='22023';end if;
