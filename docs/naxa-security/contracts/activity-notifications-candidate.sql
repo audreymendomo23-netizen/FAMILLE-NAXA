@@ -36,7 +36,7 @@ begin
  join public.sec_organizations o on o.id=s.organization_id
  where m.organization_id=org and sm.site_id=site and m.active and sm.active and s.active and o.active and m.role in ('owner','manager','operator')
  and ((audience is not null and m.user_id=audience) or (audience is null and kind in ('safety','fire','warning') and m.role in ('owner','manager')))
- on conflict(user_id,source,source_id,event_type) do nothing;
+ on conflict do nothing;
  return new;
 end $f$;
 revoke all on function sec_private.activity_notify() from public,anon,authenticated;

@@ -81,6 +81,11 @@ begin
   if length(body) not between 1 and 500 or body ~ '[[:cntrl:]]' then raise exception 'invalid reply' using errcode='22023';end if;
   insert into public.sec_support_messages(id,organization_id,site_id,request_id,author_id,body) values(p_event,p_org,p_site,c.id,auth.uid(),body);
   update public.sec_support_cases set state='waiting_customer',first_reply_at=coalesce(first_reply_at,now()) where id=c.id returning * into c;
+ elsif p_op='customer_reply' and customer and c.state in ('open','assigned','waiting_customer') and p_detail-'body'='{}'::jsonb then
+  body:=trim(coalesce(p_detail->>'body',''));
+  if length(body) not between 1 and 500 or body ~ '[[:cntrl:]]' then raise exception 'invalid reply' using errcode='22023';end if;
+  insert into public.sec_support_messages(id,organization_id,site_id,request_id,author_id,body) values(p_event,p_org,p_site,c.id,auth.uid(),body);
+  select * into c from public.sec_support_cases where id=p_case;
  elsif p_op='escalate' and agent and c.agent_id=auth.uid() and c.state in ('assigned','waiting_customer') and p_detail='{}'::jsonb then
   update public.sec_support_cases set priority='high',due_at=least(due_at,now()+interval '4 hours') where id=c.id returning * into c;
  elsif p_op='resolve' and agent and c.agent_id=auth.uid() and c.state in ('assigned','waiting_customer') and p_detail='{}'::jsonb then

@@ -23,7 +23,8 @@ do $q$declare j jsonb;begin
  if (select priority from public.sec_support_cases)<>'high' then raise exception 'escalation missing';end if;
 end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000131',true);
-insert into public.sec_support_messages(id,organization_id,site_id,request_id,author_id,body) values(gen_random_uuid(),'10000000-0000-0000-0000-000000000131','20000000-0000-0000-0000-000000000131','30000000-0000-0000-0000-000000000131','00000000-0000-0000-0000-000000000131','QA reply');
+select public.sec_support_action('10000000-0000-0000-0000-000000000131','20000000-0000-0000-0000-000000000131','30000000-0000-0000-0000-000000000131','50000000-0000-0000-0000-000000000149','customer_reply','{"body":"QA reply"}');
+select public.sec_support_action('10000000-0000-0000-0000-000000000131','20000000-0000-0000-0000-000000000131','30000000-0000-0000-0000-000000000131','50000000-0000-0000-0000-000000000149','customer_reply','{"body":"QA reply"}');
 do $q$begin if (select state from public.sec_support_cases)<>'assigned' or (select count(*) from public.sec_support_messages)<>3 then raise exception 'customer reply';end if;end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000132',true);
 select public.sec_support_action('10000000-0000-0000-0000-000000000131','20000000-0000-0000-0000-000000000131','30000000-0000-0000-0000-000000000131','50000000-0000-0000-0000-000000000135','resolve','{}');

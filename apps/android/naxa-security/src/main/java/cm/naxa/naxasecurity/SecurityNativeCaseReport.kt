@@ -43,7 +43,7 @@ internal fun securityReportCsv(v:JSONObject):String {
  if(current!=null){
   notes.filter{it.optString(if(cases)"incident_id" else "request_id")==selected}.forEach{Text(it.optString(if(cases)"note" else "body"))}
   val st=current.optString("state")
-  OutlinedTextField(note,{note=it},enabled=!busy,label={Text(if(cases)"Note" else "Réponse agent")},modifier=Modifier.fillMaxWidth())
+  OutlinedTextField(note,{note=it},enabled=!busy,label={Text(if(cases)"Note" else if(current.optString("requester_id")==s.user)"Réponse client" else "Réponse agent")},modifier=Modifier.fillMaxWidth())
   if(cases){
    Button(enabled=!busy&&note.isNotBlank(),onClick={runAction("comment",JSONObject().put("note",note.trim()))}){Text("Ajouter une note")}
    OutlinedTextField(evidence,{evidence=it},label={Text("Identifiant de preuve personnelle")});Button(enabled=!busy&&evidence.isNotBlank()&&note.isNotBlank(),onClick={runAction("evidence",JSONObject().put("note",note.trim()).put("evidence_id",evidence.trim()))}){Text("Lier la preuve")}
@@ -54,6 +54,7 @@ internal fun securityReportCsv(v:JSONObject):String {
    val customer=current.optString("requester_id")==s.user;val agent=current.optString("agent_id")==s.user
    if(!customer&&st=="open")Button(enabled=!busy,onClick={runAction("claim",JSONObject())}){Text("Prendre en charge")}
    if(agent&&st in setOf("assigned","waiting_customer")){Button(enabled=!busy&&note.isNotBlank(),onClick={runAction("reply",JSONObject().put("body",note.trim()))}){Text("Répondre")};listOf("escalate","resolve").forEach{op->Button(enabled=!busy,onClick={runAction(op,JSONObject())}){Text(op)}}}
+   if(customer&&st in setOf("open","assigned","waiting_customer"))Button(enabled=!busy&&note.isNotBlank(),onClick={runAction("customer_reply",JSONObject().put("body",note.trim()))}){Text("Envoyer ma réponse")}
    if(customer&&st=="resolved"){Button(enabled=!busy,onClick={runAction("reopen",JSONObject())}){Text("Rouvrir")};(1..5).forEach{n->TextButton(enabled=!busy,onClick={runAction("close",JSONObject().put("rating",n))}){Text("Clôturer avec note "+n)}}}
   }
  }
