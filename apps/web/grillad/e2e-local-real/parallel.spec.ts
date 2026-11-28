@@ -415,8 +415,21 @@ test('@transverse responsive professional sign-in and keyboard access',async({pa
    await expect(page.locator('html')).toHaveAttribute('lang',locale);
    await expect(page.locator('.auth-panel h1')).toBeVisible();
    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);
-   await page.locator('.auth-panel input[name=phone]').focus();
-   await expect(page.locator('.auth-panel input[name=phone]')).toBeFocused();
+   const loginPhone=page.locator('.auth-panel form').first().locator('input[name=phone]');
+   const recoveryPhone=page.locator('.auth-panel form').nth(1).locator('input[name=phone]');
+   await expect(loginPhone).toHaveCount(1);await expect(recoveryPhone).toHaveCount(1);
+   await loginPhone.focus();await expect(loginPhone).toBeFocused();
+   await recoveryPhone.focus();await expect(recoveryPhone).toBeFocused();
   }
  }
+});
+
+test('@transverse Atelier original photos load and reduced motion disables rotation',async({page})=>{
+ await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/');
+ const photos=page.locator('.atelier-photo');await expect(photos).toHaveCount(3);
+ await expect.poll(async()=>photos.evaluateAll(nodes=>nodes.every(n=>n instanceof HTMLImageElement&&n.complete&&n.naturalWidth>0))).toBe(true);
+ expect(await photos.evaluateAll(nodes=>nodes.map(n=>[n.naturalWidth,n.naturalHeight]))).toEqual([[516,387],[597,452],[495,495]]);
+ await expect(page.locator('.atelier-photo.active')).toHaveCount(1);
+ await expect(page.locator('.atelier-photo-control')).toHaveCount(0);
+ await page.emulateMedia({reducedMotion:'no-preference'});await expect(page.locator('.atelier-photo-control')).toBeVisible();await page.locator('.atelier-photo-control').click();await expect(page.locator('.atelier-photo-control')).toHaveAttribute('aria-pressed','true');
 });
