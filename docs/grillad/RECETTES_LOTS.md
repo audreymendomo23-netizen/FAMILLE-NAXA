@@ -50,3 +50,5 @@ Complément invitation : 1 test API supplémentaire, assertions partenaires ZIPP
 Complément : 1 test API paiement et 2 parcours Chromium (référence sans débit et lot de préparations). Total 190 unités (185 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/43.
 
 Complément conflits hors ligne : 1 test API d’annulation vérifiée et assertions SQL tombstone/rejeu ; total 191 unités (186 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/44.
+
+Complément démarrage Android : 1 test unitaire nommé (validité cache), assertions lifecycle invitation/renouvellement/projection enrichies. Total 192 unités (187 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/45.

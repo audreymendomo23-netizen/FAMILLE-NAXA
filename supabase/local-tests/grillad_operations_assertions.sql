@@ -43,6 +43,7 @@ reset role;
 set role service_role;
 do $test$ declare e uuid:='c2000000-0000-0000-0000-000000000002';op uuid:='c1000000-0000-0000-0000-000000000002';u uuid:='c1000000-0000-0000-0000-000000000003';v jsonb;begin
  v:=public.grillad_central_employee(e,op,u,encode(sha256(convert_to(repeat('b',40),'UTF8')),'hex'));if v->>'status'<>'pending' then raise exception 'employee invite';end if;
+ perform public.grillad_invite_rotate(e,op,encode(sha256(convert_to(repeat('d',40),'UTF8')),'hex'));
 end $test$;
 reset role;
 set role authenticated;
@@ -53,8 +54,9 @@ select set_config('request.jwt.claim.sub','c1000000-0000-0000-0000-000000000003'
 select set_config('request.jwt.claims','{"session_id":"c1000000-0000-0000-0000-000000000013"}',true);
 do $test$ declare e uuid:='c2000000-0000-0000-0000-000000000002';v jsonb;begin
  begin perform public.grillad_employee_accept(e,repeat('z',40));raise exception 'wrong invitation accepted';exception when insufficient_privilege then null;end;
- v:=public.grillad_employee_accept(e,repeat('b',40));
- if v->>'status'<>'processed' or public.grillad_employee_accept(e,repeat('b',40))<>v then raise exception 'employee accept replay';end if;
+ begin perform public.grillad_employee_accept(e,repeat('b',40));raise exception 'old token accepted';exception when insufficient_privilege then null;end;
+ v:=public.grillad_employee_accept(e,repeat('d',40));
+ if v->>'status'<>'processed' or public.grillad_employee_accept(e,repeat('d',40))<>v then raise exception 'employee accept replay';end if;
 end $test$;
 reset role;
 -- Partner fixtures only; exercise central proof and real relational source contract.
@@ -83,6 +85,20 @@ do $test$ declare o uuid:=current_setting('grillad.test.org')::uuid;s uuid:=curr
  if not public.grillad_security_bind(o,s,so,ss,so,ss) then raise exception 'security bind';end if;
  v:=public.grillad_security_project(o,s,so,ss);if (v->>'cameras')::int<>1 or (v->>'incidents')::int<>0 or (v->>'live_available')::boolean then raise exception 'security projection';end if;
  v:=public.grillad_security_project(o,s,so,ss);if (v->>'incidents')::int<>0 then raise exception 'security duplicate';end if;
+end $test$;
+reset role;
+-- A second renewal request with an expired intent is a fixture, not a real debit.
+insert into grillad_private.central_requests(id,org,site,actor,kind,details) values('c2000000-0000-0000-0000-000000000009',current_setting('grillad.test.org')::uuid,current_setting('grillad.test.site')::uuid,'c1000000-0000-0000-0000-000000000001','renewal','{"plan":"grillad_premium_month","amount":6000,"currency":"FCFA"}');
+set role service_role;
+select public.grillad_payment_prepare('c2000000-0000-0000-0000-000000000009','mtn_momo');
+reset role;
+update famille_core.payment_intents set expires_at=now()-interval '1 second' where id=(select intent_id from grillad_private.renewal_payment_links where request_id='c2000000-0000-0000-0000-000000000009');
+set role service_role;
+do $test$ declare v jsonb;e uuid:=gen_random_uuid();q uuid:='c2000000-0000-0000-0000-000000000009';op uuid:='c1000000-0000-0000-0000-000000000002';begin
+ v:=public.grillad_payment_reissue(e,q,op,'orange_money',repeat('f',64));
+ if v->>'status'<>'reissued' or v->>'intent'=v->>'previous' or public.grillad_payment_reissue(e,q,op,'orange_money',repeat('f',64))<>v then raise exception 'payment reissue';end if;
+ begin perform public.grillad_payment_reissue(gen_random_uuid(),q,op,'bank',repeat('e',64));raise exception 'unexpired intent reissued';exception when invalid_parameter_value then null;end;
+ v:=public.grillad_security_tick(10);if (v->>'processed')::int<>1 or (v->>'failed')::int<>0 then raise exception 'security tick';end if;
 end $test$;
 reset role;
 rollback;
