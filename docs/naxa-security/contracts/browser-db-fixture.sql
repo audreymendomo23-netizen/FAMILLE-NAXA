@@ -60,3 +60,5 @@ insert into sec_private.evidence_content values ('40000000-0000-0000-0000-000000
 
 -- Current shift for the independent synthetic QR attendance journey.
 insert into public.sec_shifts(id,organization_id,site_id,agent_id,created_by,label,starts_at,ends_at,state) values ('40000000-0000-0000-0000-000000000411','10000000-0000-0000-0000-000000000361','20000000-0000-0000-0000-000000000361','00000000-0000-0000-0000-000000000362','00000000-0000-0000-0000-000000000361','QA QR active shift',now()-interval '30 minutes',now()+interval '4 hours','accepted');
+
+insert into public.sec_shifts(id,organization_id,site_id,agent_id,created_by,label,starts_at,ends_at,state) values ('40000000-0000-0000-0000-000000000431','10000000-0000-0000-0000-000000000361','20000000-0000-0000-0000-000000000361','00000000-0000-0000-0000-000000000362','00000000-0000-0000-0000-000000000361','QA absence shift',now()-interval '24 hours',now()-interval '16 hours','completed');
