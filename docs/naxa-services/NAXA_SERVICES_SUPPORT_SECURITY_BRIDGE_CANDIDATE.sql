@@ -85,4 +85,4 @@ begin
 end $$;
 revoke all on function public.ns_v1_forward_support_ticket(uuid,uuid,uuid) from public,anon,authenticated;
 grant execute on function public.ns_v1_forward_support_ticket(uuid,uuid,uuid) to authenticated;
-commit;
+rollback;
