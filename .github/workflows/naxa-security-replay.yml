@@ -18,6 +18,7 @@ jobs:
       VITE_SECURITY_ATTENDANCE_ENABLED: 'true'
       VITE_SECURITY_MODULE_REQUESTS_ENABLED: 'true'
       VITE_SECURITY_FIELD_ENABLED: 'true'
+      VITE_SECURITY_MEDIA_ORIGIN: https://media.example.invalid
     steps:
       - uses: actions/checkout@v4
         with:
