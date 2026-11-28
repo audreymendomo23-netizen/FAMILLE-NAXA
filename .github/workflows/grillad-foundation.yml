@@ -3,6 +3,10 @@ on:
   push:
     branches: [work/grillad-foundation-20261127]
     paths:
+      - 'scripts/grillad/gradle-ci.sh'
+      - 'apps/web/grillad/src/**'
+      - 'apps/web/admin-console/src/GrilladAdmin.tsx'
+      - 'supabase/local-tests/grillad_transverse_assertions.sql'
       - 'apps/android/grillad/**'
       - 'apps/web/grillad/**'
       - 'scripts/grillad/**'
@@ -95,15 +99,7 @@ jobs:
           GRILLAD_FIREBASE_API_KEY: ${{ vars.GRILLAD_FIREBASE_API_KEY || secrets.GRILLAD_FIREBASE_API_KEY }}
         shell: bash
         run: |
-          set -o pipefail
-          if gradle --no-daemon --stacktrace :grillad:testDebugUnitTest :grillad:assembleDebug 2>&1 | tee /tmp/grillad-gradle.log; then
-            exit 0
-          fi
-          if grep -Eq "Plugin .* was not found|could not resolve plugin artifact" /tmp/grillad-gradle.log; then
-            gradle --no-daemon --stacktrace :grillad:testDebugUnitTest :grillad:assembleDebug
-          else
-            exit 1
-          fi
+          bash scripts/grillad/gradle-ci.sh :grillad:testDebugUnitTest :grillad:assembleDebug
       - uses: actions/upload-artifact@v4
         if: always()
         with:

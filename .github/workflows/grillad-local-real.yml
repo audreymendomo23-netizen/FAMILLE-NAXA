@@ -3,6 +3,10 @@ on:
   push:
     branches: [work/grillad-foundation-20261127]
     paths:
+      - 'scripts/grillad/gradle-ci.sh'
+      - 'supabase/drafts/grillad*.sql'
+      - 'apps/web/admin-console/src/GrilladAdmin.tsx'
+      - 'supabase/local-tests/grillad_transverse_assertions.sql'
       - '.github/workflows/grillad-local-real.yml'
       - 'scripts/grillad/local-real-*'
       - 'apps/web/grillad/e2e-local-real/**'
