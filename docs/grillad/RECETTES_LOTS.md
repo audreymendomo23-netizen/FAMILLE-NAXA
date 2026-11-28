@@ -76,3 +76,6 @@ Ajout d'une suite PostgreSQL multivendeur (job server product-race, indépendant
 
 ## Section 34 — NAXA Replay
 Campagne locale 46091449597 : 15/15 SUCCESS. Un scénario supplémentaire enregistré (deux comptes Auth réels, Chromium, permissions et logout), workflow dédié 46091864360 : BLOCKED au préflight (six secrets absents), navigateur non exécuté. 217 unités locales + 1 scénario Replay bloqué = 218 enregistrées ; aucune recette réelle déclarée réussie. Voir §34 continuité.
+
+## Section 35 — Réemploi du runner NAXA
+Trois tests d'adaptateur ajoutés (ciblage Replay/opt-in, deux identités et clôture des sessions, refus du téléphone de profil non confirmé). Registre : 220 unités locales et 1 scénario Replay bloqué = 221 enregistrées. Campagne 46092177818 : 4/15 SUCCESS ; 0 échec(s) ; 11 en attente/en cours. Pas de preuve Auth réelle ; voir §35.
