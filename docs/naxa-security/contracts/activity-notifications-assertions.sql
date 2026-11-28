@@ -5,6 +5,14 @@ insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000221
 insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000221','10000000-0000-0000-0000-000000000221','QA'),('20000000-0000-0000-0000-000000000222','10000000-0000-0000-0000-000000000221','Other');
 insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221','00000000-0000-0000-0000-000000000221',true),('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221','00000000-0000-0000-0000-000000000222',true),('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000222','00000000-0000-0000-0000-000000000223',true);
 set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000221',true);
+select public.sec_set_activity_channel('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221','sms',true);
+select public.sec_set_activity_channel('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221','email',true);
+do $q$begin
+ if has_table_privilege(current_user,'sec_private.activity_delivery_intents','SELECT') or has_table_privilege(current_user,'sec_private.activity_channel_preferences','INSERT') or has_table_privilege(current_user,'sec_private.activity_delivery_eligible','SELECT') then raise exception 'private dispatch exposed';end if;
+ begin perform public.sec_set_activity_channel('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000222','sms',true);raise exception 'cross site preference';exception when insufficient_privilege then null;end;
+ begin perform public.sec_set_activity_channel('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221','unknown',true);raise exception 'invalid channel accepted';exception when invalid_parameter_value then null;end;
+end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000222',true);
 select public.sec_field_action('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221','50000000-0000-0000-0000-000000000221','safety_report',null,'{"reason":"private QA note"}');
 select public.sec_field_action('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221','50000000-0000-0000-0000-000000000221','safety_report',null,'{"reason":"private QA note"}');
@@ -22,4 +30,22 @@ do $q$begin
  if (select count(*) from public.sec_activity_notifications)<>0 then raise exception 'cross site leak';end if;
  begin perform public.sec_read_activity('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221',gen_random_uuid());raise exception 'cross site ack';exception when insufficient_privilege then null;end;
 end $q$;
-reset role;rollback;
+reset role;
+do $q$begin
+ if (select count(*) from sec_private.activity_delivery_eligible)<>2 then raise exception 'opt-in queue missing or duplicate';end if;
+ if (select count(*) from sec_private.activity_delivery_intents)<>2 then raise exception 'unexpected delivery intent';end if;
+end $q$;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000221',true);
+select public.sec_set_activity_channel('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221','sms',false);
+select public.sec_set_activity_channel('10000000-0000-0000-0000-000000000221','20000000-0000-0000-0000-000000000221','sms',true);
+reset role;
+do $q$begin
+ if (select count(*) from sec_private.activity_delivery_eligible)<>1 or exists(select 1 from sec_private.activity_delivery_eligible where channel='sms') then raise exception 'revoked intent revived';end if;
+end $q$;
+update public.sec_site_memberships set active=false where user_id='00000000-0000-0000-0000-000000000221';
+do $q$begin if exists(select 1 from sec_private.activity_delivery_eligible) then raise exception 'inactive recipient eligible';end if;end $q$;
+update public.sec_site_memberships set active=true where user_id='00000000-0000-0000-0000-000000000221';
+update sec_private.activity_delivery_intents set created_at=now()-interval '2 days',expires_at=now()-interval '1 day' where channel='email';
+do $q$begin if exists(select 1 from sec_private.activity_delivery_eligible) then raise exception 'expired intent eligible';end if;end $q$;
+rollback;
