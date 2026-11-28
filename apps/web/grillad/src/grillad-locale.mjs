@@ -979,7 +979,17 @@ export const labels={
   "Opération confirmée": [
     "Operation confirmed",
     "Gollal tabbitinaama"
-  ]
+  ],
+  "Évolution du chiffre d’affaires": ["Revenue trend","Ƴeewtagol ceede jaaygol"],
+  "Encaissements espèces": ["Cash receipts","Ceede jaɓaaɗe"],
+  "Résultat indicatif": ["Estimated result","Njaltudi timmunde"],
+  "Non calculable": ["Cannot be calculated","Waawaa limteede"],
+  "Non défini": ["Not set","Sigaaka"],
+  "Actualisé": ["Updated","Hesɗitinaama"],
+  "Progression objectif": ["Target progress","Ƴeewtagol faandaare"],
+  "Chiffre d’affaires": ["Revenue","Ceede jaaygol"],
+  "Objectif": ["Target","Faandaare"],
+  "Objectif non défini": ["Target not set","Faandaare sigaaka"]
 };
 export function localeOf(x){return x==='en'||x==='ff-CM'?x:'fr'}
 export function translate(key,locale){return localeOf(locale)==='fr'?key:labels[key]?.[locale==='en'?0:1]??key}

@@ -246,5 +246,15 @@ internal fun grilladLabel(key:String,locale:String):String=if(locale!="en"&&loca
  "Abonnement expiré" -> if(locale=="en")"Subscription expired" else "Abonman timmii"
  "Options de sécurité" -> if(locale=="en")"Security options" else "Cuɓe kisal"
  "Opération confirmée" -> if(locale=="en")"Operation confirmed" else "Gollal tabbitinaama"
+ "Évolution du chiffre d’affaires" -> if(locale=="en")"Revenue trend" else "Ƴeewtagol ceede jaaygol"
+ "Encaissements espèces" -> if(locale=="en")"Cash receipts" else "Ceede jaɓaaɗe"
+ "Résultat indicatif" -> if(locale=="en")"Estimated result" else "Njaltudi timmunde"
+ "Non calculable" -> if(locale=="en")"Cannot be calculated" else "Waawaa limteede"
+ "Non défini" -> if(locale=="en")"Not set" else "Sigaaka"
+ "Actualisé" -> if(locale=="en")"Updated" else "Hesɗitinaama"
+ "Progression objectif" -> if(locale=="en")"Target progress" else "Ƴeewtagol faandaare"
+ "Chiffre d’affaires" -> if(locale=="en")"Revenue" else "Ceede jaaygol"
+ "Objectif" -> if(locale=="en")"Target" else "Faandaare"
+ "Objectif non défini" -> if(locale=="en")"Target not set" else "Faandaare sigaaka"
  else -> key
 }

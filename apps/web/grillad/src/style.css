@@ -139,3 +139,19 @@ article button{margin:4px 4px 4px 0;max-width:100%;white-space:normal}
 @media(prefers-reduced-motion:no-preference){.atelier-form-panel{animation:atelier-auth-enter .35s ease-out both}@keyframes atelier-auth-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}}
 
 .grillad-brandmark{display:block;width:min(100%,250px);height:auto;flex-shrink:0}.grillad-brandmark.compact{width:140px;max-width:42vw}.grillad-ink{fill:var(--text,#1f1f1f)}.grillad-brandmark.light .grillad-ink{fill:#f7f5ef}.grillad-ember-dot{transform-box:fill-box;transform-origin:50% 100%}@media(prefers-reduced-motion:no-preference){.grillad-ember-dot{animation:grillad-ember 2.4s ease-in-out infinite}@keyframes grillad-ember{0%,100%{transform:rotate(-3deg) scaleY(.96)}45%{transform:rotate(4deg) scaleY(1.09)}70%{transform:rotate(-2deg) scaleY(1.02)}}}.grillad-unavailable{max-width:440px;margin:12vh auto;padding:24px}.auth-brand .grillad-brandmark{max-width:230px}
+
+/* L’Atelier workspace: consistent cards, quieter hierarchy and confirmed activity. */
+.atelier-workspace .heading{padding-bottom:14px;border-bottom:1px solid var(--line)}
+.atelier-workspace .workspace-freshness{font-size:12px;color:var(--muted);margin:8px 0 14px}
+.atelier-workspace .hero{background:linear-gradient(135deg,#1f1f1f,#493025)}
+.atelier-workspace .metric{border-radius:16px;box-shadow:none}
+.atelier-workspace .sectionnav button{border-radius:10px}
+.atelier-activity{margin:16px 0;min-width:0}
+.atelier-activity h2{margin:0;font-size:18px}.atelier-activity p{color:var(--muted);font-size:13px;margin:4px 0}
+.activity-plot{display:block;width:100%;height:auto;max-height:180px;color:var(--accent)}
+.activity-zero{stroke:var(--line);stroke-width:1;stroke-dasharray:3 4}
+.activity-line{stroke:currentColor;stroke-width:2.5;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:0}
+.activity-dot{fill:currentColor;stroke:var(--surface);stroke-width:1.5}
+.activity-values{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(74px,1fr));gap:8px}
+.activity-values li{display:flex;flex-direction:column;font-size:12px;color:var(--muted);min-width:0}.activity-values strong{color:var(--text);overflow-wrap:anywhere}
+@media(prefers-reduced-motion:no-preference){.activity-line{animation:activity-reveal .65s ease-out both}@keyframes activity-reveal{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}}

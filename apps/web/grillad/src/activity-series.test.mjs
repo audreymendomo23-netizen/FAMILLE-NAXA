@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {activitySeries} from './activity-series.mjs';
+const row=(day,version,ca,provisional=false)=>({service_day:day,version,data:{ca,provisional}});
+test('trend uses latest confirmed revision and does not invent missing service days',()=>{assert.deepEqual(activitySeries([row('2026-11-27',1,20),row('2026-11-25',1,50),row('2026-11-27',2,30),row('2026-11-26',1,40,true),row('2026-11-24',1,20),row('2026-11-24',2,30,true)]),[{day:'2026-11-25',ca:50},{day:'2026-11-27',ca:30}]);assert.deepEqual(activitySeries(null),[]);assert.deepEqual(activitySeries([row('2026-11-28',1,null)]),[])});
