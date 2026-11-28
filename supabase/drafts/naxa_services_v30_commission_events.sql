@@ -22,7 +22,7 @@ begin
  if not ns_commission_internal.authorized_actor(p_org,p_site,p_actor) then raise exception 'NS_COMMISSION_SETTLEMENT_FORBIDDEN';end if;
  select activity_profile into profile from public.ns_organizations where id=p_org and status='active' for no key update;
  if not found then raise exception 'NS_COMMISSION_SETTLEMENT_FORBIDDEN'; end if;
- if exists(select 1 from public.ns_commission_reconciliation_plans r where (r.sale_id=p_sale or exists(select 1 from public.ns_commission_plan_appointments a where a.plan_id=r.id and a.appointment_id=p_appointment)) and r.id is distinct from p_plan) then raise exception 'NS_COMMISSION_SETTLEMENT_RESERVED';end if;
+ if exists(select 1 from public.ns_commission_reconciliation_plans r where (r.sale_id=p_sale or exists(select 1 from public.ns_commission_plan_appointments reserved_appt where reserved_appt.plan_id=r.id and reserved_appt.appointment_id=p_appointment)) and r.id is distinct from p_plan) then raise exception 'NS_COMMISSION_SETTLEMENT_RESERVED';end if;
  if exists(select 1 from public.ns_commission_allocation_batches b where b.sale_id=p_sale or exists(select 1 from jsonb_array_elements(b.allocation) x where (x->>'appointment_id')::uuid=p_appointment)) then raise exception 'NS_COMMISSION_SETTLEMENT_CONFLICT';end if;
  select * into receipt from public.ns_commission_settlements where appointment_id=p_appointment or sale_id=p_sale;
  if found then
@@ -86,7 +86,7 @@ begin
  if (select count(distinct x->>'line_id') from jsonb_array_elements(canonical) x)<>n or (select count(distinct x->>'appointment_id') from jsonb_array_elements(canonical) x)<>n then raise exception 'NS_MULTILINE_DUPLICATE';end if;
  select activity_profile into profile from public.ns_organizations where id=p_org and status='active' for no key update;
  if not found then raise exception 'NS_MULTILINE_FORBIDDEN';end if;
- if exists(select 1 from public.ns_commission_reconciliation_plans r where (r.sale_id=p_sale or exists(select 1 from public.ns_commission_plan_appointments a where a.plan_id=r.id and a.appointment_id in (select (x->>'appointment_id')::uuid from jsonb_array_elements(canonical) x))) and r.id is distinct from p_plan) then raise exception 'NS_MULTILINE_RESERVED';end if;
+ if exists(select 1 from public.ns_commission_reconciliation_plans r where (r.sale_id=p_sale or exists(select 1 from public.ns_commission_plan_appointments reserved_appt where reserved_appt.plan_id=r.id and reserved_appt.appointment_id in (select (x->>'appointment_id')::uuid from jsonb_array_elements(canonical) x))) and r.id is distinct from p_plan) then raise exception 'NS_MULTILINE_RESERVED';end if;
  select * into old from public.ns_commission_allocation_batches where id=p_id or sale_id=p_sale;
  if found then
   if old.id<>p_id or old.org_id<>p_org or old.site_id<>p_site or old.sale_id<>p_sale or old.actor_id<>actor or old.allocation<>canonical then raise exception 'NS_MULTILINE_CONFLICT';end if;
