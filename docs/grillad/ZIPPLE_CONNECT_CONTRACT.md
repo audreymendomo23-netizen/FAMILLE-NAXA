@@ -7,3 +7,6 @@ Surface cliente candidate : URL GRILLAD `/#connect=<opaque-token>` (fragment, pa
 
 ### Arbitrage du fondateur — 28 novembre 2026 (prioritaire)
 La remise GRILLAD enregistre manuellement les espèces, MTN Mobile Money ou Orange Money reçus hors application. La référence du crédit mobile peut être rapprochée ultérieurement par l'encadrement. Les règlements mobiles ne sont pas comptés en espèces dans la clôture ; le CA reste inchangé. Aucune API de collecte, aucun paiement client depuis ZIPPLE/GRILLAD, aucun transfert inter-portefeuilles. Le contrat connect_transition_method est construit et migré ; QR partenaire réel reste à qualifier.
+
+### QR commun — passe challenge
+Le QR GRILLAD candidat #duo=<opaque>&table=<hex64> valide les deux hash côté serveur via connect_pair_check. Registre de paires et révocation service-only. Après validation, le client choisit Bar ZIPPLE (contrat du donneur #table=token) ou Grillades ; commandes, caisse et règlements distincts. Aucun partenaire réel enregistré, aucune publication ni modification de ZIPPLE. Migration appliquée après 4 suites SQL vertes ; recette QR physique reste à faire.

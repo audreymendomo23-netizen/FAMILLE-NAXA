@@ -65,3 +65,5 @@ Requalification : cinq campagnes complètes de cette passe vertes (70/70 jobs). 
 Passe challenge : 2 tests unitaires Web catalogue/lot, 2 tests identité centrale, 1 test natif ticket vidéo, 2 tests intake SMS, 1 parcours Chromium de reprise multi-lots. Total 205 unités (200 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/50/8. Les tests existants corrigés ne sont pas comptés deux fois.
 
 Complément QR commun : 1 test API nommé, assertions SQL autorisation/révocation de paire. Total 206 unités (201 tests nommés + 4 suites SQL + 1 drill), lots indicatifs 50/50/47/50/9.
+
+Dernier relevé : sept campagnes 14/14 ; dernière campagne 46089210628, quatre suites SQL vertes, vérifier le reste. 206 unités distinctes du nombre de jobs.
