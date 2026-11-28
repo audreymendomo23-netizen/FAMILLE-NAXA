@@ -1,0 +1,31 @@
+name: WideMeet — Cloudflare Pages preview build
+on:
+  push:
+    branches: [work/widemeet-cloudflare-firebase-20261128]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pages-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test apps/web/widemeet/e2e/pages-proxy.test.mjs
+      - run: npm install --no-audit --no-fund
+      - run: node scripts/widemeet/cloudflare-pages-build.mjs
+        env:
+          VITE_WIDEMEET_PAGES_PROXY: 'true'
+          VITE_WIDEMEET_PUSH_ENABLED: 'true'
+      - run: |
+          test -s apps/web/widemeet/dist/index.html
+          test -s apps/web/widemeet/dist/sw.js
+          test -s apps/web/widemeet/dist/manifest.webmanifest
+          grep -R -l -F '/api/widemeet-auth' apps/web/widemeet/dist/assets >/dev/null
+          grep -F 'naxameet' apps/web/widemeet/dist/sw.js >/dev/null
+          echo WIDEMEET_PAGES_BUILD_PASS
