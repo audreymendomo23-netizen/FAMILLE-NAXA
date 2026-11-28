@@ -77,18 +77,59 @@ revoke all on function public.ns_schedule_internal_meeting(uuid,uuid,uuid,uuid,t
 grant execute on function public.ns_schedule_internal_meeting(uuid,uuid,uuid,uuid,text,timestamptz,uuid[]),public.ns_transition_internal_meeting(uuid,integer,text),public.ns_set_meeting_listener(uuid,text,boolean) to authenticated;
 -- Report reads only confirmed server facts. Site finance restricted to site managers; other staff see own assignments.
 create function public.ns_daily_briefing(p_org uuid,p_site uuid,p_day date) returns jsonb language plpgsql stable security definer set search_path='' as $f$
-declare actor uuid:=public.ns_current_member_id(p_org); manager boolean; start_at timestamptz; stop_at timestamptz; fin jsonb; appointments jsonb; clocks jsonb;
+declare actor uuid:=public.ns_current_member_id(p_org); manager boolean; start_at timestamptz; stop_at timestamptz; fin jsonb; appointments jsonb; clocks jsonb; details jsonb:='{}'::jsonb; today date:=(now() at time zone 'Africa/Douala')::date; network_ids uuid[]; post_ids uuid[]; network_count integer; network_revenue numeric; network_sales numeric; current_day boolean; role_name text;
 begin
  if actor is null or p_day is null or p_day>(now() at time zone 'Africa/Douala')::date or p_day<(now() at time zone 'Africa/Douala')::date-366 or public.ns_erp_access_reason(p_org)='blocked' or not exists(select 1 from public.ns_sites where id=p_site and org_id=p_org and status='active') then raise exception 'NS_BRIEFING_FORBIDDEN'; end if;
  if not public.ns_can_access_site(p_org,p_site) and not exists(select 1 from public.ns_member_scopes s where s.org_id=p_org and s.member_id=actor and s.site_id=p_site and s.scope_type='workstation' and s.can_read) then raise exception 'NS_BRIEFING_FORBIDDEN'; end if;
- manager:=public.ns_can_manage_site(p_org,p_site);
+ select role_code into role_name from public.ns_members where id=actor and org_id=p_org;
+ -- A workstation-only manager is never treated as a whole-site manager.
+ manager:=role_name in ('promoter','network_manager','site_manager') and exists(select 1 from public.ns_member_scopes sc where sc.org_id=p_org and sc.member_id=actor and sc.can_read and sc.can_manage and (sc.scope_type='organization' or (sc.scope_type='site' and sc.site_id=p_site)));
+ select array_agg(distinct sc.workstation_id) into post_ids from public.ns_member_scopes sc join public.ns_workstations w on w.id=sc.workstation_id and w.org_id=p_org and w.site_id=p_site where sc.org_id=p_org and sc.member_id=actor and sc.site_id=p_site and sc.scope_type='workstation' and sc.can_read and sc.can_manage and w.status='active' and role_name in ('promoter','network_manager','site_manager','workstation_manager');
+ current_day:=p_day=today;
  start_at:=p_day::timestamp at time zone 'Africa/Douala';stop_at:=(p_day+1)::timestamp at time zone 'Africa/Douala';
  if manager then select jsonb_build_object('revenue_xaf',v.revenue_xaf,'confirmed_sales_count',v.confirmed_sales_count,'uncosted_sales_count',v.uncosted_sales_count) into fin from public.ns_performance_daily v where v.org_id=p_org and v.site_id=p_site and v.performance_day=p_day; end if;
  select jsonb_build_object('scheduled_count',count(*),'completed_count',count(*) filter(where a.status='completed')) into appointments from public.ns_appointments a where a.org_id=p_org and a.site_id=p_site and a.starts_at>=start_at and a.starts_at<stop_at and (manager or a.assigned_member_id=actor);
  if public.ns_roster_enabled(p_org) then
   select jsonb_build_object('first_clock_in',min(e.occurred_at) filter(where e.event_type='staff_clock_in'),'last_clock_out',max(e.occurred_at) filter(where e.event_type='staff_clock_out'),'event_count',count(*)) into clocks from public.ns_staff_time_events e where e.org_id=p_org and e.site_id=p_site and e.staff_member_id=actor and e.occurred_at>=start_at and e.occurred_at<stop_at and e.actor_member_id=actor;
  end if;
- return jsonb_build_object('day',p_day,'generated_at',now(),'scope',case when manager then 'site' else 'personal' end,'finance',fin,'appointments',appointments,'personal_clock_events',clocks,'coverage','partial_confirmed_server_facts');
+ -- Personal data only, even if an employee has a broad read grant.
+ details:=jsonb_build_object(
+ 'own_commissions_xaf',(select coalesce(sum(c.commission_xaf),0) from public.ns_commission_entries c where c.org_id=p_org and c.site_id=p_site and c.member_id=actor and c.created_at>=start_at and c.created_at<stop_at and c.status in ('approved','paid')),
+ 'tomorrow_appointments',case when current_day then (select count(*) from public.ns_appointments a where a.org_id=p_org and a.site_id=p_site and a.starts_at>=stop_at and a.starts_at<stop_at+interval '1 day' and a.status in ('requested','booked','confirmed','arrived') and (manager or a.assigned_member_id=actor)) else null end,
+ 'tomorrow_shifts',case when current_day and public.ns_roster_enabled(p_org) then (select count(*) from public.ns_roster_shifts r where r.org_id=p_org and r.site_id=p_site and r.member_id=actor and r.status='published' and r.starts_at>=stop_at and r.starts_at<stop_at+interval '1 day') else null end,
+ 'post_appointments',case when post_ids is not null and not manager then (select count(*) from public.ns_appointments a where a.org_id=p_org and a.site_id=p_site and a.workstation_id=any(post_ids) and a.starts_at>=start_at and a.starts_at<stop_at) else null end,
+ 'post_completed',case when post_ids is not null and not manager then (select count(*) from public.ns_appointments a where a.org_id=p_org and a.site_id=p_site and a.workstation_id=any(post_ids) and a.starts_at>=start_at and a.starts_at<stop_at and a.status='completed') else null end);
+ if manager then
+  details:=details||jsonb_build_object(
+   'receipts_xaf',(select coalesce(sum(p.amount_xaf),0) from public.ns_payments p where p.org_id=p_org and p.site_id=p_site and p.status='confirmed' and p.confirmed_at>=start_at and p.confirmed_at<stop_at),
+   'pending_payments_xaf',case when current_day then (select coalesce(sum(p.amount_xaf),0) from public.ns_payments p where p.org_id=p_org and p.site_id=p_site and p.status='pending' and p.created_at>=start_at and p.created_at<stop_at) else null end,
+   'expenses_xaf',(select coalesce(sum(e.amount_xaf),0) from public.ns_expenses e where e.org_id=p_org and e.site_id=p_site and e.created_at>=start_at and e.created_at<stop_at),
+   'gross_profit_xaf',(select v.gross_profit_xaf from public.ns_performance_daily v where v.org_id=p_org and v.site_id=p_site and v.performance_day=p_day and v.gross_profit_xaf>=0),
+   'objective_xaf',(select v.target_revenue_xaf from public.ns_performance_objectives v where v.org_id=p_org and v.site_id=p_site and v.period_type='daily' and v.period_start=p_day order by v.version desc limit 1),
+   'cash_closed',(select count(*) from public.ns_cash_sessions c where c.org_id=p_org and c.site_id=p_site and c.closed_at>=start_at and c.closed_at<stop_at and c.status in ('closed','reviewed')),
+   'cash_variances',(select count(*) from public.ns_cash_sessions c where c.org_id=p_org and c.site_id=p_site and c.closed_at>=start_at and c.closed_at<stop_at and c.variance_xaf<>0),
+   'new_customers',(select count(*) from public.ns_customers c where c.org_id=p_org and c.site_id=p_site and c.created_at>=start_at and c.created_at<stop_at),
+   'loyalty_rewards',(select count(*) from public.ns_loyalty_events e where e.org_id=p_org and e.site_id=p_site and e.created_at>=start_at and e.created_at<stop_at and e.event_type='reward_earned'),
+   'support_requests',(select count(*) from public.ns_support_requests r where r.org_id=p_org and r.site_id=p_site and r.created_at>=start_at and r.created_at<stop_at),
+   'completed_work',(select count(distinct e.record_id) from public.ns_management_record_events e join public.ns_management_records r on r.id=e.record_id and r.org_id=e.org_id and r.site_id=e.site_id where e.org_id=p_org and e.site_id=p_site and r.record_type in ('work_order','repair_order','service_order') and e.to_status in ('delivered','closed') and e.occurred_at>=start_at and e.occurred_at<stop_at),
+   'supplier_payments_xaf',(select coalesce(sum(p.amount_xaf),0) from public.ns_supplier_payments p where p.org_id=p_org and p.site_id=p_site and p.paid_at>=start_at and p.paid_at<stop_at),
+   'receivables_xaf',case when current_day then (select coalesce(sum(r.amount_xaf-r.paid_xaf),0) from public.ns_management_records r where r.org_id=p_org and r.site_id=p_site and r.record_type='customer_receivable' and r.status in ('open','partial')) else null end,
+   'followups_due',case when current_day then (select count(*) from public.ns_customer_followups r where r.org_id=p_org and r.site_id=p_site and r.status='active' and r.next_due_at<stop_at) else null end,
+   'stock_low',case when current_day then (select count(*) from public.ns_inventory_items i where i.org_id=p_org and i.site_id=p_site and i.active and i.quantity<=i.reorder_level) else null end,
+   'purchase_open',case when current_day then (select count(*) from public.ns_purchase_documents r where r.org_id=p_org and r.site_id=p_site and r.status in ('ordered','partially_received')) else null end,
+   'supplier_debt_xaf',case when current_day then (select coalesce(sum(r.received_total_xaf-r.paid_total_xaf),0) from public.ns_purchase_documents r where r.org_id=p_org and r.site_id=p_site and r.status<>'cancelled') else null end,
+   'supplier_overdue_xaf',case when current_day then (select coalesce(sum(r.received_total_xaf-r.paid_total_xaf),0) from public.ns_purchase_documents r where r.org_id=p_org and r.site_id=p_site and r.status<>'cancelled' and r.due_at<now()) else null end,
+   'work_open',case when current_day then (select count(*) from public.ns_management_records r where r.org_id=p_org and r.site_id=p_site and r.record_type in ('work_order','repair_order','service_order') and r.status not in ('closed','delivered','cancelled','rejected','paid')) else null end,
+   'work_overdue',case when current_day then (select count(*) from public.ns_management_records r where r.org_id=p_org and r.site_id=p_site and r.record_type in ('work_order','repair_order','service_order') and r.status not in ('closed','delivered','cancelled','rejected','paid') and r.due_at<now()) else null end,
+   'pressing_open',case when current_day then (select count(*) from public.ns_pressing_orders r where r.org_id=p_org and r.site_id=p_site and r.status in ('received','in_progress','ready')) else null end,
+   'pressing_overdue',case when current_day then (select count(*) from public.ns_pressing_orders r where r.org_id=p_org and r.site_id=p_site and r.status in ('received','in_progress','ready') and r.promised_at<now()) else null end);
+  if role_name in ('promoter','network_manager') then
+   select array_agg(si.id order by si.id) into network_ids from public.ns_sites si where si.org_id=p_org and si.status='active' and exists(select 1 from public.ns_member_scopes sc where sc.org_id=p_org and sc.member_id=actor and sc.can_read and sc.can_manage and (sc.scope_type='organization' or (sc.scope_type='site' and sc.site_id=si.id)));
+   select count(*),sum(v.revenue_xaf),sum(v.confirmed_sales_count) into network_count,network_revenue,network_sales from public.ns_performance_daily v where v.org_id=p_org and v.site_id=any(network_ids) and v.performance_day=p_day;
+   details:=details||jsonb_build_object('network_sites',cardinality(network_ids),'network_revenue_xaf',case when network_count=cardinality(network_ids) then network_revenue else null end,'network_sales',case when network_count=cardinality(network_ids) then network_sales else null end);
+  end if;
+ end if;
+ return jsonb_build_object('day',p_day,'generated_at',now(),'scope',case when manager then 'site' else 'personal' end,'finance',fin,'appointments',appointments,'personal_clock_events',clocks,'details',details,'coverage','partial_confirmed_server_facts');
 end $f$;
 revoke all on function public.ns_daily_briefing(uuid,uuid,date) from public,anon,authenticated;
 grant execute on function public.ns_daily_briefing(uuid,uuid,date) to authenticated;
