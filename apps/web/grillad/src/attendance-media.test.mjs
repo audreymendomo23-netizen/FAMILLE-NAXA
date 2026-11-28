@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {mediaLease,freshGps} from './attendance-media.mjs';
+test('cancelled media capture cannot be submitted after geolocation resolves',()=>{const l=mediaLease();const a=l.begin();l.invalidate();assert.equal(l.current(a),false);const b=l.begin();assert.equal(l.current(b),true);assert.equal(l.current(a),false)});
+test('new photo request supersedes previous one and closing invalidates both',()=>{const l=mediaLease();const a=l.begin(),b=l.begin();assert.equal(l.current(a),false);assert.equal(l.current(b),true);l.invalidate();assert.equal(l.current(b),false)});
+test('pointage accepts only finite recent GPS timestamps',()=>{assert.equal(freshGps(95000,100000),true);for(const t of [84999,101001,NaN,Infinity])assert.equal(freshGps(t,100000),false)});
