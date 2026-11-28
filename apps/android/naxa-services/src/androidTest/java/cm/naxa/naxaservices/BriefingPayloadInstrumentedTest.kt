@@ -8,6 +8,15 @@ class BriefingPayloadInstrumentedTest {
  @Test fun annualPeriodPreservesEveryDayAndRejectsGaps(){
   val end=java.time.LocalDate.parse("2024-12-31");val rows=(0 until 366).map{i->report().put("day",end.minusDays((365-i).toLong()).toString())};val result=nativeBriefingPeriod(rows,end,366);assertEquals(732L,result["appointments"]);assertTrue(runCatching{nativeBriefingPeriod(rows.drop(1),end,366)}.isFailure)
  }
+ @Test fun voiceQuestionsOnlyUseAuthorizedKnownValues(){
+  val labels=mapOf("appointments" to "Appointments","revenue" to "Revenue","clocks" to "Clock events")
+  val values=mapOf("appointments" to 2L,"clocks" to null)
+  assertEquals("Appointments: 2",nativeBriefingQuestion(" appointments? ",labels,values))
+  assertNull(nativeBriefingQuestion("Revenue",labels,values))
+  assertNull(nativeBriefingQuestion("Clock events",labels,values))
+  assertNull(nativeBriefingQuestion("Show customer names",labels,values))
+  assertEquals("Revenue: 0",nativeBriefingQuestion("Revenue",labels,mapOf("revenue" to 0L)))
+ }
  @Test fun periodPreservesScopeAndUnknownFinance(){
   val a=report().put("day","2026-11-26");val b=report()
   val result=nativeBriefingPeriod(listOf(a,b),java.time.LocalDate.parse("2026-11-27"),2)

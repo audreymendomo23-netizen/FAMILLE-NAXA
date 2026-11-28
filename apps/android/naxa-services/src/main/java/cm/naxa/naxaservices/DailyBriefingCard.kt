@@ -1,6 +1,18 @@
 package cm.naxa.naxaservices
 
 import android.app.DatePickerDialog
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import java.text.Normalizer
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
@@ -61,7 +73,7 @@ internal fun validateNativeBriefing(report:JSONObject,expectedDay:String) {
  }
  if(!report.isNull("personal_clock_events"))briefingCount(report.getJSONObject("personal_clock_events").opt("event_count"))
 }
-internal fun briefingText(report:JSONObject,language:String):String {
+internal fun briefingText(report:JSONObject,language:String,detailed:Boolean=true):String {
  val w=briefingWords.getValue(language)
  val appointments=report.getJSONObject("appointments")
  val finance=report.optJSONObject("finance")
@@ -72,8 +84,8 @@ internal fun briefingText(report:JSONObject,language:String):String {
  return buildString {
   append(w.intro).append(" ").append(report.getString("day")).append(". ")
   append(w.appointment).append(": ").append(briefingCount(appointments.opt("scheduled_count"))).append("; ").append(w.completed).append(": ").append(briefingCount(appointments.opt("completed_count"))).append(". ")
-  if(finance!=null)append(w.revenue).append(": ").append(briefingCount(finance.opt("revenue_xaf"))).append("; ").append(w.sales).append(": ").append(briefingCount(finance.opt("confirmed_sales_count"))).append(". ")
-  if(attendance!=null)append(w.attendance).append(": ").append(briefingCount(attendance.opt("event_count"))).append(". ")
+  if(finance!=null){append(w.revenue).append(": ").append(briefingCount(finance.opt("revenue_xaf"))).append(". ");if(detailed)append(w.sales).append(": ").append(briefingCount(finance.opt("confirmed_sales_count"))).append(". ")}
+  if(detailed&&attendance!=null)append(w.attendance).append(": ").append(briefingCount(attendance.opt("event_count"))).append(". ")
   append(w.missing)
  }
 }
@@ -90,6 +102,58 @@ internal fun nativeBriefingPeriod(rows:List<JSONObject>,end:LocalDate,days:Int):
  if(site)for((key,field) in listOf("revenue" to "revenue_xaf","sales" to "confirmed_sales_count","uncosted" to "uncosted_sales_count"))metrics[key]=total(rows.map{it.optJSONObject("finance")?.let{f->briefingCount(f.opt(field))}})
  metrics["clocks"]=total(rows.map{it.optJSONObject("personal_clock_events")?.let{p->briefingCount(p.opt("event_count"))}})
  return metrics
+}
+internal fun nativeBriefingQuestion(question:String,labels:Map<String,String>,values:Map<String,Long?>):String?{
+ fun normal(text:String)=Normalizer.normalize(text,Normalizer.Form.NFKC).trim().lowercase(Locale.ROOT).trimEnd('?','？','.','。','!').trim()
+ val key=labels.entries.singleOrNull{normal(it.value)==normal(question)}?.key?:return null
+ val amount=values[key]?:return null
+ return labels.getValue(key)+": "+amount
+}
+@Composable
+private fun NativeBriefingQuestion(labels:Map<String,String>,values:Map<String,Long?>,language:String,foreground:Boolean,busy:Boolean,buttonText:String,errorText:String,onSpeak:(String)->Unit,onStop:()->Unit){
+ val context=LocalContext.current
+ val latestForeground by rememberUpdatedState(foreground)
+ val latestBusy by rememberUpdatedState(busy)
+ val latestSpeak by rememberUpdatedState(onSpeak)
+ var recognizer by remember{mutableStateOf<SpeechRecognizer?>(null)}
+ var listening by remember{mutableStateOf(false)}
+ var error by remember{mutableStateOf(false)}
+ var answer by remember{mutableStateOf<String?>(null)}
+ var alive by remember{mutableStateOf(true)}
+ fun stopRecognition(){val r=recognizer;recognizer=null;listening=false;r?.cancel();r?.destroy()}
+ DisposableEffect(Unit){alive=true;onDispose{alive=false;stopRecognition()}}
+ LaunchedEffect(foreground,busy){if(!foreground||busy){stopRecognition();answer=null;error=false}}
+ fun start(){
+  if(!alive||!latestForeground||latestBusy||recognizer!=null)return
+  if(Build.VERSION.SDK_INT<31||!SpeechRecognizer.isOnDeviceRecognitionAvailable(context)){error=true;return}
+  try{
+   onStop();error=false;answer=null
+   val r=SpeechRecognizer.createOnDeviceSpeechRecognizer(context);recognizer=r;listening=true
+   r.setRecognitionListener(object:RecognitionListener{
+    override fun onReadyForSpeech(params:Bundle?){}
+    override fun onBeginningOfSpeech(){}
+    override fun onRmsChanged(rmsdB:Float){}
+    override fun onBufferReceived(buffer:ByteArray?){}
+    override fun onEndOfSpeech(){}
+    override fun onPartialResults(partialResults:Bundle?){}
+    override fun onEvent(eventType:Int,params:Bundle?){}
+    override fun onError(errorCode:Int){if(alive&&recognizer===r){stopRecognition();if(latestForeground)error=true}}
+    override fun onResults(results:Bundle?){
+     if(!alive||recognizer!==r)return
+     val questions=results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
+     stopRecognition()
+     if(!latestForeground||latestBusy)return
+     val result=questions.firstNotNullOfOrNull{nativeBriefingQuestion(it,labels,values)}
+     if(result==null)error=true else{answer=result;latestSpeak(result)}
+    }
+   })
+   r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_LANGUAGE,language).putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,true).putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,false).putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,3))
+  }catch(_:Exception){stopRecognition();error=true}
+ }
+ val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(alive&&latestForeground&&!latestBusy){if(granted)start() else error=true}}
+ OutlinedButton(onClick={if(listening)stopRecognition() else if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)start() else permission.launch(Manifest.permission.RECORD_AUDIO)},enabled=foreground&&!busy){Text(buttonText+(if(listening)" …" else ""))}
+ answer?.let{Text(it)}
+ if(error)Text(errorText,color=MaterialTheme.colorScheme.error)
 }
 @Composable
 internal fun DailyBriefingCard(session:AuthSession,siteId:String){
@@ -116,6 +180,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   var busy by remember{mutableStateOf(false)}
   var error by remember{mutableStateOf(false)}
   var report by remember{mutableStateOf<JSONObject?>(null)}
+  var detailed by remember{mutableStateOf(true)}
   var periodDays by remember{mutableStateOf(7)}
   var period by remember{mutableStateOf<Map<String,Long?>?>(null)}
   var archiveIds by remember{mutableStateOf<List<Pair<String,String>>>(emptyList())}
@@ -169,7 +234,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
      briefingText(r,language)
      if(!foreground||generation!=requestGeneration)return@launch
      report=r
-     if(andPlay)playText(briefingText(r,language))
+     if(andPlay)playText(briefingText(r,language,detailed))
     }catch(c:CancellationException){throw c}catch(_:Exception){if(generation==requestGeneration&&foreground)error=true}finally{if(generation==requestGeneration)busy=false}
    }
   }
@@ -229,12 +294,19 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
     if(playing||paused)OutlinedButton(onClick={stop()},enabled=!busy){Text(w.stop)}
     OutlinedButton(onClick={load(false)},enabled=!busy&&briefingDateAllowed(date)){Text(when(language){"en"->"Refresh";"ff-CM"->"Hesɗitin";"es"->"Actualizar";"it"->"Aggiorna";"zh-CN"->"刷新";else->"Actualiser"})}
     if(error)Text(w.error,color=MaterialTheme.colorScheme.error)
-    report?.let{Text(briefingText(it,language))}
+    Row{TextButton(onClick={stop();detailed=false},enabled=!busy){Text(label("Résumé","Summary","Tonngol","Resumen","Sintesi","摘要"))};TextButton(onClick={stop();detailed=true},enabled=!busy){Text(label("Détaillé","Detailed","Humpito timmungo","Detallado","Dettagliato","详细"))}}
+    report?.let{Text(briefingText(it,language,detailed))}
     HorizontalDivider()
     Text(label("Bilan par période","Period report","Jaŋtol sahaa","Informe por período","Resoconto per periodo","期间报告"),style=MaterialTheme.typography.titleMedium)
     Row{listOf(1,2,7,30,366).forEach{d->TextButton(onClick={stop();periodDays=d;period=null},enabled=!busy&&foreground){Text((if(d==periodDays)"✓ " else "")+(if(d==366)label("Année","Year","Hitaande","Año","Anno","年") else d.toString()))}}}
     OutlinedButton(onClick={periodAction("load")},enabled=!busy&&foreground){Text(label("Calculer la période","Calculate period","Lim sahaa","Calcular período","Calcola periodo","计算期间"))}
     period?.forEach{(k,v)->TextButton(onClick={playText(metricLabel(k)+": "+v)},enabled=!busy&&foreground&&v!=null){Text(metricLabel(k)+": "+(v?.toString()?:w.error))}}
+    val questionValues=period?:report?.let{nativeBriefingPeriod(listOf(it),LocalDate.parse(it.getString("day")),1)}
+    questionValues?.let{values->
+     key(language,date,periodDays,requestGeneration){
+      NativeBriefingQuestion(values.keys.associateWith{metricLabel(it)},values,language,foreground,busy,label("Poser une question au micro (local)","Ask using local microphone","Ƴam e daande","Preguntar con micrófono local","Domanda con microfono locale","使用本地麦克风提问"),w.error,onSpeak={playText(it)},onStop={stop()})
+     }
+    }
     OutlinedButton(onClick={periodAction("save")},enabled=!busy&&foreground&&period!=null&&date.isBefore(briefingToday())){Text(label("Archiver","Archive","Resnu","Archivar","Archivia","归档"))}
     OutlinedButton(onClick={periodAction("list")},enabled=!busy&&foreground){Text(label("Charger les archives","Load archives","Loow rese","Cargar archivos","Carica archivio","加载档案"))}
     archiveIds.forEach{(id,title)->TextButton(onClick={periodAction("open",id)},enabled=!busy&&foreground){Text(title)}}

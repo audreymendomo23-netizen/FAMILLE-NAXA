@@ -16,10 +16,10 @@ const copy:Record<Lang,{title:string;intro:string;appointments:string;completed:
  it:{title:"Il mio resoconto",intro:"Ecco il tuo resoconto parziale basato sui dati confermati.",appointments:"Appuntamenti",completed:"completati",finance:"Ricavi in franchi CFA",sales:"vendite confermate",clocks:"Registrazioni personali delle presenze",missing:"Gli altri indicatori non sono disponibili in questo resoconto.",play:"Ascolta il mio resoconto",stop:"Interrompi",unavailable:"Voce locale o dati non disponibili.",load:"Aggiorna"},
  "zh-CN":{title:"我的日报",intro:"这是根据已确认数据生成的部分报告。",appointments:"预约",completed:"已完成",finance:"营业收入（非洲金融共同体法郎）",sales:"已确认销售",clocks:"个人考勤记录",missing:"其他指标暂未包含在此报告中。",play:"收听我的日报",stop:"停止",unavailable:"本地语音或数据不可用。",load:"刷新"}
 };
-export function briefingNarration(r:Report,l:Lang):string{
+export function briefingNarration(r:Report,l:Lang,detailed=true):string{
  const t=copy[l];
  const uncosted=({fr:"Ventes sans coût renseigné",en:"Sales without recorded costs","ff-CM":"Soodugol alaa njaru winndaaɗo",es:"Ventas sin coste registrado",it:"Vendite senza costo registrato","zh-CN":"未记录成本的销售"})[l];
- return [t.intro,r.day,t.appointments+": "+r.appointments.scheduled_count+"; "+t.completed+": "+r.appointments.completed_count+".",r.finance===null?"":t.finance+": "+r.finance.revenue_xaf+"; "+t.sales+": "+r.finance.confirmed_sales_count+". "+uncosted+": "+r.finance.uncosted_sales_count+".",r.personal_clock_events===null?"":t.clocks+": "+r.personal_clock_events.event_count+".",t.missing].filter(Boolean).join(" ");
+ return [t.intro,r.day,t.appointments+": "+r.appointments.scheduled_count+"; "+t.completed+": "+r.appointments.completed_count+".",r.finance===null?"":t.finance+": "+r.finance.revenue_xaf+(detailed?"; "+t.sales+": "+r.finance.confirmed_sales_count+". "+uncosted+": "+r.finance.uncosted_sales_count+".":"."),!detailed||r.personal_clock_events===null?"":t.clocks+": "+r.personal_clock_events.event_count+".",t.missing].filter(Boolean).join(" ");
 }
 
 export function validateBriefing(value:unknown,day:string):Report {
@@ -155,6 +155,7 @@ export function DailyBriefing(props:Props){
 }
 function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Props){
  const [lang,setLang]=useState<Lang>(account.default_locale);
+ const [detailed,setDetailed]=useState(true);
  const [day,setDay]=useState(()=>briefingDateBounds().today);
  const bounds=briefingDateBounds();
  const dateLabel=({fr:"Date du bilan",en:"Report date","ff-CM":"Ñalnde jaŋtol",es:"Fecha del informe",it:"Data del resoconto","zh-CN":"报告日期"})[lang];
@@ -184,7 +185,7 @@ function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Prop
   // Only a local voice: never transmit business data to a browser cloud voice.
   const voice=window.speechSynthesis.getVoices().find(v=>v.localService&&v.lang.toLowerCase().split("-")[0]===lang.toLowerCase().split("-")[0]);
   if(!voice){setError(true);return;}
-  stop();setError(false);const u=new SpeechSynthesisUtterance(briefingNarration(r,lang));u.voice=voice;u.lang=voice.lang;u.rate=speed;audio.current=u;
+  stop();setError(false);const u=new SpeechSynthesisUtterance(briefingNarration(r,lang,detailed));u.voice=voice;u.lang=voice.lang;u.rate=speed;audio.current=u;
   u.onend=()=>{if(audio.current===u){audio.current=null;setPlaying(false);setPaused(false);}};u.onerror=()=>{if(audio.current===u){audio.current=null;setPlaying(false);setPaused(false);setError(true);}};
   setPaused(false);setPlaying(true);window.speechSynthesis.speak(u);
  }
@@ -196,5 +197,6 @@ function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Prop
  <button className="btn primary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>{if(playing){stop();return;}void load().then(r=>{if(r&&mounted.current&&!r.abort.signal.aborted&&controller.current===r.abort)speak(r.data);});}}>{playing?t.stop:t.play}</button>
  {playing&&<button className="btn secondary" onClick={()=>{if(!audio.current)return;if(paused)window.speechSynthesis.resume();else window.speechSynthesis.pause();setPaused(!paused);}}>{({fr:paused?"Reprendre":"Pause",en:paused?"Resume":"Pause","ff-CM":paused?"Jokku":"Fowtu",es:paused?"Continuar":"Pausa",it:paused?"Riprendi":"Pausa","zh-CN":paused?"继续":"暂停"})[lang]}</button>}
  <button className="btn secondary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>void load()}>{t.load}</button>
- {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang)}</p>}<BriefingReminders account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} lang={lang}/><PeriodBriefing key={day} account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} day={day} lang={lang}/></section>;
+ <label>{({fr:"Présentation du bilan",en:"Report detail","ff-CM":"Feere jaŋtol",es:"Detalle del informe",it:"Dettaglio resoconto","zh-CN":"报告详细程度"})[lang]}<select value={detailed?"detail":"summary"} disabled={loading} onChange={e=>{stop();setDetailed(e.target.value==="detail");}}><option value="summary">{({fr:"Résumé",en:"Summary","ff-CM":"Tonngol",es:"Resumen",it:"Sintesi","zh-CN":"摘要"})[lang]}</option><option value="detail">{({fr:"Détaillé",en:"Detailed","ff-CM":"Humpito timmungo",es:"Detallado",it:"Dettagliato","zh-CN":"详细"})[lang]}</option></select></label>
+ {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang,detailed)}</p>}<BriefingReminders account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} lang={lang}/><PeriodBriefing key={day} account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} day={day} lang={lang}/></section>;
 }
