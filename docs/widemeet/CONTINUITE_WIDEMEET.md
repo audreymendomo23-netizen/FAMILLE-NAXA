@@ -472,3 +472,7 @@ Décision utilisateur : conserver la connexion épurée mais avec une photo de f
 
 ## 28/11/2026 — Recette de la connexion avant publication de test autorisée
 Run 46115175466, SHA 593aed8 : Android, SQL, contrats et Edge réussis; Web et Pages en échec sur assertions Playwright. Correction du contrôle CSS pour les deux couches cover (voile et photo) et du test de non-fausse authentification : vérifier absence de navigation et menu en connexion, Retour puis vérifier absence de facturation publique. Ajout contrôle du chargement/décodage réel de la photo de fond. Aucun assouplissement des contrôles d'identité ni modification du code métier. Publication Cloudflare de test autorisée par l'utilisateur, branche de publication dédiée, sans main ni ouverture publique du signup de recette. Nouveau résultat CI à constater.
+
+
+## 28/11/2026 — Vérification de la publication réelle
+Run de publication 46115725122 sur be99002 : build effectué, mais Playwright échoue sur une Promise non résolue dans l'assertion de débordement horizontal (deux dimensions). Correction par expect.poll qui attend la mesure réelle; aucune assertion supprimée. Contrôle public https://widemeet.pages.dev/sw.js : ancien cache index-CIt7Hf4l.css/index-DXJgl9eu.js, sans photos; /visuals/signin.jpg renvoie le shell ancien. Déploiement non attesté, branche GitHub seule insuffisante. Accès au tableau Cloudflare requis pour vérifier branche et journaux réels. Aucun changement de backend.
