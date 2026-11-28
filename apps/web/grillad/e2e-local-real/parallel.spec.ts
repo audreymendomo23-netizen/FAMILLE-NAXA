@@ -388,3 +388,16 @@ test('@transverse WebRTC bidirectional synthetic audio and screen-like video act
  });
  expect(result.receivedA).toContain('audio');expect(result.receivedB).toContain('audio');expect(result.receivedB).toContain('video');expect(result.av).toBeGreaterThan(0);expect(result.bv).toBeGreaterThan(0);expect(result.video).toBeGreaterThan(0);
 });
+
+// A real browser switches all three languages, persists the choice and checks authenticated FAQ.
+test('@transverse FR EN ff-CM login and FAQ language persistence',async({page})=>{
+ await page.goto('/');await page.getByRole('combobox',{name:'Langue',exact:true}).selectOption('en');
+ await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();await expect(page.locator('html')).toHaveAttribute('lang','en');
+ await page.reload();await expect(page.getByRole('combobox',{name:'Language',exact:true})).toHaveValue('en');
+ await page.getByRole('combobox',{name:'Language',exact:true}).selectOption('ff-CM');await expect(page.getByRole('heading',{name:'Naatugol e kisal',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Naatu',exact:true})).toBeVisible();
+ await page.getByRole('combobox',{name:'Ɗemngal',exact:true}).selectOption('en');
+ await page.getByLabel('Phone (+237…)',{exact:true}).fill(accounts.owner.phone);await page.getByLabel('Password',{exact:true}).fill(accounts.owner.password);await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Home',exact:true})).toBeVisible();await page.getByRole('button',{name:'More',exact:true}).click();await page.getByRole('button',{name:'Support',exact:true}).click();
+ await expect(page.getByText('How do I record a payment?',{exact:true})).toBeVisible();await page.getByRole('combobox',{name:'Language',exact:true}).selectOption('ff-CM');await expect(page.getByText('Hol no mi danndata njoɓdi?',{exact:true})).toBeVisible();
+ await page.getByRole('combobox',{name:'Ɗemngal',exact:true}).selectOption('fr');await expect(page.getByText('Comment enregistrer un règlement ?',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Déconnexion',exact:true}).click();await expect(page.getByRole('heading',{name:'Connexion',exact:true})).toBeVisible();
+});

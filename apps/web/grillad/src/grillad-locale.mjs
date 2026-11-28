@@ -791,6 +791,106 @@ export const labels={
   "Sauvegarde et restauration": [
     "Backup and recovery",
     "Danndugol e heɓtugol humpito"
+  ],
+  "Conversation indisponible.": [
+    "Conversation unavailable.",
+    "Yeewtere alaa jooni."
+  ],
+  "Envoi non confirmé : réessayez le même message.": [
+    "Delivery not confirmed: retry the same message.",
+    "Neldugol tabbitinaaka: eto ɓatakuru nduu kadi."
+  ],
+  "Confirmation non obtenue. Réessayez la même demande. Aucun agent ou envoi distant confirmé.": [
+    "Confirmation not received. Retry the same request. No agent or remote delivery confirmed.",
+    "Tabbitinol heɓaaka. Eto ɗaɓɓitannde ndee kadi. Alaa gollotooɗo walla neldugol tabbitinaangol."
+  ],
+  "Dossier enregistré dans le registre Famille NAXA": [
+    "Ticket saved in the Famille NAXA register",
+    "Kayit danndaama e doggol Famille NAXA"
+  ],
+  "Assistance Famille NAXA — dossier enregistré côté serveur. Messagerie disponible ; accès agent soumis à habilitation. Appel Web et partage volontaire en qualification ; disponibilité selon l’agent et le réseau.": [
+    "Famille NAXA support — ticket saved on the server. Messaging is available; agent access requires authorization. Web calling and voluntary screen sharing are being tested; availability depends on the agent and network.",
+    "Ballal Famille NAXA — kayit danndaama e sarworde. Ɓatakuuje ena mbaawi neldeede; gollotooɓe yamiraaɓe tan mbaawi naatde. Noddirgol Web e lollingol yaynirde e jaɓugol maa ena ƴeewtee; ena tugnii e gollotooɗo e Internet."
+  ],
+  "Registre Famille NAXA. Conversation disponible ; accès agent soumis à habilitation. Appels audio natifs en qualification ; accès agent et réseau requis.": [
+    "Famille NAXA register. Messaging is available; agent access requires authorization. Native audio calls are being tested; agent and network access are required.",
+    "Doggol Famille NAXA. Yeewtere ena woodi; gollotooɓe yamiraaɓe tan mbaawi naatde. Noddirgol daande ena ƴeewtee; gollotooɗo e Internet ena coklaa."
+  ],
+  "Abonnement expiré : les opérations métier restent bloquées. Actualisez après confirmation centrale du paiement.": [
+    "Subscription expired: business operations remain blocked. Refresh after central payment confirmation.",
+    "Sahaa abonman timmii: golle dartinaama. Hesɗitin caggal tabbitinol njoɓdi e Famille NAXA."
+  ],
+  "Une opération antérieure reste conservée et devra être vérifiée après réactivation.": [
+    "An earlier operation remains saved and must be verified after reactivation.",
+    "Golle adannde ena danndaa; ƴeewto nde caggal hurmitingol."
+  ],
+  "Confirmation incertaine : ne créez pas de nouvelle opération.": [
+    "Confirmation uncertain: do not create a new operation.",
+    "Tabbitinol heɓaaka: hoto sos golle kesere."
+  ],
+  "Si ce numéro est éligible, la demande sera examinée. Aucun envoi confirmé.": [
+    "If this number is eligible, the request will be reviewed. No delivery confirmed.",
+    "So limgal ngal jaɓaama, ɗaɓɓitannde ndee maa ƴeewtee. Neldugol tabbitinaaka."
+  ],
+  "Historique des services clôturés par la tâche serveur. Données serveur confirmées uniquement.": [
+    "History of services closed by the server task. Confirmed server data only.",
+    "Jaŋtol golle timminaande e sarworde. Humpito sarworde tabbitinaango tan."
+  ],
+  "Push distant à qualifier.": [
+    "Remote push delivery requires qualification.",
+    "Neldugol tintine iwɗe woɗɗi ena fadi ƴeewtagol."
+  ],
+  "Collaborateurs GRILLAD déjà activés dans cette organisation. Aucun nouveau compte créé ici.": [
+    "Existing activated GRILLAD team members in this organization. No new account is created here.",
+    "Golluɓe GRILLAD yamiraaɓe e fedde ndee. Alaa konte kese sosaaɗe ɗoo."
+  ],
+  "Abonnement expiré : opérations métier bloquées. Actualisez après confirmation centrale.": [
+    "Subscription expired: business operations blocked. Refresh after central confirmation.",
+    "Sahaa abonman timmii: golle dartinaama. Hesɗitin caggal tabbitinol Famille NAXA."
+  ],
+  "Une opération antérieure reste conservée.": [
+    "An earlier operation remains saved.",
+    "Golle adannde ena danndaa."
+  ],
+  "Le serveur vérifie d’abord si le lot a déjà été confirmé. Conservez vos justificatifs de ventes.": [
+    "The server first checks whether the batch was already confirmed. Keep your sales evidence.",
+    "Sarworde ƴeewtata tawo so golle ɗee tabbitinaama. Danndu seedamfaaji jaaygol maa."
+  ],
+  "Quantité signée : négative pour une perte, positive pour une entrée.": [
+    "Signed quantity: negative for a loss, positive for incoming stock.",
+    "Keewal e maande: les sero ngam bonannde, dow sero ngam jawdi naatndi."
+  ],
+  "ACCÈS : 2 000 F/mois ou 24 000 F/an. PREMIUM : 6 000 F/mois ou 60 000 F/an.": [
+    "ACCESS: XAF 2,000/month or 24,000/year. PREMIUM: XAF 6,000/month or 60,000/year.",
+    "ACCÈS: 2 000 F/lewru walla 24 000 F/duumri. PREMIUM: 6 000 F/lewru walla 60 000 F/duumri."
+  ],
+  "Organisation à renouveler": [
+    "Organization to renew",
+    "Fedde nde abonman mum hesɗitinee"
+  ],
+  "Date d’effet": [
+    "Effective date",
+    "Ñalngu fuɗɗugol"
+  ],
+  "Motif de configuration": [
+    "Configuration reason",
+    "Daliilu teelte"
+  ],
+  "Nouvel horaire de service": [
+    "New service time",
+    "Sahaa golle keso"
+  ],
+  "Date du nouvel horaire": [
+    "New schedule date",
+    "Ñalngu sahaa keso"
+  ],
+  "Motif du nouvel horaire": [
+    "New schedule reason",
+    "Daliilu sahaa keso"
+  ],
+  "Navigation": [
+    "Navigation",
+    "Doggol"
   ]
 };
 export function localeOf(x){return x==='en'||x==='ff-CM'?x:'fr'}

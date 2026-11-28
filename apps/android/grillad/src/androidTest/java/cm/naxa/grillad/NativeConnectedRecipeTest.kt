@@ -21,6 +21,13 @@ class NativeConnectedRecipeTest {
   check(BuildConfig.DEBUG&&BuildConfig.GRILLAD_LOCAL_RECIPE&&BuildConfig.GRILLAD_API_URL=="http://127.0.0.1:4182/functions/v1/grillad")
   val context=InstrumentationRegistry.getInstrumentation().targetContext
   val accounts=JSONObject(File(context.filesDir,"grillad-recipe-accounts.json").readText())
+  ui.onNodeWithText("English",substring=false).performClick()
+  ui.onNodeWithText("Professional sign in",substring=false).assertExists()
+  ui.onNodeWithText("Fulfulde",substring=false).performClick()
+  ui.onNodeWithText("Naatugol e kisal",substring=false).assertExists()
+  ui.onNodeWithText("Naatu",substring=false).assertExists()
+  ui.onNodeWithText("Français",substring=false).performClick()
+  ui.onNodeWithText("Connexion professionnelle",substring=false).assertExists()
   val seller=accounts.getJSONObject("seller")
   ui.onAllNodes(hasSetTextAction())[0].performTextInput(seller.getString("phone"))
   ui.onAllNodes(hasSetTextAction())[1].performTextInput(seller.getString("password"))
