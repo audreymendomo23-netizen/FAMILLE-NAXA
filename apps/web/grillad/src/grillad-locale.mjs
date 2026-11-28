@@ -1,4 +1,4 @@
-// Common vocabulary reused from NAXA SERVICES; GRILLAD-specific Fulfulde labels remain pending native review.
+// Common NAXA SERVICES vocabulary and English; missing ff-CM entries fall back to French.
 export const labels={
   "Accueil": [
     "Home",
@@ -231,6 +231,346 @@ export const labels={
   "Connexion professionnelle": [
     "Professional sign in",
     "Naatugol e kisal"
+  ],
+  "Article": [
+    "Item",
+    "Jawdi"
+  ],
+  "Période": [
+    "Period",
+    "Sahaa"
+  ],
+  "Catégorie de dépense": [
+    "Expense category",
+    "Fannu njoɓdi"
+  ],
+  "Accès professionnel GRILLAD": [
+    "GRILLAD professional access",
+    null
+  ],
+  "Première connexion avec invitation": [
+    "First sign-in with invitation",
+    null
+  ],
+  "Référence invitation": [
+    "Invitation reference",
+    null
+  ],
+  "Code invitation": [
+    "Invitation code",
+    null
+  ],
+  "Rester connecté sur cet appareil": [
+    "Stay signed in on this device",
+    null
+  ],
+  "Réinitialiser mon code local après connexion vérifiée": [
+    "Reset my local code after verified sign-in",
+    null
+  ],
+  "Renouvellement uniquement": [
+    "Renewal only",
+    null
+  ],
+  "CA net": [
+    "Net revenue",
+    null
+  ],
+  "Objectif du jour": [
+    "Today's target",
+    null
+  ],
+  "Objectif CA FCFA": [
+    "Revenue target (XAF)",
+    null
+  ],
+  "Enregistrer l’objectif": [
+    "Save target",
+    null
+  ],
+  "Exporter le point journalier PDF": [
+    "Export daily summary PDF",
+    null
+  ],
+  "Pas de données confirmées.": [
+    "No confirmed data.",
+    null
+  ],
+  "Nom de l’article": [
+    "Item name",
+    null
+  ],
+  "Coût facultatif": [
+    "Optional cost",
+    null
+  ],
+  "Modifier le prix": [
+    "Change price",
+    null
+  ],
+  "Modifier le prix sélectionné": [
+    "Change selected price",
+    null
+  ],
+  "Actualiser le coût": [
+    "Update cost",
+    null
+  ],
+  "Désactiver": [
+    "Disable",
+    null
+  ],
+  "Désactiver l’article": [
+    "Disable item",
+    null
+  ],
+  "Réactiver": [
+    "Reactivate",
+    null
+  ],
+  "Corriger les quantités": [
+    "Adjust quantities",
+    null
+  ],
+  "Corriger la quantité": [
+    "Adjust quantity",
+    null
+  ],
+  "Enregistrer la correction": [
+    "Save adjustment",
+    null
+  ],
+  "Télécharger le reçu PDF": [
+    "Download receipt PDF",
+    null
+  ],
+  "Annuler cette vente": [
+    "Cancel sale",
+    null
+  ],
+  "Attendu": [
+    "Expected",
+    null
+  ],
+  "Clôturer": [
+    "Close",
+    null
+  ],
+  "Rapprochement des règlements mobiles": [
+    "Mobile payment reconciliation",
+    null
+  ],
+  "Rapprocher le règlement": [
+    "Reconcile payment",
+    null
+  ],
+  "Clôtures confirmées": [
+    "Confirmed closings",
+    null
+  ],
+  "Catégorie": [
+    "Category",
+    null
+  ],
+  "Intrants": [
+    "Inputs",
+    null
+  ],
+  "Combustible": [
+    "Fuel",
+    null
+  ],
+  "Emballages": [
+    "Packaging",
+    null
+  ],
+  "Entretien": [
+    "Maintenance",
+    null
+  ],
+  "Personnel": [
+    "Staff",
+    null
+  ],
+  "Autres": [
+    "Other",
+    null
+  ],
+  "Annuler la dépense": [
+    "Cancel expense",
+    null
+  ],
+  "Service en cours": [
+    "Current service",
+    null
+  ],
+  "CA estimé au prochain service": [
+    "Estimated revenue for next service",
+    null
+  ],
+  "Marquer comme lu": [
+    "Mark as read",
+    null
+  ],
+  "Préférences": [
+    "Preferences",
+    null
+  ],
+  "Inscrire cet appareil": [
+    "Register device",
+    null
+  ],
+  "Désactiver les notifications distantes": [
+    "Disable remote notifications",
+    null
+  ],
+  "Équipe du point": [
+    "Location team",
+    null
+  ],
+  "Affectations au point actif": [
+    "Assignments at active location",
+    null
+  ],
+  "Non affecté": [
+    "Unassigned",
+    null
+  ],
+  "Vendeur": [
+    "Seller",
+    null
+  ],
+  "Responsable": [
+    "Manager",
+    null
+  ],
+  "Confirmer l’affectation": [
+    "Confirm assignment",
+    null
+  ],
+  "Confirmer le statut": [
+    "Confirm status",
+    null
+  ],
+  "Apparence": [
+    "Appearance",
+    null
+  ],
+  "Animation nocturne": [
+    "Night animation",
+    null
+  ],
+  "Mode de gestion": [
+    "Management mode",
+    null
+  ],
+  "Indépendant": [
+    "Independent",
+    null
+  ],
+  "Centralisé": [
+    "Centralized",
+    null
+  ],
+  "Confirmer le mode": [
+    "Confirm mode",
+    null
+  ],
+  "Configurer le service": [
+    "Configure service",
+    null
+  ],
+  "Horaires futurs": [
+    "Future hours",
+    null
+  ],
+  "Programmer l’horaire futur": [
+    "Schedule future hours",
+    null
+  ],
+  "Sujet assistance": [
+    "Support subject",
+    null
+  ],
+  "Description assistance": [
+    "Support description",
+    null
+  ],
+  "Réessayer la même demande": [
+    "Retry same request",
+    null
+  ],
+  "Mes dossiers / Actualiser": [
+    "My tickets / Refresh",
+    null
+  ],
+  "Conversation": [
+    "Conversation",
+    null
+  ],
+  "Conversation assistance": [
+    "Support conversation",
+    null
+  ],
+  "Actualiser la conversation": [
+    "Refresh conversation",
+    null
+  ],
+  "Message assistance": [
+    "Support message",
+    null
+  ],
+  "Réessayer": [
+    "Retry",
+    null
+  ],
+  "Envoyer le message": [
+    "Send message",
+    null
+  ],
+  "Vous": [
+    "You",
+    null
+  ],
+  "Assistant de pilotage": [
+    "Management assistant",
+    null
+  ],
+  "Libellé": [
+    "Label",
+    null
+  ],
+  "Montant": [
+    "Amount",
+    null
+  ],
+  "Motif de correction": [
+    "Correction reason",
+    null
+  ],
+  "Motif d’annulation": [
+    "Cancellation reason",
+    null
+  ],
+  "Motif de réactivation": [
+    "Reactivation reason",
+    null
+  ],
+  "Motif de création": [
+    "Creation reason",
+    null
+  ],
+  "Nom du nouveau point": [
+    "New location name",
+    null
+  ],
+  "Verrouiller": [
+    "Lock",
+    null
+  ],
+  "Reconnexion et vérification": [
+    "Reconnect and verify",
+    null
   ]
 };
 export function localeOf(x){return x==='en'||x==='ff-CM'?x:'fr'}

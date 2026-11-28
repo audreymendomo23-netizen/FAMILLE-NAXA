@@ -4,3 +4,5 @@ test('shared locale is presentation only, three locales and fallback',()=>{for(c
 test('English price and back labels do not silently fall back to French',()=>{assert.equal(translate('Prix','en'),'Price');assert.equal(translate('Retour','en'),'Back')});
 
 test('sign-in and common operational labels use shared vocabulary and unsupported locale stays French',()=>{for(const k of ['Connexion','Connexion professionnelle','Téléphone (+237…)','Mot de passe oublié','Ajouter l’article','Ouvrir la caisse','Points de vente']){assert.ok(labels[k],k);assert.notEqual(translate(k,'en'),k);assert.ok(translate(k,'ff-CM'))}assert.equal(translate('Accueil','invalid'),'Accueil')});
+
+test('extended labels have English and explicit French fallback for missing Fulfulde',()=>{for(const k of ['Assistant de pilotage','Conversation assistance','Animation nocturne'])assert.notEqual(translate(k,'en'),k);for(const [k,v] of Object.entries(labels))if(v[1]===null)assert.equal(translate(k,'ff-CM'),k)});
