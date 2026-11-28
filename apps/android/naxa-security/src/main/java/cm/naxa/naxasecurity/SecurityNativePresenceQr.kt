@@ -1,7 +1,6 @@
 package cm.naxa.naxasecurity
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -13,8 +12,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import kotlinx.coroutines.CancellationException
@@ -28,7 +25,7 @@ private data class QrPending(val key:String,val event:String,val detail:JSONObje
  if(screen!="B4.09")return
  val n=LocalSecurityNative.current;val s=n.session?:return;val site=n.site?:return;val g=n.generation;val context=LocalContext.current;val scope=rememberCoroutineScope()
  var shifts by remember(g){mutableStateOf<List<JSONObject>>(emptyList())};var shift by remember(g){mutableStateOf("")};var action by remember(g){mutableStateOf("arrival")};var issued by remember(g){mutableStateOf("")};var expires by remember(g){mutableLongStateOf(0)};var code by remember(g){mutableStateOf("")};var status by remember(g){mutableStateOf("")};var busy by remember(g){mutableStateOf(false)};var pending by remember(g){mutableStateOf<QrPending?>(null)}
- val valid=Regex("^[a-f0-9-]{36}\\.[a-f0-9]{64}$")
+ val valid=securityTemporaryQrPattern
  fun run(op:String){if(busy)return;busy=true;scope.launch{try{if(op=="load"){val v=SecurityNativeApi.records(s,site,"sec_shifts");if(n.generation==g){shifts=v.filter{it.optString("agent_id")!=s.user&&it.optString("state")=="accepted"};status="Vacations chargées."};return@launch}
  val target=if(op=="issue")shift else code.substringBefore(".");val key=op+":"+target+":"+(if(op=="issue")action else code)
  val e=pending?.takeIf{it.key==key}?:kotlin.run{val detail=if(op=="issue")JSONObject().put("token",securityPassToken()).put("action",action)else{check(valid.matches(code));val p=securityFreshLocation(context);check(!p.isFromMockProvider);JSONObject().put("token",code.substringAfter(".")).put("lat",p.latitude).put("lon",p.longitude).put("accuracy_m",p.accuracy.toDouble()).put("observed_at",Instant.ofEpochMilli(p.time).toString()).put("source","android").put("mock_reported",false)};QrPending(key,UUID.randomUUID().toString(),detail)}
@@ -44,7 +41,7 @@ private data class QrPending(val key:String,val event:String,val detail:JSONObje
  shifts.forEach{r->FilterChip(selected=shift==r.optString("id"),enabled=!busy,onClick={shift=r.getString("id");issued=""},label={Text(r.optString("label")+" · "+r.optString("agent_id"))})}
  listOf("arrival","departure","pause_start","pause_end").forEach{k->FilterChip(selected=action==k,enabled=!busy,onClick={action=k;issued=""},label={Text(k)})}
  Button(enabled=!busy&&shift.isNotBlank(),onClick={run("issue")}){Text("Émettre le QR nominatif")}
- if(issued.isNotBlank()){val image=remember(issued){runCatching{val m=QRCodeWriter().encode(issued,BarcodeFormat.QR_CODE,280,280);Bitmap.createBitmap(IntArray(280*280){i->if(m[i%280,i/280])android.graphics.Color.BLACK else android.graphics.Color.WHITE},280,280,Bitmap.Config.ARGB_8888).asImageBitmap()}.getOrNull()};image?.let{Image(it,contentDescription="QR de pointage",modifier=Modifier.size(240.dp))};OutlinedTextField(issued,{},readOnly=true,label={Text("Code QR de pointage")})}
+ if(issued.isNotBlank()){val image=remember(issued){runCatching{securityTemporaryQrBitmap(issued).asImageBitmap()}.getOrNull()};image?.let{Image(it,contentDescription="QR de pointage",modifier=Modifier.size(240.dp))};OutlinedTextField(issued,{},readOnly=true,label={Text("Code QR de pointage")})}
  Button(enabled=!busy,onClick={scan.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setBeepEnabled(false).setBarcodeImageEnabled(false))}){Text("Scanner le QR")}
  OutlinedTextField(code,{code=it},enabled=!busy,label={Text("Code de pointage")})
  Button(enabled=!busy&&valid.matches(code),onClick={if(ContextCompat.checkSelfPermission(context,Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)run("consume")else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION))}){Text("Confirmer le QR et la position")}

@@ -8,9 +8,6 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
-import android.graphics.Bitmap
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.*
 import kotlinx.coroutines.CancellationException
@@ -30,17 +27,17 @@ private data class PassPending(val signature:String,val event:String,val detail:
  val v=SecurityNativeApi.visitPass(s,site,e.event,op,target,e.detail)
  if(n.generation==g){if(op=="issue"){expires=java.time.Instant.parse(v.getString("expires_at")).toEpochMilli();check(expires>System.currentTimeMillis());issued=v.getString("pass_id")+"."+e.detail.getString("token")} else code="";pending=null;rows=emptyList();status="Contrôle de passage : "+v.optString("state")+" — aucune ouverture physique."}
  }catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g)status="Passage refusé ou non confirmé."}finally{if(n.generation==g)busy=false}}}
- val valid=Regex("^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\\.[a-f0-9]{64}$")
+ val valid=securityTemporaryQrPattern
  val scanner=rememberLauncherForActivityResult(ScanContract()){result->if(n.generation==g){val raw=result.contents;if(raw!=null&&valid.matches(raw)){code=raw;status="QR lu. Confirmez au serveur."}else if(raw!=null)status="QR invalide."}}
  LaunchedEffect(issued,expires){if(issued.isNotBlank()&&expires>0){delay((expires-System.currentTimeMillis()).coerceAtLeast(0));issued="";expires=0;status="Code expiré."}}
  Text("Code temporaire de contrôle manuel");Text("Usage unique, aucune ouverture physique. L’agent applique les consignes du site.")
  OutlinedTextField(register,{register=it},enabled=!busy,label={Text("Identifiant du registre examiné")})
  OutlinedTextField(minutes,{minutes=it},enabled=!busy,label={Text("Validité en minutes")})
  Button(enabled=!busy&&register.isNotBlank()&&minutes.toIntOrNull()?.let{it in 1..120}==true,onClick={act("issue",register.trim())}){Text("Créer un code temporaire")}
- if(issued.isNotEmpty()){val image=remember(issued){runCatching{val matrix=QRCodeWriter().encode(issued,BarcodeFormat.QR_CODE,280,280);val pixels=IntArray(280*280){i->if(matrix[i%280,i/280])android.graphics.Color.BLACK else android.graphics.Color.WHITE};Bitmap.createBitmap(pixels,280,280,Bitmap.Config.ARGB_8888).asImageBitmap()}.getOrNull()};image?.let{Image(it,contentDescription="QR du code temporaire",modifier=Modifier.size(240.dp))};OutlinedTextField(issued,{},readOnly=true,label={Text("Code à transmettre")});Button(onClick={issued=""}){Text("Masquer le code")}}
+ if(issued.isNotEmpty()){val image=remember(issued){runCatching{securityTemporaryQrBitmap(issued).asImageBitmap()}.getOrNull()};image?.let{Image(it,contentDescription="QR du code temporaire",modifier=Modifier.size(240.dp))};OutlinedTextField(issued,{},readOnly=true,label={Text("Code à transmettre")});Button(onClick={issued=""}){Text("Masquer le code")}}
  Button(enabled=!busy,onClick={scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Scanner le QR temporaire").setBeepEnabled(false).setBarcodeImageEnabled(false))}){Text("Scanner le QR")}
  OutlinedTextField(code,{code=it},enabled=!busy,label={Text("Code de passage")})
- Button(enabled=!busy&&Regex("^[a-f0-9-]{36}\\.[a-f0-9]{64}$").matches(code),onClick={act("consume",code.substringBefore("."))}){Text("Vérifier et consommer le code")}
+ Button(enabled=!busy&&valid.matches(code),onClick={act("consume",code.substringBefore("."))}){Text("Vérifier et consommer le code")}
  Button(enabled=!busy&&valid.matches(code),onClick={act("consume_entry",code.substringBefore("."))}){Text("Vérifier le QR et consigner l’entrée")}
  Button(enabled=!busy,onClick={busy=true;scope.launch{try{val v=SecurityNativeApi.records(s,site,"sec_visit_passes");if(n.generation==g)rows=v}catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g){rows=emptyList();status="Lecture refusée."}}finally{if(n.generation==g)busy=false}}}){Text("Actualiser les codes")}
  rows.forEach{r->Text(r.optString("id")+" · "+r.optString("expires_at")+" · "+(if(!r.isNull("revoked_at"))"Révoqué" else if(!r.isNull("used_at"))"Utilisé" else "Non utilisé"));if(r.isNull("used_at")&&r.isNull("revoked_at"))Button(enabled=!busy,onClick={act("revoke",r.optString("id"))}){Text("Révoquer le code")}}

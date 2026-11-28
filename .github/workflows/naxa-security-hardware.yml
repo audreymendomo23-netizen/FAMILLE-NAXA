@@ -1,0 +1,85 @@
+name: NAXA SECURITY — virtual hardware laboratory
+on:
+  push:
+    branches: ['work/naxa-security-completion-20261128']
+    paths:
+      - 'apps/android/naxa-security/**'
+      - 'docs/naxa-security/contracts/hardware-lab/**'
+      - '.github/workflows/naxa-security-hardware.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  android-lab:
+    if: github.ref == 'refs/heads/work/naxa-security-completion-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api: [26, 35]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -r /dev/kvm
+      - name: Android instrumented hardware-boundary recipes
+        uses: reactivecircus/android-emulator-runner@v2.35.0
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated
+          script: bash docs/naxa-security/contracts/hardware-lab/run-emulator.sh
+      - name: Upload evidence and raw test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-virtual-hardware-api-${{ matrix.api }}
+          path: |
+            security-hardware-results/
+            apps/android/naxa-security/build/outputs/androidTest-results/connected/
+            apps/android/naxa-security/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 14
+  edge-lab:
+    if: github.ref == 'refs/heads/work/naxa-security-completion-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Virtual gateway recipes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p security-hardware-results
+          node --test --test-reporter=junit docs/naxa-security/contracts/gateway-contract.test.mjs docs/naxa-security/contracts/edge-runtime.test.mjs > security-hardware-results/edge-junit.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-virtual-edge
+          path: security-hardware-results/
+          if-no-files-found: warn
+          retention-days: 14

@@ -29,7 +29,7 @@ internal suspend fun securityFreshLocation(context:Context):Location=withTimeout
   val manager=context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
   val listener=object:LocationListener{
    override fun onLocationChanged(location:Location){
-    if(location.hasAccuracy()&&location.accuracy>0&&location.accuracy<=100&&!location.isFromMockProvider&&System.currentTimeMillis()-location.time in 0L..120000L){
+    if(securityUsableGps(location)){
      manager.removeUpdates(this);if(c.isActive)c.resume(location)
     }
    }
