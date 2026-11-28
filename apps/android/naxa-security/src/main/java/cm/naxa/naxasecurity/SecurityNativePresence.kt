@@ -15,6 +15,6 @@ import org.json.JSONObject
  Button(enabled=!busy&&selected.isNotBlank(),onClick={load(true)}){Text("Calculer le bilan")}
  report?.let{r->
   fun mins(k:String):String { return if(r.isNull(k)) "Non calculé" else (r.optLong(k)/60).toString()+" min" }
-  Text(if(r.optBoolean("complete"))"Séquence examinée complète" else "Séquence incomplète ou à revoir");Text("Travail : "+mins("worked_seconds")+" · Pause : "+mins("pause_seconds"));Text("Retard : "+mins("late_seconds")+" · Départ anticipé : "+mins("early_departure_seconds"));Text("En attente : "+r.optString("pending")+" · Rejetés : "+r.optString("rejected")+" · Anomalies : "+r.optString("anomalies"))}
+  Text(if(r.optBoolean("complete"))"Séquence examinée complète" else "Séquence incomplète ou à revoir");Text(when(r.optString("attendance_status")){"not_accepted"->"Vacation non acceptée";"reviewed_complete"->"Pointages examinés complets";"review_required"->"Examen nécessaire";"scheduled"->"Vacation à venir";"in_progress_unconfirmed"->"Vacation en cours, présence non certifiée";"missing_evidence"->"Aucune preuve reçue — absence non confirmée";"incomplete_evidence"->"Preuves incomplètes";"cancelled"->"Vacation annulée";else->"Situation indéterminée"});Text("Travail : "+mins("worked_seconds")+" · Pause : "+mins("pause_seconds"));Text("Retard : "+mins("late_seconds")+" · Départ anticipé : "+mins("early_departure_seconds"));Text("En attente : "+r.optString("pending")+" · Rejetés : "+r.optString("rejected")+" · Anomalies : "+r.optString("anomalies"))}
  Text(status)
 }
