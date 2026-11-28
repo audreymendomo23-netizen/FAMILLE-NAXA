@@ -71,14 +71,28 @@ export async function handle(request,env,fetcher=fetch){
   if(!/^Bearer \S+$/.test(bearer))return reply(401,{error:'SESSION'});
   const token=bearer.slice(7);
   if(body.action==='subscription_debit_share'||body.action==='subscription_credit_capture'){
-   if(!env.service||!uuid.test(body.request)||typeof body.sms!=='string'||body.sms.length<12||body.sms.length>8000)return reply(400,{error:'CAPTURE_INPUT'});
    const level=body.action==='subscription_debit_share'?1:2;
+   const auto=level===2&&body.request==null;
+   if(level===2){body.device=body.device??body.deviceId;body.sms=body.sms??body.smsText;body.sender=body.sender??body.senderOriginAddress;}
+   if(!env.service||(!auto&&!uuid.test(body.request))||typeof body.sms!=='string'||body.sms.length<12||body.sms.length>8000)return reply(400,{error:'CAPTURE_INPUT'});
    if(level===2&&(!uuid.test(body.device)||typeof body.deviceToken!=='string'||!/^[A-Za-z0-9_-]{32,128}$/.test(body.deviceToken)||body.source!=='sms_receiver'||!['MobileMoney','OrangeMoney'].includes(body.sender)))return reply(403,{error:'CAPTURE_DEVICE_REQUIRED'});
    const id=await fetcher(base+'/auth/v1/user',{method:'GET',headers:{apikey:env.key,Authorization:bearer},redirect:'error',signal:AbortSignal.timeout(10000)});const user=id.ok?await id.json():null;let sid;try{sid=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id}catch{}if(!uuid.test(user?.id)||!uuid.test(sid))return reply(401,{error:'SESSION'});
    const digest=async v=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v))),x=>x.toString(16).padStart(2,'0')).join('');
-   const args={p_request:body.request,p_actor:user.id,p_session:sid,p_device:level===2?body.device:null,p_hash:level===2?await digest(body.deviceToken):null,p_level:level};
+   const {parsePromoteurPaymentSms,normalizePaymentSms}=await import('./naxa-payment-sms.ts');
+   const deviceHash=level===2?await digest(body.deviceToken):null;
+   if(auto){
+    const channel=body.sender==='MobileMoney'?'mtn_momo':'orange_money';
+    if(body.canal!==channel)return reply(400,{error:'CAPTURE_CHANNEL'});
+    const received=Date.parse(body.smsReceivedAt);if(!Number.isFinite(received)||received>Date.now()+60000||received<Date.now()-86400000)return reply(400,{error:'CAPTURE_TIME'});
+    const p=parsePromoteurPaymentSms(body.sms,channel,body.sender);const payer=String(p?.payerNumber??'').replace(/\D/g,'').slice(-9);
+    if(!p||p.direction!=='merchant_credit'||!p.success||!Number.isSafeInteger(p.amount)||p.amount<=0||!p.reference||p.reference.length<5||!/^6\d{8}$/.test(payer)||!p.occurredAt||Math.abs(Date.parse(p.occurredAt)-received)>300000)return reply(202,{result:{status:'manual_review',level:3}});
+    const found=await post('/rest/v1/rpc/grillad_capture_match',{p_actor:user.id,p_session:sid,p_device:body.device,p_hash:deviceHash,p_channel:channel,p_reference:p.reference,p_amount:p.amount,p_payer:payer,p_occurred:p.occurredAt},env.service);
+    if(!found.ok)return upstream(found);if(!uuid.test(found.result))return reply(202,{result:{status:'manual_review',level:3}});
+    body.request=found.result;
+   }
+   const args={p_request:body.request,p_actor:user.id,p_session:sid,p_device:level===2?body.device:null,p_hash:deviceHash,p_level:level};
    const ctx=await post('/rest/v1/rpc/grillad_capture_context',args,env.service);if(!ctx.ok)return upstream(ctx);
-   const {parsePromoteurPaymentSms,normalizePaymentSms}=await import('./naxa-payment-sms.ts');const c=ctx.result;const parsed=parsePromoteurPaymentSms(body.sms,c.channel,level===2?body.sender:null);
+const c=ctx.result;const parsed=parsePromoteurPaymentSms(body.sms,c.channel,level===2?body.sender:null);
    if(!parsed||parsed.direction!==(level===1?'payer_debit':'merchant_credit')||!parsed.success||parsed.amount!==c.amount||!parsed.reference||parsed.reference.length<5||(level===2&&body.sender!==(c.channel==='mtn_momo'?'MobileMoney':'OrangeMoney')))return reply(202,{result:{status:'manual_review',level:3}});
    const digits=v=>String(v??'').replace(/\D/g,'');const dest=digits(c.destination);const actual=digits(parsed.merchantNumber);
    const name=v=>normalizePaymentSms(v).replace(/[^a-z0-9]/g,'');

@@ -7,7 +7,7 @@ insert into auth.users(id,email,phone,phone_confirmed_at) values
  ('c1000000-0000-0000-0000-000000000001','grillad-owner@x.invalid','237699000011',now()),
  ('c1000000-0000-0000-0000-000000000002','grillad-operator@x.invalid','237699000012',now()),
  ('c1000000-0000-0000-0000-000000000003','grillad-seller@x.invalid','237699000013',now());
-insert into auth.sessions(id,user_id) values('c1000000-0000-0000-0000-000000000011','c1000000-0000-0000-0000-000000000001'),('c1000000-0000-0000-0000-000000000013','c1000000-0000-0000-0000-000000000003');
+insert into auth.sessions(id,user_id) values('c1000000-0000-0000-0000-000000000011','c1000000-0000-0000-0000-000000000001'),('c1000000-0000-0000-0000-000000000013','c1000000-0000-0000-0000-000000000003'),('c1000000-0000-0000-0000-000000000012','c1000000-0000-0000-0000-000000000002');
 set role service_role;
 do $test$ declare e uuid:='c2000000-0000-0000-0000-000000000001';u uuid:='c1000000-0000-0000-0000-000000000001';op uuid:='c1000000-0000-0000-0000-000000000002';v jsonb;begin
  v:=public.grillad_central_provision(e,op,u,'+237699000011','Test grillad','Point test','grillad_premium_month');
@@ -141,7 +141,10 @@ set role service_role;
 do $test$ declare q uuid:='c2000000-0000-0000-0000-000000000009';v jsonb;begin
  v:=public.grillad_subscription_proof(q,1::smallint,'c1000000-0000-0000-0000-000000000001','DEBIT-FIXTURE',6000,'699000011','FIXTURE-DEST',now(),repeat('1',64));
  if v->>'status'<>'awaiting_independent_proof' then raise exception 'single proof auto approved';end if;
- v:=public.grillad_subscription_proof(q,2::smallint,'c1000000-0000-0000-0000-000000000002','CREDIT-FIXTURE',6000,'699000011','FIXTURE-DEST',now(),repeat('2',64));
+ if not public.grillad_capture_device_set('c1000000-0000-0000-0000-000000000021','c1000000-0000-0000-0000-000000000002',repeat('7',64),'orange_money','FIXTURE-DEST',true) then raise exception 'capture enrollment';end if;
+ if public.grillad_capture_match('c1000000-0000-0000-0000-000000000002','c1000000-0000-0000-0000-000000000012','c1000000-0000-0000-0000-000000000021',repeat('7',64),'orange_money','debit.fixture',6000,'699000011',now()) is distinct from q then raise exception 'unique reference match';end if;
+ if public.grillad_capture_match('c1000000-0000-0000-0000-000000000002','c1000000-0000-0000-0000-000000000012','c1000000-0000-0000-0000-000000000021',repeat('7',64),'orange_money','WRONG-FIXTURE',6000,'699000011',now()) is not null then raise exception 'amount-only match';end if;
+ v:=public.grillad_subscription_proof(q,2::smallint,'c1000000-0000-0000-0000-000000000002','DEBIT-FIXTURE',6000,'699000011','FIXTURE-DEST',now(),repeat('2',64));
  if v->>'status'<>'processed' then raise exception 'independent proofs not matched';end if;
 end $test$;
 reset role;
@@ -149,10 +152,15 @@ insert into grillad_private.central_requests(id,org,site,actor,kind,details) val
 set role authenticated;
 do $test$ declare q uuid:='c2000000-0000-0000-0000-000000000010';o uuid:=current_setting('grillad.test.org')::uuid;s uuid:=current_setting('grillad.test.site')::uuid;begin
  perform public.grillad_payment_quote(o,s,q,'orange_money');
- begin perform public.grillad_subscription_declare(o,s,q,'credit.fixture',6000,'699000011',now());raise exception 'cross intent reference reused';exception when unique_violation then null;end;
+ begin perform public.grillad_subscription_declare(o,s,q,'debit.fixture',6000,'699000011',now());raise exception 'cross intent reference reused';exception when unique_violation then null;end;
 end $test$;
 reset role;
 set role service_role;
+do $test$ declare q uuid:='c2000000-0000-0000-0000-000000000010';v jsonb;begin
+ v:=public.grillad_subscription_proof(q,1::smallint,'c1000000-0000-0000-0000-000000000001','OTHER-DEBIT',6000,'699000011','FIXTURE-DEST',now(),repeat('8',64));
+ v:=public.grillad_subscription_proof(q,2::smallint,'c1000000-0000-0000-0000-000000000002','OTHER-CREDIT',6000,'699000011','FIXTURE-DEST',now(),repeat('9',64));
+ if v->>'status'<>'manual_review' then raise exception 'distinct references auto confirmed';end if;
+end $test$;
 do $test$ declare u uuid:='c1000000-0000-0000-0000-000000000001';op uuid:='c1000000-0000-0000-0000-000000000002';e uuid:=gen_random_uuid();h text:=encode(sha256(convert_to('grillad:+237699000011','UTF8')),'hex');begin
  if not public.grillad_identity_review(e,op,u,h,repeat('3',64),'owner',null) or not public.grillad_identity_review(e,op,u,h,repeat('3',64),'owner',null) then raise exception 'identity review';end if;
  begin perform public.grillad_identity_review(gen_random_uuid(),op,u,repeat('4',64),repeat('5',64),'owner',null);raise exception 'unverified phone';exception when insufficient_privilege then null;end;
