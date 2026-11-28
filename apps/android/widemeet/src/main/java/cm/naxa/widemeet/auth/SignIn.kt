@@ -9,9 +9,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import cm.naxa.widemeet.BuildConfig
+import cm.naxa.widemeet.WideMeetPhoto
 import java.util.UUID
 
-@Composable fun SignIn(english:Boolean,configured:Boolean,gateway:AuthGateway,onSession:(Session)->Unit,onBack:()->Unit){
+@Composable fun SignIn(english:Boolean,configured:Boolean,gateway:AuthGateway,onSession:(Session)->Unit,onBack:()->Unit,animate:Boolean=false){
  var identifier by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var show by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var recoveryError by remember{mutableStateOf(false)};var recoveryNotice by remember{mutableStateOf(false)}
  var keep by remember{mutableStateOf(false)};var pin by remember{mutableStateOf("")};var pinConfirm by remember{mutableStateOf("")}
  var signup by remember{mutableStateOf(false)};var enterprise by remember{mutableStateOf(false)};var display by remember{mutableStateOf("")};var workspace by remember{mutableStateOf("")};var confirm by remember{mutableStateOf("")};var accepted by remember{mutableStateOf(false)};var registered by remember{mutableStateOf("")};var requestId by remember{mutableStateOf(UUID.randomUUID().toString())}
@@ -41,6 +42,7 @@ import java.util.UUID
  Card(Modifier.fillMaxWidth()){
  Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
  Text(tr("Connexion","Sign in"),style=MaterialTheme.typography.headlineMedium,modifier=Modifier.testTag("wm-signin-title"))
+ WideMeetPhoto("signin",animate,122.dp)
  OutlinedTextField(identifier,{identifier=it.take(27)},enabled=!busy,label={Text(tr("Identifiant WideMeet","WideMeet ID"))},singleLine=true,modifier=Modifier.fillMaxWidth())
  OutlinedTextField(password,{password=it.take(256)},enabled=!busy,label={Text(tr("Mot de passe","Password"))},singleLine=true,visualTransformation=if(show)VisualTransformation.None else PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
  TextButton(onClick={show=!show}){Text(if(show)tr("Masquer le mot de passe","Hide password")else tr("Afficher le mot de passe","Show password"))}
