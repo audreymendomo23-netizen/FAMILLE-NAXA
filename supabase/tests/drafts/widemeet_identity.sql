@@ -330,3 +330,28 @@ end $wm$;
 reset role;
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';
+
+-- V2 professional title is descriptive, workspace-bound, managed by promoter only.
+begin;
+insert into auth.users(id) values ('91000000-0000-4000-8000-000000000001'),('91000000-0000-4000-8000-000000000002'),('91000000-0000-4000-8000-000000000003');
+insert into public.wm_accounts(id,auth_user_id,login_id,auth_alias,display_name) values
+('92000000-0000-4000-8000-000000000001','91000000-0000-4000-8000-000000000001','WM-V2OWNER1','v2owner@example.invalid','Owner'),
+('92000000-0000-4000-8000-000000000002','91000000-0000-4000-8000-000000000002','WM-V2STAFF1','v2staff@example.invalid','Staff'),
+('92000000-0000-4000-8000-000000000003','91000000-0000-4000-8000-000000000003','WM-V2OTHER1','v2other@example.invalid','Other');
+insert into public.wm_workspaces(id,kind,name) values ('93000000-0000-4000-8000-000000000001','enterprise','V2 A'),('93000000-0000-4000-8000-000000000002','enterprise','V2 B');
+insert into public.wm_memberships(account_id,workspace_id,role) values ('92000000-0000-4000-8000-000000000001','93000000-0000-4000-8000-000000000001','promoteur'),('92000000-0000-4000-8000-000000000002','93000000-0000-4000-8000-000000000001','staff'),('92000000-0000-4000-8000-000000000003','93000000-0000-4000-8000-000000000002','promoteur');
+set local role service_role;
+select public.wm_issue_device_session('92000000-0000-4000-8000-000000000001','94000000-0000-4000-8000-000000000001','93000000-0000-4000-8000-000000000001',repeat('a',64));
+select public.wm_issue_device_session('92000000-0000-4000-8000-000000000002','94000000-0000-4000-8000-000000000002','93000000-0000-4000-8000-000000000001',repeat('b',64));
+do $$ declare d jsonb; begin
+ d:=jsonb_build_object('member_id','92000000-0000-4000-8000-000000000002','job_title','Comptable');
+ if public.wm_identity_action(repeat('b',64),'professional-title-update',d) is not null then raise exception 'staff write accepted';end if;
+ if public.wm_identity_action(repeat('a',64),'professional-title-update',d) is distinct from '{"updated":true}'::jsonb then raise exception 'owner write rejected';end if;
+ if public.wm_identity_action(repeat('b',64),'profile','{}')->>'job_title' is distinct from 'Comptable' then raise exception 'profile title mismatch';end if;
+ if public.wm_identity_action(repeat('a',64),'contacts','{}')->'contacts'->0->>'job_title' is distinct from 'Comptable' then raise exception 'contact title mismatch';end if;
+ if public.wm_identity_action(repeat('a',64),'professional-title-update',jsonb_build_object('member_id','92000000-0000-4000-8000-000000000003','job_title','Other')) is not null then raise exception 'foreign write accepted';end if;
+ if public.wm_identity_action(repeat('a',64),'professional-title-update',d||jsonb_build_object('job_title',repeat('x',121))) is not null then raise exception 'overlong accepted';end if;
+ if public.wm_identity_action(repeat('a',64),'professional-title-update',d||'{"job_title":null}'::jsonb) is distinct from '{"updated":true}'::jsonb then raise exception 'clear rejected';end if;
+ if public.wm_identity_action(repeat('b',64),'profile','{}')->>'job_title' is not null then raise exception 'title not cleared';end if;
+end $$;
+rollback;
