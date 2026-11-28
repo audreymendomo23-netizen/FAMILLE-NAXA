@@ -39,6 +39,6 @@ jobs:
       - run: |
           psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_bootstrap_local_auth.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
-          psql -X -v ON_ERROR_STOP=1 -c 'create schema if not exists famille_private; create table famille_private.recovery_requests(id uuid,app_code text,channel text,status text,created_at timestamptz)'
+          psql -X -v ON_ERROR_STOP=1 -c 'create schema if not exists famille_private; create table famille_private.recovery_requests(id uuid,app_code text,channel text,status text,created_at timestamptz); create table famille_private.account_app_access(user_id uuid,app_code text,organization_id uuid,role_code text,location_id uuid,status text,starts_at timestamptz,ends_at timestamptz)'
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/naxa_control_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/naxa_control_assertions.sql
