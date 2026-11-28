@@ -49,3 +49,7 @@ insert into auth.users values ('00000000-0000-0000-0000-000000000145');
 insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000141','00000000-0000-0000-0000-000000000145','operator',true);
 insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000141','20000000-0000-0000-0000-000000000141','00000000-0000-0000-0000-000000000145',true);
 insert into sec_private.support_agents values ('10000000-0000-0000-0000-000000000141','20000000-0000-0000-0000-000000000141','00000000-0000-0000-0000-000000000145',true);
+
+-- Synthetic evidence for Livecare attachment journey.
+insert into public.sec_evidence_files(id,organization_id,site_id,owner_id,reference,digest,size_bytes) values ('40000000-0000-0000-0000-000000000381','10000000-0000-0000-0000-000000000141','20000000-0000-0000-0000-000000000141','00000000-0000-0000-0000-000000000141','QA support proof','ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',3);
+insert into sec_private.evidence_content values ('40000000-0000-0000-0000-000000000381',decode('YWJj','base64'));
