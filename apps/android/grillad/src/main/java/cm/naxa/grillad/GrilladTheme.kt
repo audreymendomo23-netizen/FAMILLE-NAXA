@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.dp
 @Composable internal fun GrilladAuthHero(subtitle:String){
  Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color(0xFF1F1F1F),contentColor=Color(0xFFF7F5EF)),shape=RoundedCornerShape(26.dp)){
   Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-   Text("GrillaD",style=MaterialTheme.typography.displaySmall,fontWeight=FontWeight.ExtraBold)
+   GrilladBrandMark(light=true)
    Text(subtitle,style=MaterialTheme.typography.titleMedium)
    Box(Modifier.fillMaxWidth().aspectRatio(4f/3f).clip(RoundedCornerShape(14.dp))){
     Image(painter=painterResource(R.drawable.grillad_auth_braise),contentDescription=null,modifier=Modifier.matchParentSize(),contentScale=ContentScale.Fit)

@@ -22,10 +22,10 @@ import androidx.compose.ui.unit.dp
  var pin by remember{mutableStateOf("")};var repeat by remember{mutableStateOf("")};var message by remember{mutableStateOf("")}
  BackHandler(true){}
  Box(Modifier.fillMaxSize().safeDrawingPadding().imePadding(),contentAlignment=Alignment.TopCenter){Column(Modifier.widthIn(max=440.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
- Text("GrillaD",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.ExtraBold)
+ GrilladBrandMark()
  Spacer(Modifier.height(20.dp))
  Text(tr(if(setup)"Créer votre code local" else "Déverrouiller GRILLAD"),style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
- Text(tr("Code individuel à quatre chiffres. La connexion serveur reste obligatoire."),color=MaterialTheme.colorScheme.onSurfaceVariant)
+ Text(tr("Code personnel à quatre chiffres. Il protège l’accès à votre espace."),color=MaterialTheme.colorScheme.onSurfaceVariant)
  GrilladPinField(pin,{pin=it},tr("Code local"))
  if(setup)GrilladPinField(repeat,{repeat=it},tr("Confirmer le code"))
  Button({val r=if(setup)manager.enroll(user,pin)else manager.verify(user,pin);pin="";repeat="";if(r.code==LocalAccessPinCode.SUCCESS)onUnlocked() else message=when(r.code){LocalAccessPinCode.LOCKED->"Code verrouillé temporairement. Réessayez après le délai.";LocalAccessPinCode.INVALID->"Code incorrect. Tentatives restantes : "+r.attemptsRemaining;else->"Code indisponible ou invalide. Reconnectez-vous si nécessaire."}},enabled=LocalAccessPinPolicy.isValid(pin)&&(!setup||pin==repeat),modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text(tr(if(setup)"Enregistrer et ouvrir" else "Déverrouiller"))}

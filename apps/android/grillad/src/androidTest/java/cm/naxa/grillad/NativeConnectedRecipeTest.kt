@@ -22,26 +22,26 @@ class NativeConnectedRecipeTest {
   val context=InstrumentationRegistry.getInstrumentation().targetContext
   val accounts=JSONObject(File(context.filesDir,"grillad-recipe-accounts.json").readText())
   ui.onNodeWithText("English",substring=false).performClick()
-  ui.onNodeWithText("Professional sign in",substring=false).assertExists()
+  ui.onNodeWithText("GRILLAD professional access",substring=false).assertExists()
   ui.onNodeWithText("Fulfulde",substring=false).performClick()
-  ui.onNodeWithText("Naatugol e kisal",substring=false).assertExists()
+  ui.onNodeWithText("Naatugol e nokkuure golle GRILLAD",substring=false).assertExists();ui.onNodeWithText("Naatugol e kisal",substring=false).assertExists()
   ui.onNodeWithText("Naatu",substring=false).assertExists()
   ui.onNodeWithText("Français",substring=false).performClick()
-  ui.onNodeWithText("Connexion professionnelle",substring=false).assertExists()
+  ui.onNodeWithText("Accès professionnel GRILLAD",substring=false).assertExists()
   val seller=accounts.getJSONObject("seller")
   ui.onAllNodes(hasSetTextAction())[0].performTextInput(seller.getString("phone"))
   ui.onAllNodes(hasSetTextAction())[1].performTextInput(seller.getString("password"))
   ui.onNodeWithText("Se connecter").performScrollTo().performClick()
   ui.waitUntil(60000){ui.onAllNodesWithText("Créer votre code local").fetchSemanticsNodes().isNotEmpty()}
   ui.onAllNodes(hasSetTextAction())[0].performTextInput("1357");ui.onAllNodes(hasSetTextAction())[1].performTextInput("1357")
-  ui.onNodeWithText("Enregistrer et ouvrir").performClick()
+  ui.onNodeWithText("Enregistrer et ouvrir").performScrollTo().performClick()
   ui.waitUntil(60000){ui.onAllNodesWithText("Nouvelle vente").fetchSemanticsNodes().isNotEmpty()}
   ui.onNodeWithText("Verrouiller").performClick()
   ui.waitUntil(10000){ui.onAllNodesWithText("Déverrouiller GRILLAD").fetchSemanticsNodes().isNotEmpty()}
-  ui.onAllNodes(hasSetTextAction())[0].performTextInput("1357");ui.onNodeWithText("Déverrouiller",substring=false).performClick()
+  ui.onAllNodes(hasSetTextAction())[0].performTextInput("1357");ui.onNodeWithText("Déverrouiller",substring=false).performScrollTo().performClick()
   ui.waitUntil(60000){ui.onAllNodesWithText("Nouvelle vente").fetchSemanticsNodes().isNotEmpty()}
   ui.onNodeWithText("Déconnexion").performClick()
-  ui.waitUntil(30000){ui.onAllNodesWithText("Connexion professionnelle").fetchSemanticsNodes().isNotEmpty()}
+  ui.waitUntil(30000){ui.onAllNodesWithText("Accès professionnel GRILLAD").fetchSemanticsNodes().isNotEmpty()}
   val api=ConnectedApi(BuildConfig.GRILLAD_API_URL,BuildConfig.GRILLAD_PUBLIC_KEY)
   val org="d2000000-0000-0000-0000-000000000001";val site="d3000000-0000-0000-0000-000000000001";val other="d3000000-0000-0000-0000-000000000002"
   runBlocking {
