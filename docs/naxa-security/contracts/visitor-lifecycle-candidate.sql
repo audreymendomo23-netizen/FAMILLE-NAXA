@@ -8,12 +8,12 @@ begin
  if p_op='list' and p_register is null and p_event is null and p_reason is null then
   with batch as(select s.id,s.reference,s.recorded_at,s.recorded_at+make_interval(mins=>(s.details->>'duration_minutes')::integer) as expires_at,s.cancelled_at,
    (select l.direction from public.sec_passage_logs l where l.organization_id=p_org and l.site_id=p_site and l.register_id=s.id order by l.sequence desc limit 1) as last_direction
-   from public.sec_service_register s where s.organization_id=p_org and s.site_id=p_site and s.kind='visitor' and (p_after is null or s.id>p_after) order by s.id limit 101),
+   from public.sec_service_register s where s.organization_id=p_org and s.site_id=p_site and s.kind='visitor' and (r in ('owner','manager') or s.reporter_id=auth.uid()) and (p_after is null or s.id>p_after) order by s.id limit 101),
   page as(select b.*,case when b.last_direction='entry' then 'inside' when b.cancelled_at is not null then 'cancelled' when b.last_direction='exit' then 'exited' when b.expires_at<=now() then 'expired' else 'expected' end as state from batch b order by b.id limit 100)
   select coalesce((select jsonb_agg(to_jsonb(x) order by x.id) from page x),'[]'::jsonb),(select count(*) from batch),(select id from page order by id desc limit 1) into v,n,next_id;
   return jsonb_build_object('organization_id',p_org,'site_id',p_site,'actor_id',auth.uid(),'operation',p_op,'rows',v,'next',case when n>100 then next_id end,'can_cancel',r in ('owner','manager'),'physical_access',false);
  elsif p_op='history' and p_register is not null and p_event is null and p_reason is null and p_after is null then
-  if not exists(select 1 from public.sec_service_register where id=p_register and organization_id=p_org and site_id=p_site and kind='visitor') then raise exception 'register denied' using errcode='42501';end if;
+  if not exists(select 1 from public.sec_service_register where id=p_register and organization_id=p_org and site_id=p_site and kind='visitor' and (r in ('owner','manager') or reporter_id=auth.uid())) then raise exception 'register denied' using errcode='42501';end if;
   select coalesce(jsonb_agg(to_jsonb(x) order by x.sequence desc),'[]'::jsonb) into v from (select id,actor_id,direction,sequence,created_at from public.sec_passage_logs where register_id=p_register and organization_id=p_org and site_id=p_site order by sequence desc limit 100)x;
   return jsonb_build_object('organization_id',p_org,'site_id',p_site,'actor_id',auth.uid(),'operation',p_op,'register_id',p_register,'rows',v,'physical_access',false);
  elsif p_op='cancel' and p_register is not null and p_event is not null and p_after is null then

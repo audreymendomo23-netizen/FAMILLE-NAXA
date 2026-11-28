@@ -30,4 +30,16 @@ do $q$declare reg uuid:=(select id from public.sec_service_register where reques
  begin perform public.sec_field_action('10000000-0000-0000-0000-000000000441','20000000-0000-0000-0000-000000000441',gen_random_uuid(),'passage',reg,'{"direction":"entry","reason":"QA forbidden"}');raise exception 'reentry allowed';exception when invalid_parameter_value then null;end;
  if jsonb_array_length(public.sec_visitor_lifecycle('10000000-0000-0000-0000-000000000441','20000000-0000-0000-0000-000000000441','history',reg)->'rows')<>2 then raise exception 'history';end if;
 end $q$;
+reset role;
+insert into auth.users values ('00000000-0000-0000-0000-000000000443');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000441','00000000-0000-0000-0000-000000000443','operator',true);
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000441','20000000-0000-0000-0000-000000000441','00000000-0000-0000-0000-000000000443',true);
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000441',true);
+select set_config('qa.visitor_id',(select id::text from public.sec_service_register where request_id='30000000-0000-0000-0000-000000000441'),true);
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000443',true);
+do $q$begin
+ if jsonb_array_length(public.sec_visitor_lifecycle('10000000-0000-0000-0000-000000000441','20000000-0000-0000-0000-000000000441','list')->'rows')<>0 then raise exception 'visitor reference leaked to unrelated operator';end if;
+ begin perform public.sec_visitor_lifecycle('10000000-0000-0000-0000-000000000441','20000000-0000-0000-0000-000000000441','history',current_setting('qa.visitor_id')::uuid);raise exception 'unrelated visitor history';exception when insufficient_privilege then null;end;
+end $q$;
 reset role;rollback;
