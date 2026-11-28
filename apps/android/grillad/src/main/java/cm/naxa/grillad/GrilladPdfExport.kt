@@ -17,7 +17,7 @@ internal fun reportPdfLines(r:JSONObject):List<String> = buildList {
  rows(r.optJSONArray("purchases_by_supplier")).forEach{x->add(x.optString("supplier")+" : "+x.optString("amount")+" FCFA")}
  add("Ventes : "+r.optString("sales_count")+" / Unités : "+r.optString("quantity"))
  rows(r.optJSONArray("sites")).forEach{x->add(x.optString("name")+" : CA "+x.optString("ca")+" FCFA")}
- add("Données confirmées serveur uniquement")
+ rows(r.optJSONArray("expenses_by_category")).forEach{x->add(x.optString("category")+" : "+x.optString("amount")+" FCFA")};add("Données confirmées serveur uniquement")
 }
 internal fun writeGrilladPdf(context:Context,uri:Uri,title:String,lines:List<String>){
  val pdf=PdfDocument()
@@ -27,4 +27,12 @@ internal fun writeGrilladPdf(context:Context,uri:Uri,title:String,lines:List<Str
   wrapped.chunked(44).forEachIndexed{i,part->val page=pdf.startPage(PdfDocument.PageInfo.Builder(595,842,i+1).create());part.forEachIndexed{j,s->page.canvas.drawText(s,40f,50f+j*17f,paint)};pdf.finishPage(page)}
   context.contentResolver.openOutputStream(uri)?.use{pdf.writeTo(it)}?:error("Fichier indisponible")
  }finally{pdf.close()}
+}
+
+internal fun dailyReportPdfLines(x:JSONObject):List<String> = buildList {
+ val d=x.optJSONObject("data")?:JSONObject()
+ add("Service : "+x.optString("service_day")+" / version "+x.optString("version"));add("Période : "+x.optString("starts_at")+" / "+x.optString("ends_at"))
+ add(if(d.optBoolean("provisional"))"PROVISOIRE — caisse ou pointage non clôturé" else "Service clôturé — données confirmées")
+ listOf("ca" to "CA","direct_ca" to "Direct","connect_ca" to "Connect","expenses" to "Dépenses","margin" to "Marge","operating_result" to "Résultat indicatif","encaissements" to "Encaissements espèces","cash_difference" to "Écart de caisse","target" to "Objectif").forEach{(k,label)->add(label+" : "+if(d.isNull(k))"Non attribué / inconnu" else d.optString(k)+" FCFA")}
+ listOf("sales_count" to "Ventes","prepared" to "Préparé","sold" to "Vendu","stock_adjustments" to "Ajustements","open_cash_count" to "Caisses ouvertes","unpaired_arrivals" to "Arrivées sans départ").forEach{(k,label)->add(label+" : "+if(d.isNull(k))"—" else d.optString(k))}
 }

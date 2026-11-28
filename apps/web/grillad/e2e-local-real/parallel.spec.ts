@@ -333,6 +333,13 @@ test('@transverse shared support registry, private ticket, exact replay and cent
   expect(Number(localSql("select count(*) from famille_core.support_tickets t join famille_core.applications a on a.id=t.app_id where a.code='grillad' and t.id='"+event+"'"))).toBe(1);
   await invoke(request,{action:'central_overview'},owner,403);
   await invoke(request,{action:'central_overview'},seller,403);
+  await s({action:'backup_export'},403);
+  await s({action:'backup_preferences'},403);
+  const pref=await o({action:'backup_preferences',frequency:'weekly',minute:360,weekday:1,monthday:1});
+  expect(pref).toMatchObject({frequency:'weekly',minute:360,cloud_status:'not_connected',last_success:null});
+  expect(await o({action:'backup_preferences'})).toEqual(pref);
+  const archive=await o({action:'backup_export'});expect(archive).toMatchObject({format:'grillad-business-export-v1',org,site});
+  expect(Object.keys(archive.tables)).not.toContain('events');
   await s({action:'referral',operation:'generate'},403);
   const referral=await o({action:'referral',operation:'generate'});
   expect(referral.code).toMatch(/^[0-9A-F]{32}$/);expect(referral.reward_status).toBe('pending_policy');

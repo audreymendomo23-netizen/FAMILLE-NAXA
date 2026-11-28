@@ -208,4 +208,45 @@ end $fn$;
 revoke all on function public.grillad_central_agent_access(uuid,boolean,text) from public,anon,authenticated;
 grant execute on function public.grillad_central_agent_access(uuid,boolean,text) to authenticated;
 
+-- Owner-controlled backup preference and bounded, explicit business export.
+-- No OAuth credential, PIN, profile photo, camera or authentication material exported.
+create table grillad_private.backup_preferences(
+ org uuid not null,site uuid not null,actor uuid not null references auth.users(id),
+ frequency text not null check(frequency in ('off','daily','weekly','monthly')),
+ local_minute integer not null check(local_minute between 0 and 1439),
+ weekday integer not null check(weekday between 1 and 7),monthday integer not null check(monthday between 1 and 28),
+ updated_at timestamptz not null default now(),primary key(org,site,actor),
+ foreign key(org,site) references grillad_private.enabled_sites(org,site));
+alter table grillad_private.backup_preferences enable row level security;
+revoke all on grillad_private.backup_preferences from public,anon,authenticated;
+create function public.grillad_backup_preferences(p_org uuid,p_site uuid,p_frequency text default null,p_minute integer default null,p_weekday integer default null,p_monthday integer default null) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v grillad_private.backup_preferences%rowtype;
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_BACKUP_DENIED' using errcode='42501';end if;
+ if p_frequency is not null then
+  if p_frequency not in ('off','daily','weekly','monthly') or p_minute is null or p_minute not between 0 and 1439 or p_weekday is null or p_weekday not between 1 and 7 or p_monthday is null or p_monthday not between 1 and 28 then raise exception 'GRILLAD_BACKUP_INPUT' using errcode='22023';end if;
+  insert into grillad_private.backup_preferences(org,site,actor,frequency,local_minute,weekday,monthday) values(p_org,p_site,auth.uid(),p_frequency,p_minute,p_weekday,p_monthday)
+  on conflict(org,site,actor) do update set frequency=excluded.frequency,local_minute=excluded.local_minute,weekday=excluded.weekday,monthday=excluded.monthday,updated_at=now();
+ end if;
+ select * into v from grillad_private.backup_preferences where org=p_org and site=p_site and actor=auth.uid();
+ return jsonb_build_object('frequency',coalesce(v.frequency,'off'),'minute',coalesce(v.local_minute,360),'weekday',coalesce(v.weekday,1),'monthday',coalesce(v.monthday,1),'timezone','Africa/Douala','destination','google_drive','cloud_status','not_connected','last_success',null);
+end $fn$;
+create function public.grillad_backup_export(p_org uuid,p_site uuid) returns jsonb
+language plpgsql stable security definer set search_path=pg_catalog as $fn$
+declare v jsonb:='{}'::jsonb; t text; a jsonb; n bigint;
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_BACKUP_DENIED' using errcode='42501';end if;
+ foreach t in array array['items','cash','cash_recounts','preparations','stock_adjustments','sales','cash_receipts','expenses','purchases','targets','dimension_targets','service_policy','service_revisions','daily_summary'] loop
+  execute format('select count(*) from grillad_private.%I where org=$1 and site=$2',t) into n using p_org,p_site;
+  if n>10000 then raise exception 'GRILLAD_BACKUP_TOO_LARGE' using errcode='22023';end if;
+  execute format('select coalesce(jsonb_agg(to_jsonb(x) order by to_jsonb(x)::text),''[]''::jsonb) from grillad_private.%I x where org=$1 and site=$2',t) into a using p_org,p_site;
+  v:=v||jsonb_build_object(t,a);
+  if octet_length(v::text)>3000000 then raise exception 'GRILLAD_BACKUP_TOO_LARGE' using errcode='22023';end if;
+ end loop;
+ return jsonb_build_object('format','grillad-business-export-v1','org',p_org,'site',p_site,'generated_at',now(),'coverage','selected_business_tables_only','tables',v);
+end $fn$;
+revoke all on function public.grillad_backup_preferences(uuid,uuid,text,integer,integer,integer),public.grillad_backup_export(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.grillad_backup_preferences(uuid,uuid,text,integer,integer,integer),public.grillad_backup_export(uuid,uuid) to authenticated;
+
 commit;
