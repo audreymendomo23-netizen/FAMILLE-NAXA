@@ -605,6 +605,15 @@ try{
  assert.ok((await identity(ss.access_token,"center-company-list",{kind:"announcement"})).items.some(p=>p.id===targetId));
  assert.ok(!(await identity(su.access_token,"center-company-list",{kind:"announcement"})).items.some(p=>p.id===targetId));
  assert.equal((await identityRequest(su.access_token,"center-company-confirm",{id:targetId})).status,403);
+ const teamNoticeKey="company:"+targetId;
+ const teamNotice=(await ok(room+"/notices",{},ss.access_token)).items.find(n=>n.k===teamNoticeKey);
+ assert.ok(teamNotice);assert.equal(teamNotice.kind,"company_announcement");assert.equal(teamNotice.title,null);
+ assert.ok(!(await ok(room+"/notices",{},su.access_token)).items.some(n=>n.k===teamNoticeKey));
+ assert.ok(!(await ok(room+"/notices",{},sm.access_token)).items.some(n=>n.k===teamNoticeKey));
+ assert.equal((await request(room+"/notices",{read:teamNoticeKey},su.access_token)).status,403);
+ assert.equal((await ok(room+"/notices",{read:teamNoticeKey},ss.access_token)).read,true);
+ assert.ok((await ok(room+"/notices",{},ss.access_token)).items.find(n=>n.k===teamNoticeKey).read_at);
+ assert.equal((await identity(ss.access_token,"center-company-list",{kind:"announcement"})).items.find(p=>p.id===targetId).confirmed,false);
  assert.equal((await identity(ss.access_token,"center-company-confirm",{id:targetId})).confirmed,true);
  const teamMedia={post_id:targetId,id:randomUUID(),kind:"file",mime:"application/pdf",name:"team.pdf",content:Buffer.from("%PDF-1.4\nteam\n%%EOF").toString("base64")};
  assert.equal((await cmOk(sm.access_token,"upload",teamMedia)).state,"ready");
@@ -623,7 +632,10 @@ try{
  assert.equal((await cmReq(ss.access_token,"download",{post_id:targetId,id:teamMedia.id})).status,403);
  assert.equal((await identityRequest(ss.access_token,"center-company-confirm",{id:targetId})).status,403);
  assert.equal((await identity(sm.access_token,"center-company-list",{kind:"announcement"})).items.find(p=>p.id===targetId).confirmation_count,0);
+ assert.ok(!(await ok(room+"/notices",{},ss.access_token)).items.some(n=>n.k===teamNoticeKey));
+ assert.equal((await request(room+"/notices",{read:teamNoticeKey},ss.access_token)).status,403);
  console.log("PASS V2 company team targeting and attachment revocation on reassignment");
+ console.log("PASS V2 company notices audience isolation and independent explicit announcement confirmation");
  assert.equal((await identityRequest(sm.access_token,"revoke-member",{member_id:scopeStaff.id})).status,403);
  await identity(so.access_token,"manager-assign",{member_id:scopeStaff.id,manager_id:scopeManager.id});
  const revokedChat={peer_id:scopeStaff.id,message_id:randomUUID(),body:"Revocation fixture"};

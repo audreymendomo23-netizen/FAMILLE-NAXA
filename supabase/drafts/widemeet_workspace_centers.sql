@@ -547,6 +547,21 @@ create table public.wm_company_posts(
 );
 alter table public.wm_chat_media add constraint wm_chat_media_company_post_fk foreign key(post_id) references public.wm_company_posts(id);
 create index wm_company_posts_feed on public.wm_company_posts(workspace_id,kind,created_at desc,id desc) where removed_at is null;
+-- Reuse the existing notice inbox without copying post content to the push ledger.
+create function public.wm_company_notice_items(w uuid,viewer uuid) returns jsonb
+language sql stable security invoker set search_path=pg_catalog,public as $notice$
+ select coalesce(jsonb_agg(to_jsonb(x) order by x.due desc,x.k),'[]'::jsonb) from (
+  select 'company:'||p.id::text as k,case when p.kind='announcement' then 'company_announcement' else 'company_news' end as kind,p.id as ref,null::text as title,p.created_at as due
+  from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled
+  join public.wm_accounts ac on ac.id=p.author_id and ac.enabled
+  join public.wm_workspaces ws on ws.id=p.workspace_id and ws.enabled and ws.kind='enterprise'
+  where p.workspace_id=w and p.author_id<>viewer and p.removed_at is null and public.wm_company_audience_allowed(w,p.author_id,p.team_id,viewer)
+  order by p.created_at desc,p.id desc limit 100
+ ) x
+$notice$;
+revoke all on function public.wm_company_notice_items(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.wm_company_notice_items(uuid,uuid) to service_role;
+
 create table public.wm_company_reads(
  post_id uuid not null references public.wm_company_posts(id),account_id uuid not null references public.wm_accounts(id),
  confirmed_at timestamptz not null default clock_timestamp(),primary key(post_id,account_id)

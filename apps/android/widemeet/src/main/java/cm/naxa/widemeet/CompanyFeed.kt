@@ -10,9 +10,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.UUID
 
-@Composable fun CompanyFeed(english:Boolean,gateway:AuthGateway,session:Session){
+@Composable fun CompanyFeed(english:Boolean,gateway:AuthGateway,session:Session,initialKind:String="news"){
  fun tr(fr:String,en:String)=if(english)en else fr
- var kind by remember{mutableStateOf("news")};var body by remember{mutableStateOf("")};var data by remember{mutableStateOf<JSONObject?>(null)}
+ var kind by remember{mutableStateOf(if(initialKind=="announcement")"announcement" else "news")};var body by remember{mutableStateOf("")};var data by remember{mutableStateOf<JSONObject?>(null)}
  var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<JSONObject?>(null)};var remove by remember{mutableStateOf<String?>(null)}
  var mediaOpen by remember{mutableStateOf<String?>(null)};var team by remember{mutableStateOf("")};var teamMenu by remember{mutableStateOf(false)}
  var pollEnabled by remember{mutableStateOf(false)};var options by remember{mutableStateOf(listOf("",""))};var voteConfirm by remember{mutableStateOf<Pair<String,Int>?>(null)};var closeConfirm by remember{mutableStateOf<String?>(null)}

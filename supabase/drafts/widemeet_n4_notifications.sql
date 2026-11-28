@@ -33,12 +33,16 @@ revoke all on public.wm_notice_reads from public,anon,authenticated;
 grant select,insert on public.wm_notice_reads to service_role;
 create function public.wm_notices(p_hash text,p_read text default null)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare s record; role_name text; items jsonb; t timestamptz:=clock_timestamp();
+declare s record; role_name text; items jsonb; company_items jsonb:='[]'::jsonb; t timestamptz:=clock_timestamp();
 begin
  select * into s from public.wm_session_context(p_hash);
  if not found or s.password_change_required then return null;end if;
  select role into role_name from public.wm_memberships where account_id=s.account_id and workspace_id=s.workspace_id and enabled;
  if not found then return null;end if;
+ -- Older isolated qualification stacks omit the workspace-centers draft; keep those tests valid.
+ if to_regprocedure('public.wm_company_notice_items(uuid,uuid)') is not null then
+  execute 'select public.wm_company_notice_items($1,$2)' into company_items using s.workspace_id,s.account_id;
+ end if;
  with notices as(
   select 'invite:'||r.id||':'||(r.state->>'scheduledMs') as k,'invitation' as kind,r.id as ref,r.state->>'title' as title,to_timestamp((r.state->>'scheduledMs')::double precision/1000) as due
   from public.wm_rooms r where r.workspace_id=s.workspace_id and r.state->>'status'='scheduled' and r.host_id<>s.account_id and exists(select 1 from public.wm_room_actor_for(p_hash,r.id))
@@ -64,6 +68,8 @@ begin
   union all
   select 'subscription:'||e.workspace_id||':'||extract(epoch from e.valid_until)::bigint,'subscription_expiring',e.workspace_id,null,e.valid_until
   from public.wm_room_entitlements e where e.workspace_id=s.workspace_id and e.enabled and role_name='promoteur' and e.valid_until between t and t+interval '72 hours'
+  union all
+  select n.k,n.kind,n.ref,n.title,n.due from jsonb_to_recordset(coalesce(company_items,'[]'::jsonb)) as n(k text,kind text,ref uuid,title text,due timestamptz)
  ), visible as (
   select n.k,n.kind,n.ref,n.title,n.due,r.read_at from notices n left join public.wm_notice_reads r on r.workspace_id=s.workspace_id and r.account_id=s.account_id and r.notice_key=n.k
   where n.k is not null and n.due is not null order by (r.read_at is not null),n.due,n.k limit 100

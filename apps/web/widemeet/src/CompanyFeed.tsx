@@ -1,9 +1,9 @@
 import React,{useState,useEffect,useRef} from "react";
 import {identityAction} from "./session.mjs";
 import {ChatMedia} from "./ChatMedia";
-export function CompanyFeed({base,session,locale}){
+export function CompanyFeed({base,session,locale,initialKind="news"}){
  const tr=(fr,en)=>locale==="en"?en:fr;
- const [kind,K]=useState("news"),[data,D]=useState(null),[body,B]=useState(""),[busy,W]=useState(false),[error,E]=useState(false);
+ const [kind,K]=useState(initialKind==="announcement"?"announcement":"news"),[data,D]=useState(null),[body,B]=useState(""),[busy,W]=useState(false),[error,E]=useState(false);
  const pending=useRef(null),serial=useRef(0),lock=useRef(false),commentPending=useRef(null);
  const [mediaOpen,MO]=useState(null),[team,T]=useState("");
  const [pollEnabled,PE]=useState(false),[options,OP]=useState(["",""]);
