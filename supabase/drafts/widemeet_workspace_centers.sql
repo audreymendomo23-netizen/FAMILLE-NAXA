@@ -518,4 +518,71 @@ begin
 end $wm$;
 revoke all on function public.wm_chat_media_purge_candidates(integer),public.wm_chat_media_purge_ack(uuid) from public,anon,authenticated;
 grant execute on function public.wm_chat_media_purge_candidates(integer),public.wm_chat_media_purge_ack(uuid) to service_role;
+
+-- V2-03 private enterprise feed: one publication engine, distinct kinds.
+create table public.wm_company_posts(
+ id uuid primary key, workspace_id uuid not null, author_id uuid not null,
+ kind text not null check(kind in ('news','announcement')),
+ body text not null check(length(btrim(body)) between 1 and 4000),
+ created_at timestamptz not null default clock_timestamp(), removed_at timestamptz,
+ foreign key(author_id,workspace_id) references public.wm_memberships(account_id,workspace_id)
+);
+create index wm_company_posts_feed on public.wm_company_posts(workspace_id,kind,created_at desc,id desc) where removed_at is null;
+create table public.wm_company_reads(
+ post_id uuid not null references public.wm_company_posts(id),account_id uuid not null references public.wm_accounts(id),
+ confirmed_at timestamptz not null default clock_timestamp(),primary key(post_id,account_id)
+);
+alter table public.wm_company_posts enable row level security;
+alter table public.wm_company_reads enable row level security;
+revoke all on public.wm_company_posts,public.wm_company_reads from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_company_posts,public.wm_company_reads to service_role;
+create function public.wm_company_action(p_hash text,p_action text,p_data jsonb) returns jsonb
+language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a record; item public.wm_company_posts%rowtype; pid uuid; k text; content text; result jsonb;
+begin
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into a from public.wm_lock_room_actor_for(p_hash,null);
+ if not found or not exists(select 1 from public.wm_workspaces w where w.id=a.workspace_id and w.enabled and w.kind='enterprise') or jsonb_typeof(p_data) is distinct from 'object' then return null;end if;
+ if p_action='center-company-list' then
+  if (p_data-'kind')<>'{}'::jsonb or jsonb_typeof(p_data->'kind') is distinct from 'string' then return null;end if;
+  k:=p_data->>'kind';if k not in ('news','announcement') then return null;end if;
+  select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc,x.id desc),'[]'::jsonb) into result from (
+   select p.id,p.kind,p.author_id,ac.display_name,mb.job_title,p.body,p.created_at,
+    p.author_id=a.account_id or a.role='promoteur' as can_remove,
+    (p.kind='announcement' and p.author_id<>a.account_id) as can_confirm,
+    exists(select 1 from public.wm_company_reads cr where cr.post_id=p.id and cr.account_id=a.account_id) as confirmed,
+    case when p.kind='announcement' and (p.author_id=a.account_id or a.role='promoteur') then
+      (select count(*) from public.wm_company_reads cr join public.wm_memberships cm on cm.account_id=cr.account_id and cm.workspace_id=p.workspace_id and cm.enabled join public.wm_accounts ca on ca.id=cm.account_id and ca.enabled where cr.post_id=p.id) else null end as confirmation_count
+   from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled
+   join public.wm_accounts ac on ac.id=p.author_id and ac.enabled
+   where p.workspace_id=a.workspace_id and p.kind=k and p.removed_at is null order by p.created_at desc,p.id desc limit 100
+  ) x;
+  return jsonb_build_object('items',result,'can_publish',k='news' or a.role in ('promoteur','manager'));
+ end if;
+ if jsonb_typeof(p_data->'id') is distinct from 'string' or coalesce(p_data->>'id','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then return null;end if;
+ pid:=(p_data->>'id')::uuid;
+ if p_action='center-company-publish' then
+  if (p_data-'id'-'kind'-'body')<>'{}'::jsonb or jsonb_typeof(p_data->'kind') is distinct from 'string' or jsonb_typeof(p_data->'body') is distinct from 'string' then return null;end if;
+  k:=p_data->>'kind';content:=btrim(p_data->>'body');
+  if k not in ('news','announcement') or length(content) not between 1 and 4000 or (k='announcement' and a.role not in ('promoteur','manager')) then return null;end if;
+  insert into public.wm_company_posts(id,workspace_id,author_id,kind,body) values(pid,a.workspace_id,a.account_id,k,content) on conflict(id) do nothing;
+  select * into item from public.wm_company_posts where id=pid and workspace_id=a.workspace_id and author_id=a.account_id and kind=k and body=content and removed_at is null;
+  if not found then return null;end if;return jsonb_build_object('id',pid,'published',true);
+ end if;
+ if (p_data-'id')<>'{}'::jsonb then return null;end if;
+ select p.* into item from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=p.author_id and ac.enabled where p.id=pid and p.workspace_id=a.workspace_id;
+ if not found then return null;end if;
+ if p_action='center-company-remove' then
+  if item.author_id<>a.account_id and a.role<>'promoteur' then return null;end if;
+  update public.wm_company_posts set removed_at=coalesce(removed_at,clock_timestamp()) where id=pid and workspace_id=a.workspace_id;
+  return jsonb_build_object('removed',true);
+ elsif p_action='center-company-confirm' then
+  if item.removed_at is not null or item.kind<>'announcement' or item.author_id=a.account_id then return null;end if;
+  insert into public.wm_company_reads(post_id,account_id) values(pid,a.account_id) on conflict do nothing;
+  return jsonb_build_object('confirmed',true);
+ end if;
+ return null;
+end $wm$;
+revoke all on function public.wm_company_action(text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_company_action(text,text,jsonb) to service_role;
 commit;
