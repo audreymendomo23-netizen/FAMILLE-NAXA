@@ -73,3 +73,6 @@ Dernier relevé : sept campagnes 14/14 ; dernière campagne 46089210628, quatre 
 
 ## Section 33 — Recettes transactionnelles et contrats de raccordement
 Ajout d'une suite PostgreSQL multivendeur (job server product-race, indépendante) et de cinq tests API nommés ; assertion minuit dans la suite de pointage existante. Total 217 unités (211 tests nommés + 5 suites SQL + 1 drill), lots 50/50/47/50/20. Les 15 jobs d'une campagne ne sont pas 217 jobs. Preuves : product-race SUCCESS sur 46091363065 ; les cinq nouveaux tests API SUCCESS dans infrastructure 46091421116 ; correctif syntaxe minuit f1b4db0, run 46091449597 à vérifier selon le relevé de continuité. Qualification produit complète et matérielle non présumée.
+
+## Section 34 — NAXA Replay
+Campagne locale 46091449597 : 15/15 SUCCESS. Un scénario supplémentaire enregistré (deux comptes Auth réels, Chromium, permissions et logout), workflow dédié 46091864360 : BLOCKED au préflight (six secrets absents), navigateur non exécuté. 217 unités locales + 1 scénario Replay bloqué = 218 enregistrées ; aucune recette réelle déclarée réussie. Voir §34 continuité.
