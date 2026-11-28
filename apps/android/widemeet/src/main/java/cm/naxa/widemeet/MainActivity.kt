@@ -34,10 +34,10 @@ import kotlinx.coroutines.launch
 import android.os.SystemClock
 import cm.naxa.widemeet.auth.*
 
-private val Green=Color(0xFF78C800);private val Yellow=Color(0xFFFFE52B)
+private val Green=Color(0xFF017F42);private val Yellow=Color(0xFFFCC102)
 private val White=Color(0xFFFFFFFF);private val Black=Color(0xFF121714)
 private val Blue=Color(0xFF29B9FF);private val Orange=Color(0xFFFF9A24)
-private val Red=Color(0xFFE43636);private val Deep=Color(0xFF07552C)
+private val Red=Color(0xFFE43636);private val Deep=Color(0xFF013F22)
 private val tabs=listOf("Accueil","Agenda","Chat","Archives","Profil")
 private val tabsEn=listOf("Home","Calendar","Chat","Archives","Profile")
 private val symbols=listOf("⌂","▦","◉","▤","○")
@@ -85,7 +85,7 @@ class MainActivity:ComponentActivity(){
  fun tr(fr:String,en:String)=if(english)en else fr
  val labels=if(english)tabsEn else tabs
  val menuLabels=if(english)menuEn else menuFr
- val colors=if(dark)darkColorScheme(primary=Green,onPrimary=Black,secondary=Yellow,onSecondary=Black,background=Color(0xFF101611),surface=Color(0xFF1A241C),onSurface=White,onBackground=White,error=Color(0xFFFF7777)) else lightColorScheme(primary=Deep,onPrimary=White,secondary=Yellow,onSecondary=Black,background=Color(0xFFF6FAEF),surface=White,onSurface=Black,onBackground=Black,error=Color(0xFFC02626))
+ val colors=if(dark)darkColorScheme(primary=Green,onPrimary=Black,secondary=Yellow,onSecondary=Black,background=Color(0xFF101611),surface=Color(0xFF1A241C),onSurface=White,onBackground=White,error=Color(0xFFFF7777)) else lightColorScheme(primary=Deep,onPrimary=White,secondary=Yellow,onSecondary=Black,background=Color(0xFFFCFCFD),surface=White,onSurface=Black,onBackground=Black,error=Color(0xFFC02626))
  val unavailable=tr("Cet espace sera disponible à la connexion de votre compte.","This area will be available when your account is connected.")
  MaterialTheme(colorScheme=colors){
  Box(Modifier.fillMaxSize()){
@@ -97,7 +97,7 @@ class MainActivity:ComponentActivity(){
   TextButton(onClick={toggle()},colors=if(signIn)ButtonDefaults.textButtonColors(containerColor=colors.surface,contentColor=colors.onSurface)else ButtonDefaults.textButtonColors(),modifier=Modifier.testTag("wm-theme").semantics{contentDescription=tr(if(dark)"Mode clair" else "Mode nuit",if(dark)"Light mode" else "Dark mode")}){Text(if(dark)"☀" else "☾",fontSize=22.sp)}
   if(!signIn)TextButton(onClick={menu=true},modifier=Modifier.testTag("wm-menu").semantics{contentDescription=tr("Options","Options")}){Text("☰",fontSize=22.sp)}
  }
- },bottomBar={if(!signIn)NavigationBar{labels.forEachIndexed{i,l->NavigationBarItem(modifier=Modifier.testTag("wm-tab-$i"),selected=tab==i&&detail.isEmpty(),onClick={tab=i;detail=""},icon={Text(symbols[i],fontSize=22.sp)},label={Text(l,fontSize=11.sp)},colors=NavigationBarItemDefaults.colors(indicatorColor=Green,selectedIconColor=Black,selectedTextColor=colors.onSurface))}}}){padding->
+ },bottomBar={if(!signIn)NavigationBar{labels.forEachIndexed{i,l->NavigationBarItem(modifier=Modifier.testTag("wm-tab-$i"),selected=tab==i&&detail.isEmpty(),onClick={tab=i;detail=""},icon={Text(symbols[i],fontSize=22.sp)},label={Text(l,fontSize=11.sp)},colors=NavigationBarItemDefaults.colors(indicatorColor=Color.Transparent,selectedIconColor=if(dark)Color(0xFF70D891) else Green,selectedTextColor=colors.onSurface))}}}){padding->
  Box(Modifier.fillMaxSize().padding(padding)){
  val contentScroll=key(signIn){rememberScrollState()}
  Column(Modifier.fillMaxSize().verticalScroll(contentScroll).padding(16.dp),verticalArrangement=if(signIn)Arrangement.spacedBy(14.dp,Alignment.CenterVertically)else Arrangement.spacedBy(14.dp)){
@@ -122,6 +122,7 @@ class MainActivity:ComponentActivity(){
  else if(detail.isNotEmpty()){TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))};Text(detail,style=MaterialTheme.typography.headlineMedium)
  if(detail in listOf(menuFr[11],menuFr[12],menuFr[13],menuEn[11],menuEn[12],menuEn[13])){Button(onClick={toggle()}){Text(if(dark)tr("Mode clair","Light mode")else tr("Mode nuit","Dark mode"))};Button(onClick={english=!english;detail=""},modifier=Modifier.testTag("wm-language")){Text(if(english)"Français"else "English")};Row(verticalAlignment=Alignment.CenterVertically){Switch(checked=motion,onCheckedChange={motion=it},modifier=Modifier.testTag("wm-motion"));Text("Animations")}}else {val photo=when(detail){tr("Nouvelle réunion","New meeting")->"meeting";tr("Programmer","Schedule")->"schedule";tr("Rejoindre","Join")->"join";tr("Mes rapports","My reports")->"report";else->null};if(photo!=null)WideMeetPhoto(photo,animate,180.dp);Text(unavailable)}
  }else if(tab==0){
+ if(current!=null&&session!=null){val s=session!!;key(s.memberId,s.deviceId,s.activeWorkspaceId,"v2-home"){IdentityPanel(english,gateway,s,"dashboard")};Button(onClick={detail=tr("Nouvelle réunion","New meeting")},modifier=Modifier.fillMaxWidth().heightIn(min=88.dp),colors=ButtonDefaults.buttonColors(containerColor=Green,contentColor=White)){Text(tr("Nouvelle réunion","New meeting"),style=MaterialTheme.typography.titleLarge)};Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){OutlinedButton(onClick={detail=tr("Rejoindre","Join")},modifier=Modifier.weight(1f)){Text(tr("Rejoindre","Join"))};OutlinedButton(onClick={detail=tr("Programmer","Schedule")},modifier=Modifier.weight(1f)){Text(tr("Programmer","Schedule"))}};TextButton(onClick={detail=tr("Mes rapports","My reports")}){Text(tr("Mes rapports","My reports"))};if(current.kind=="enterprise")TextButton(onClick={detail=menuLabels[0]}){Text(tr("Annuaire professionnel","Professional directory"))};if(s.workspaces.size>1)TextButton(enabled=!switching,onClick={switchDialog=true}){Text(tr("Changer d’espace","Switch workspace"))}}else{
  Card(colors=CardDefaults.cardColors(containerColor=Deep,contentColor=White),modifier=Modifier.fillMaxWidth()){
  Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
  Text(tr("Vos réunions, sans frontières.","Your meetings, without borders."),style=MaterialTheme.typography.headlineMedium)
@@ -136,9 +137,10 @@ class MainActivity:ComponentActivity(){
  Card(onClick={detail=actions[i]},modifier=Modifier.weight(1f).heightIn(min=110.dp)){
  Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Surface(color=accents[i],shape=MaterialTheme.shapes.medium){Text(marks[i],color=Black,fontSize=23.sp,modifier=Modifier.padding(8.dp))};Text(actions[i],style=MaterialTheme.typography.titleMedium);WideMeetPhoto(listOf("meeting","schedule","join","report")[i],animate,88.dp)}
  }}}}
+ }
  if(current!=null&&session!=null&&BuildConfig.WIDEMEET_PUSH_ENABLED){val s=session!!;key(s.memberId,s.activeWorkspaceId,s.deviceId,"push"){PushPreferences(english,gateway,s)}}
  if(current!=null&&session!=null&&BuildConfig.WIDEMEET_NOTICES_ENABLED){val s=session!!;key(s.memberId,s.deviceId,s.activeWorkspaceId,"notices"){NoticeInbox(english,roomGateway,s){kind->when{kind.startsWith("task_")->detail=menuLabels[6];kind=="minutes_published"->{tab=3;detail=""};kind=="periodic_report"->detail=menuLabels[4];kind=="subscription_expiring"->detail=menuLabels[7];else->{tab=1;detail=""}}}}}
- if(current!=null&&session!=null){val s=session!!;key(s.memberId,s.deviceId,s.activeWorkspaceId,"dashboard"){IdentityPanel(english,gateway,s,"dashboard")}}else Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text(labels[1],style=MaterialTheme.typography.titleLarge);Text(unavailable)}}
+ if(current==null||session==null)Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text(labels[1],style=MaterialTheme.typography.titleLarge);Text(unavailable)}}
  }else{Text(labels[tab],style=MaterialTheme.typography.headlineMedium);Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){WideMeetPhoto(listOf("home","schedule","join","archive","signin")[tab],animate,170.dp);Text(unavailable);if(tab==4){TextButton(onClick={detail=menuLabels[13]}){Text(menuLabels[13])};TextButton(onClick={detail=menuLabels[9]}){Text(menuLabels[9])}}}}}
  }
  if(!signIn&&(alpha.value>0f||startup.value>0f))Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(Yellow.copy(alpha=maxOf(alpha.value,startup.value)),Color.Transparent),center=Offset(0f,0f),radius=700f)))
