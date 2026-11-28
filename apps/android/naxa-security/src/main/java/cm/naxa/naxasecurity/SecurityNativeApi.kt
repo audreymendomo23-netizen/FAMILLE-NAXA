@@ -116,6 +116,13 @@ internal object SecurityNativeApi {
  suspend fun presenceQr(s:SecurityNativeSession,site:SecurityNativeSite,event:String,op:String,target:String,detail:JSONObject):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);require(op in setOf("issue","consume"));val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_event",SecurityNativeContract.uuid(event)).put("p_op",op).put("p_target",SecurityNativeContract.uuid(target)).put("p_detail",detail);val v=JSONObject(call("/rest/v1/rpc/sec_presence_qr",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user&&v.optString("event_id")==event&&v.optString("operation")==op&&v.opt("physical_presence_certified")==false);v
  }
+ suspend fun storeEvidence(s:SecurityNativeSession,site:SecurityNativeSite,event:String,reference:String,digest:String,encoded:String):JSONObject=withContext(Dispatchers.IO){
+  checkScope(s,site);val id=SecurityNativeContract.uuid(event);require(reference.matches(Regex("^[A-Za-z0-9._-]{1,80}$"))&&digest.matches(Regex("^[a-f0-9]{64}$"))&&encoded.length in 4..350000)
+  val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_event",id).put("p_operation","evidence_store").put("p_target",JSONObject.NULL).put("p_detail",JSONObject().put("reference",reference).put("digest",digest).put("base64",encoded));val v=JSONObject(call("/rest/v1/rpc/sec_service_action",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user&&v.optString("event_id")==id&&v.optString("target_id")==id&&v.optString("operation")=="evidence_store"&&v.optString("state")=="stored"&&v.optString("digest")==digest);v
+ }
+ suspend fun personalEvidence(s:SecurityNativeSession,site:SecurityNativeSite,id:String):JSONObject=withContext(Dispatchers.IO){
+  checkScope(s,site);val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_id",SecurityNativeContract.uuid(id));val v=JSONObject(call("/rest/v1/rpc/sec_evidence_download",s.token,p));check(v.optString("id")==id&&v.optString("digest").matches(Regex("^[a-f0-9]{64}$")));v
+ }
  suspend fun evidenceInventory(s:SecurityNativeSession,site:SecurityNativeSite,body:JSONObject):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);val p=JSONObject(body.toString()).put("p_org",site.organization).put("p_site",site.id);val v=JSONObject(call("/rest/v1/rpc/sec_evidence_inventory",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user);v
  }
