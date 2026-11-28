@@ -27,13 +27,13 @@ import org.json.JSONObject
  listOf(1,7,30,90,365).forEach{d->FilterChip(selected=days==d,enabled=!busy,onClick={days=d},label={Text("$d jours")})}
  Button(enabled=!busy,onClick={busy=true;scope.launch{try{val v=SecurityNativeApi.auditExport(s,site,source,days);val a=v.getJSONArray("rows");if(n.generation==g){exportRows=(0 until a.length()).map{a.getJSONObject(it)};export.launch("security-audit-interval.csv")}}catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g)status="Export refusé ou indisponible. Réduisez la période."}finally{if(n.generation==g)busy=false}}}){Text("Exporter toute la période CSV")}
  Text("Maximum 10 000 événements et 7,5 Mo de données par export, sans troncature.")
- var retentionDays by remember(screen,g){mutableStateOf("")};var hold by remember(screen,g){mutableStateOf(true)};var candidate by remember(screen,g){mutableStateOf<Long?>(null)}
- fun retention(save:Boolean){if(busy)return;busy=true;scope.launch{try{val v=SecurityNativeApi.auditRetention(s,site,if(save)retentionDays.toInt() else null,if(save)hold else null);if(n.generation==g){retentionDays=if(v.isNull("days"))"" else v.optString("days");hold=v.optBoolean("legal_hold",true);candidate=v.getLong("access_trace_candidates");status="Politique consultée — simulation uniquement."}}catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g){candidate=null;status="Politique refusée ou indisponible."}}finally{if(n.generation==g)busy=false}}}
+ var retentionDays by remember(screen,g){mutableStateOf("")};var hold by remember(screen,g){mutableStateOf(true)};var candidate by remember(screen,g){mutableStateOf<Long?>(null)};var sourceCounts by remember(screen,g){mutableStateOf<JSONObject?>(null)}
+ fun retention(save:Boolean){if(busy)return;busy=true;scope.launch{try{val v=SecurityNativeApi.auditRetention(s,site,if(save)retentionDays.toInt() else null,if(save)hold else null);if(n.generation==g){retentionDays=if(v.isNull("days"))"" else v.optString("days");hold=v.optBoolean("legal_hold",true);candidate=v.getLong("total_candidates");sourceCounts=v.getJSONObject("source_counts");status="Politique consultée — simulation uniquement."}}catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g){candidate=null;sourceCounts=null;status="Politique refusée ou indisponible."}}finally{if(n.generation==g)busy=false}}}
  Text("Conservation des traces — propriétaire")
  Button(enabled=!busy,onClick={retention(false)}){Text("Consulter la politique")}
  OutlinedTextField(retentionDays,{retentionDays=it},enabled=!busy,label={Text("Durée en jours")})
  FilterChip(selected=hold,enabled=!busy,onClick={hold=!hold},label={Text("Gel de conservation")})
  Button(enabled=!busy&&retentionDays.toIntOrNull()?.let{it in 1..3650}==true,onClick={retention(true)}){Text("Enregistrer la politique de simulation")}
- candidate?.let{Text("Traces candidates : "+it+" — aucune suppression.")}
+ candidate?.let{Text("Traces candidates : "+it+" — aucune suppression.")};sourceCounts?.let{counts->counts.keys().asSequence().toList().sorted().forEach{k->Text(k+" : "+counts.optLong(k))}}
  Text(status)
 }

@@ -8,7 +8,7 @@ create table sec_private.audit_retention_policy(
 );
 revoke all on sec_private.audit_retention_policy from public,anon,authenticated;
 create function sec_private.audit_retention(p_org uuid,p_site uuid,p_days integer default null,p_hold boolean default null) returns jsonb language plpgsql security definer set search_path=pg_catalog as $f$
-declare v sec_private.audit_retention_policy%rowtype; eligible bigint; cutoff timestamptz;
+declare v sec_private.audit_retention_policy%rowtype; eligible bigint; cutoff timestamptz;total_candidates bigint:=0;source_counts jsonb:='{}'::jsonb;
 begin
  if sec_private.field_role(p_org,p_site) is distinct from 'owner' then raise exception 'owner required' using errcode='42501';end if;
  if (p_days is null)<>(p_hold is null) or (p_days is not null and p_days not between 1 and 3650) then raise exception 'invalid policy' using errcode='22023';end if;
@@ -19,8 +19,13 @@ begin
  else select * into v from sec_private.audit_retention_policy where organization_id=p_org and site_id=p_site;end if;
  if v.days is not null then cutoff:=now()-make_interval(days=>v.days);end if;
  if v.days is null or v.legal_hold then eligible:=0;
- else select count(*) into eligible from public.sec_access_audit where organization_id=p_org and site_id=p_site and created_at<cutoff;end if;
- return jsonb_build_object('organization_id',p_org,'site_id',p_site,'configured',v.days is not null,'days',v.days,'legal_hold',coalesce(v.legal_hold,true),'cutoff',cutoff,'access_trace_candidates',eligible,'preview_only',true);
+ else
+ select count(*) into eligible from public.sec_access_audit where organization_id=p_org and site_id=p_site and created_at<cutoff;
+ -- Owner receives aggregate counts, not another user's sensitive journal payload.
+ select coalesce(sum(c.n),0),coalesce(jsonb_object_agg(c.source,c.n),'{}'::jsonb) into total_candidates,source_counts
+ from (select source,count(*) as n from public.sec_audit_timeline where organization_id=p_org and site_id=p_site and created_at<cutoff group by source)c;
+ end if;
+ return jsonb_build_object('organization_id',p_org,'site_id',p_site,'configured',v.days is not null,'days',v.days,'legal_hold',coalesce(v.legal_hold,true),'cutoff',cutoff,'access_trace_candidates',eligible,'total_candidates',total_candidates,'source_counts',source_counts,'preview_only',true);
 end $f$;
 revoke all on function sec_private.audit_retention(uuid,uuid,integer,boolean) from public,anon,authenticated;
 grant execute on function sec_private.audit_retention(uuid,uuid,integer,boolean) to authenticated;
