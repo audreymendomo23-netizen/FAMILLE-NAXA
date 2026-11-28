@@ -1,0 +1,72 @@
+name: NAXA SERVICES — isolated support and SECURITY bridge
+on:
+  push:
+    branches: [work/naxa-services-completion-20261120]
+    paths:
+      - '.github/workflows/naxa-services-support-security-bridge.yml'
+      - 'docs/naxa-services/NAXA_SERVICES_SUPPORT_SECURITY_BRIDGE_*.sql'
+      - 'apps/web/naxa-services/**'
+      - 'apps/android/naxa-services/**'
+      - 'supabase/drafts/naxa_services_*.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: naxa_bridge_ci
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d naxa_bridge_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: naxa_bridge_ci
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: 144e54d5b6933dfd1a0c1d57858df3a0ed120a5b
+          path: security-donor
+          persist-credentials: false
+      - name: Verify exact donor and isolated database
+        run: |
+          test "$(git -C security-donor hash-object docs/naxa-security/contracts/backend-candidate.sql)" = 3f437d637cd6efdf9c5f30917a12f580e71e8599
+          test "$PGHOST" = 127.0.0.1
+          test "$PGDATABASE" = naxa_bridge_ci
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+      - name: Apply existing contracts in disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_postgres_bootstrap.sql
+          for draft in supabase/drafts/naxa_services_v1.sql supabase/drafts/naxa_services_v2_activity_onboarding_management.sql supabase/drafts/naxa_services_v3_operations_rewards_sync.sql supabase/drafts/naxa_services_v4_supplier_accounting_forecast.sql; do
+            test "$(tail -n 1 "$draft")" = "rollback;"
+            sed -E '$s/rollback;/commit/' "$draft" | psql -v ON_ERROR_STOP=1
+          done
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/0002_famille_core_rls.sql
+          psql -v ON_ERROR_STOP=1 -f security-donor/docs/naxa-security/contracts/backend-candidate.sql
+      - name: Verify bridge and permissions using synthetic fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          draft=docs/naxa-services/NAXA_SERVICES_SUPPORT_SECURITY_BRIDGE_CANDIDATE.sql
+          test "$(tail -n 1 "$draft")" = "rollback;"
+          sed -E '$s/rollback;/commit/' "$draft" | psql -v ON_ERROR_STOP=1
+          psql -v ON_ERROR_STOP=1 -f docs/naxa-services/NAXA_SERVICES_SUPPORT_SECURITY_BRIDGE_TEST.sql
