@@ -17,7 +17,8 @@ import androidx.compose.ui.unit.dp
  SecurityOperationalPanel(screen.id)
  SecurityModulePanel(screen.id)
  SecurityNativeCaseReport(screen.id)
+ SecurityNativeField(screen.id)
  if(screen.id in listOf("B4.08","B4.10"))SecurityAttendanceCapture(screen.id)
- Text("Consultation préparatoire. Aucune commande ni validation possible.",style=MaterialTheme.typography.bodySmall)
+ Text("Les champs non raccordés restent préparatoires. Les opérations ci-dessus requièrent un reçu serveur ; aucune commande physique.",style=MaterialTheme.typography.bodySmall)
  }}
 }
