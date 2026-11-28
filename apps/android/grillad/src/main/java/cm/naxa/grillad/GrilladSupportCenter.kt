@@ -7,11 +7,10 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.UUID
-@Composable internal fun GrilladSupportCenter(enabled:Boolean,request:suspend(JSONObject)->Any){
- val ctx=LocalContext.current;val pref=remember{ctx.getSharedPreferences("grillad-help-v1",0)};var locale by remember{mutableStateOf(pref.getString("locale","fr")?:"fr")}
+@Composable internal fun GrilladSupportCenter(enabled:Boolean,locale:String,onLocale:(String)->Unit,request:suspend(JSONObject)->Any){
  val labels=when(locale){"en"->listOf("Language","Help","Create ticket","Submit request");"ff-CM"->listOf("Ɗemngal","Ballal","Sos kayit","Neldu ɗaɓɓitannde");else->listOf("Langue","Aide","Créer un ticket","Envoyer la demande")}
  val scope=rememberCoroutineScope();var subject by remember{mutableStateOf("")};var description by remember{mutableStateOf("")};var id by remember{mutableStateOf(UUID.randomUUID().toString())};var uncertain by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")};var tickets by remember{mutableStateOf<List<JSONObject>>(emptyList())};var selected by remember{mutableStateOf("")}
- Text(labels[0]);Row{listOf("fr" to "FR","en" to "EN","ff-CM" to "Fufulɓe").forEach{(l,n)->TextButton({locale=l;pref.edit().putString("locale",l).apply()}){Text(if(locale==l)"✓ "+n else n)}}}
+ Text(labels[0]);Row{listOf("fr" to "FR","en" to "EN","ff-CM" to "Fufulɓe").forEach{(l,n)->TextButton({onLocale(l)}){Text(if(locale==l)"✓ "+n else n)}}}
  if(locale=="ff-CM")Text("Commandes d’aide traduites ; guides métier en français, validation linguistique en attente.")
  Text("FAQ · "+labels[1],style=MaterialTheme.typography.titleMedium)
  Text(if(locale=="en")"Payment: manually record cash, MTN or Orange. GRILLAD does not debit customer funds." else "Règlement : déclaration manuelle espèces, MTN ou Orange. Aucun débit client par GRILLAD.")

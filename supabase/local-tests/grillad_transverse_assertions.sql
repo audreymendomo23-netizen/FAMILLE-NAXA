@@ -83,6 +83,9 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000004',true);
 select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000014","aal":"aal2","app_metadata":{}}',true);
 do $test$ declare o uuid:='b2000000-0000-0000-0000-000000000001';begin
+ perform set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000014","aal":"aal1","app_metadata":{}}',true);
+ begin perform public.grillad_central_overview();raise exception 'central AAL1 accepted';exception when insufficient_privilege then null;end;
+ perform set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000014","aal":"aal2","app_metadata":{}}',true);
  if public.grillad_central_overview()->>'app' is distinct from 'grillad' then raise exception 'central identity';end if;
  if jsonb_array_length(public.grillad_central_clients())<>1 then raise exception 'central directory';end if;
  if public.grillad_central_client_state(o,'active','suspended','Synthetic central test')->>'status' is distinct from 'suspended' then raise exception 'central suspend';end if;
