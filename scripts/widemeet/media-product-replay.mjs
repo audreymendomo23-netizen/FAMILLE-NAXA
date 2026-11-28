@@ -297,6 +297,14 @@ try{
    assert.equal((await tr(hs.access_token,"search",{...q,query:"x"})).status,403);
    assert.equal((await tr(hs.access_token,"search",{...q,recording_id:randomUUID()})).status,403);
    console.log("PASS canonical original-language archive cues, unknown speaker, literal source search and room/role denial");
+   const question={...captured,query:"What about the project?"};
+   const evidence=await tk(hs.access_token,"question",question);assert.equal(evidence.method,"question-evidence-v1");assert.equal(evidence.recording_id,speechRecordingId);assert.equal(evidence.approved,false);assert.ok(evidence.matches.length>0&&evidence.matches.length<=8);
+   for(const hit of evidence.matches){const {segment_index,...source}=hit;assert.deepEqual(source,live.result.segments[segment_index]);}
+   assert.deepEqual((await tk(hs.access_token,"question",{...question,query:"xyznonexistentword"})).matches,[]);
+   assert.equal((await tr(gs.access_token,"question",question)).status,403);
+   assert.equal((await tr(hs.access_token,"question",{...question,recording_id:randomUUID()})).status,403);
+   assert.equal((await tr(hs.access_token,"question",{...question,query:"x"})).status,403);
+   console.log("PASS private question evidence returns only exact permitted transcript excerpts, no approval, missing evidence and guest denial");
    const review=live.result.review;assert.equal(review.method,"extractive-review-v1");assert.equal(review.recording_id,speechRecordingId);assert.ok(review.excerpts.length>0);
    for(const item of [...review.excerpts,...review.decision_candidates]){const {segment_index,...source}=item;assert.deepEqual(source,live.result.segments[segment_index]);}
    const selection={...captured,indices:[review.excerpts[0].segment_index]};

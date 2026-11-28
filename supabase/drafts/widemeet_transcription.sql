@@ -80,6 +80,27 @@ returns jsonb language sql immutable security invoker set search_path=pg_catalog
 $wm$;
 revoke all on function public.wm_transcription_search(jsonb,uuid,text) from public,anon,authenticated;
 grant execute on function public.wm_transcription_search(jsonb,uuid,text) to service_role;
+-- Question evidence: bounded linguistic word matching on the authorized recording.
+-- Returns only exact excerpts, not generated answers or inferred facts.
+create function public.wm_transcription_question(p_result jsonb,p_recording uuid,p_query text)
+returns jsonb language sql immutable security invoker set search_path=pg_catalog,public as $wm$
+ with settings as (
+  select case p_result->>'language' when 'fr' then 'pg_catalog.french'::regconfig when 'en' then 'pg_catalog.english'::regconfig else 'pg_catalog.simple'::regconfig end as cfg
+ ), terms as (
+  select cfg,tsvector_to_array(to_tsvector(cfg,left(btrim(p_query),200))) as words from settings
+ ), scored as (
+  select seg,ord,(select count(*) from unnest(words) q(word) where word=any(tsvector_to_array(to_tsvector(cfg,seg->>'text')))) as score
+  from terms cross join lateral jsonb_array_elements(coalesce(p_result->'segments','[]'::jsonb)) with ordinality as t(seg,ord)
+  where length(btrim(p_query)) between 3 and 200
+ ), ranked as (
+  select seg,ord,score from scored where score>0 order by score desc,(seg->>'uncertain')::boolean,ord limit 8
+ )
+ select jsonb_build_object('method','question-evidence-v1','recording_id',p_recording,'approved',false,
+ 'matches',coalesce(jsonb_agg(seg||jsonb_build_object('segment_index',ord-1) order by score desc,(seg->>'uncertain')::boolean,ord),'[]'::jsonb))
+ from ranked
+$wm$;
+revoke all on function public.wm_transcription_question(jsonb,uuid,text) from public,anon,authenticated;
+grant execute on function public.wm_transcription_question(jsonb,uuid,text) to service_role;
 create function public.wm_transcription_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare s record; rid uuid; recid uuid; j public.wm_transcription_jobs%rowtype; v jsonb; src jsonb; selection jsonb; review jsonb; selected_items jsonb; segment_no integer; speaker_no integer; expected_rev integer; current_rev integer; event_id uuid; previous_event jsonb; annotation jsonb;
@@ -151,6 +172,9 @@ begin
  elsif p_action='search' then
   if not found or j.status<>'complete' or jsonb_typeof(p_data->'query') is distinct from 'string' or length(btrim(p_data->>'query')) not between 2 and 120 then return null;end if;
   return public.wm_transcription_search(j.result,recid,p_data->>'query');
+ elsif p_action='question' then
+  if not found or j.status<>'complete' or jsonb_typeof(p_data->'query') is distinct from 'string' or length(btrim(p_data->>'query')) not between 3 and 200 then return null;end if;
+  return public.wm_transcription_question(j.result,recid,p_data->>'query');
  elsif p_action='read' then
   if not found then return jsonb_build_object('status','not_requested','attempts',0);end if;
  else return null;end if;

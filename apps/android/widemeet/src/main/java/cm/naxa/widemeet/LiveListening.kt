@@ -14,7 +14,7 @@ import org.json.JSONObject
  fun tr(fr:String,en:String)=if(english)en else fr
  val context=LocalContext.current
  var enabled by remember(roomId,session.deviceId){mutableStateOf(false)}
- val languages=listOf("original" to tr("Piste originale","Original audio"),"en" to "English","fr" to "Français","ff" to "Fulfulde","es" to "Español","it" to "Italiano","zh" to "中文")
+ val languages=listOf("original" to tr("Piste originale","Original audio"),"en" to "English","fr" to "Français","ff" to "Fulfulde","es" to "Español","it" to "Italiano","zh" to "中文","wes" to "Cameroon Pidgin English","ewo" to "Ewondo","dua" to "Duala","bas" to "Basaa","bbj" to "Ghomala’","bum" to "Bulu","bax" to "Bamoun","ybb" to "Yemba","mhk" to "Mungaka","ar" to "العربية","pt" to "Português","de" to "Deutsch")
  var target by remember(roomId,session.deviceId){mutableStateOf("en")}
  var chosen by remember(roomId,session.deviceId){mutableStateOf(false)}
  var menu by remember{mutableStateOf(false)}

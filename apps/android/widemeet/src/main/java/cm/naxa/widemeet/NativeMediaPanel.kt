@@ -150,9 +150,9 @@ import java.net.URI
  val r=room;if(r!=null)tracks.forEach{track->key(track){RemoteVideo(r,track)}}
  if(status=="connected"){
  if(!captionTouched&&languagePrefs!=null)TextButton(onClick={captionTouched=true;captionLanguage=languagePrefs?.optString("subtitles","original")?:"original"}){Text(tr("Utiliser ma langue de sous-titres","Use my preferred subtitle language"))}
- val languages=listOf("off" to tr("Désactivés","Off"),"original" to tr("Original","Original"),"fr" to "Français","en" to "English","ff" to "Fulfulde","es" to "Español","it" to "Italiano","zh" to "中文")
+ val languages=listOf("off" to tr("Désactivés","Off"),"original" to tr("Original","Original"),"fr" to "Français","en" to "English","ff" to "Fulfulde","es" to "Español","it" to "Italiano","zh" to "中文","wes" to "Cameroon Pidgin English","ewo" to "Ewondo","dua" to "Duala","bas" to "Basaa","bbj" to "Ghomala’","bum" to "Bulu","bax" to "Bamoun","ybb" to "Yemba","mhk" to "Mungaka","ar" to "العربية","pt" to "Português","de" to "Deutsch")
  Text(tr("Sous-titres (audio consenti)","Captions (consented audio)"))
- Box{OutlinedButton(onClick={captionMenu=true}){Text(languages.firstOrNull{it.first==captionLanguage}?.second?:captionLanguage)};DropdownMenu(expanded=captionMenu,onDismissRequest={captionMenu=false}){for((code,name) in languages)DropdownMenuItem(text={Text(name)},onClick={captionTouched=true;captionLanguage=code;captionMenu=false})}}
+ Box{OutlinedButton(onClick={captionMenu=true}){Text(languages.firstOrNull{it.first==captionLanguage}?.second?:tr("Indisponible","Unavailable"))};DropdownMenu(expanded=captionMenu,onDismissRequest={captionMenu=false}){for((code,name) in languages)DropdownMenuItem(text={Text(name)},onClick={captionTouched=true;captionLanguage=code;captionMenu=false})}}
  if(captionLanguage!="off"){val c=caption
  Text(if(c!=null)c.optString("text").ifBlank{tr("Silence","Silence")}else if(captionState=="unavailable")tr("Sous-titres indisponibles ou consentement absent.","Captions unavailable or consent missing.")else tr("En attente de parole enregistrée avec consentement.","Waiting for consented recorded speech."))
  if(c?.optBoolean("fallback")==true)Text(tr("Traduction indisponible : langue originale.","Translation unavailable: original language."))

@@ -48,6 +48,6 @@ private val languageOptions=listOf("fr" to "Français","en" to "English","ff" to
  if(preview.isNotEmpty())Text(preview);if(saved)Text(tr("Préférences enregistrées.","Preferences saved."))
  }
  TextButton(onClick=onArchives){Text(tr("Ouvrir mes documents","Open my documents"))}
- Text(tr("La traduction simultanée n’est pas encore disponible. L’exemple n’utilise aucun contenu de réunion.","Simultaneous translation is not yet available. The sample uses no meeting content."))
+ Text(tr("L’écoute traduite du français vers l’anglais dépend des autorisations de la réunion et des voix disponibles sur votre appareil. L’aperçu ne contient aucun contenu de réunion.","Translated listening from French to English depends on meeting permissions and available device voices. The preview uses no meeting content."))
  }}
 }
