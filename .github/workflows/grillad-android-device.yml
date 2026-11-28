@@ -4,6 +4,7 @@ on:
     branches: [work/grillad-foundation-20261127]
     paths:
       - 'scripts/grillad/gradle-ci.sh'
+      - 'scripts/grillad/device-gradle-ci.sh'
       - 'supabase/drafts/grillad*.sql'
       - 'supabase/functions/grillad/**'
       - 'supabase/functions/grillad-drive/**'
@@ -18,7 +19,7 @@ permissions:
 jobs:
   emulator:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,7 +34,7 @@ jobs:
       - uses: android-actions/setup-android@v4
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Build unconfigured debug APK (no production access)
-        run: bash scripts/grillad/gradle-ci.sh :grillad:assembleDebug
+        run: bash scripts/grillad/device-gradle-ci.sh
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
