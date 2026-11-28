@@ -859,3 +859,7 @@ Inscription Web et Android remplacées par un formulaire interne identifiant/mot
 
 ### 91.6. Recettes internes
 Recette @signup remplacée par inscription navigateur via véritable Auth local et alias interne, ouverture caisse, durée serveur, isolation inter-tenant, absence paiement, contrôle RPC direct, expiration, rejeu sans prolongation et doublon téléphone déclaré. Suppression dépendance Mailpit dans la recette. Adaptation des sélecteurs login de non-régression FR/EN. Résultats à constater sur le nouveau SHA ; pas de vert anticipé.
+
+
+### Authentification hybride — décision du 28 novembre 2026
+Trois parcours : interne GRILLAD (sans OTP/email), Google via infrastructure OAuth NAXA sans compte préalable, NAXA SSO. Deux projets Supabase distincts. Première brique : validation serveur de l'identité auprès du projet NAXA fixé, sans accepter de rôle ou de claims fournis par le client. Tests négatifs ajoutés au gate. Cette brique ne crée pas encore de session FAMILLE, ne rattache pas les comptes et ne provisionne pas l'essai. Restent : flux OAuth PKCE et callbacks Web/Android, échange sécurisé de session à usage unique, liaison durable issuer/subject avec contrôle de double possession, provisionnement transactionnel et recettes E2E. Aucun changement de production NAXA.
