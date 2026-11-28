@@ -1,6 +1,6 @@
 # NAXA SERVICES — document de continuité dédié
 
-**Version :** 1.5  
+**Version :** 1.6  
 **Date de mise à jour :** 28 novembre 2026  
 **Dépôt :** `audreymendomo23-netizen/FAMILLE-NAXA`  
 **Branche de travail :** `work/naxa-services-completion-20261120`  
@@ -1949,3 +1949,12 @@ Authentification de la cible avec compte de recette autorisé, contrôle des dro
 - Maturité commerciale V1.0 = parcours retenus qualifiés sur le candidat exact et sa cible / parcours retenus. Dénominateur à figer après inventaire action par action et dépendances, aucun pourcentage anticipé.
 - Réalisation CDC = registre atomique complet du CDC ; pourcentage non calculable actuellement (coverageComplete=false). Le 8/43 historique est un sous-ensemble de réserves et non un taux de construction.
 - Relancer les recettes Gate, Replay isolé, PWA, backup, APK et readiness selon les workflows existants au SHA de gel ; conserver la matrice de 43 critères en parallèle. Ne pas supprimer les assertions de fonctionnalités reportées dans les tests historiques. Le verdict de lancement est NO-GO jusqu'aux preuves terminales du profil V1.0 et aux contrôles indispensables sur cible. 
+
+
+### 23.5 — 28 novembre : exception propriétaire au gel V1.0 — pointage GPS/selfie avancé
+
+Le pointage probant est réintégré au périmètre commercial V1.0, et non reporté à V1.1. Cette décision prévaut sur §23.1–23.2 uniquement pour ce module. Aucun autre module reporté n'est réactivé. Candidat Web/PWA commercial : flag ATTENDANCE=true ; candidat Android Release : ATTENDANCE_ENABLED=true. Le profil de qualification existant et les 43 critères restent intacts.
+
+Réutiliser le parcours existant : prises/fins de service GPS obligatoire pour B/C, pauses selon politique, selfie configurable par responsable habilité, poste/site autorisés, horodatage et fraîcheur, refus si preuve obligatoire manquante, staging opaque et anti-rejeu, historique privé et contrôle du supérieur habilité, aucun suivi GPS permanent. Respecter les règles existantes du solo et ne pas inventer de sanction, biométrie faciale ou nouvelle exigence. Le consentement/information, la minimisation et la rétention des données doivent être vérifiés avant lancement.
+
+Preuves historiques : Gate #781 / Replay #40 (GPS obligatoire v21), Replay #52 (Auth/Storage, GPS/caméra simulés, prise/pause/reprise/fin, revue privée), tests v16/v17 en rollback. Ces preuves ne valent pas qualification physique ou activation hébergée. Les réserves B1-05, B1-06, B1-07 restent ouvertes : politique poste/rôle, nettoyage effectif et preuves sur appareils réels, selon le CDC et la matrice existante. Recette exacte du candidat : Gate, Replay et Android ; vérifier permissions refusées, GPS obligatoire B/C, selfie requis, changement de poste, expiration, anti-rejeu, contrôle de l'accès aux preuves et rejet sans preuve. Les flags ne remplacent ni les droits serveur ni les migrations autorisées. Aucun main, déploiement manuel, migration hébergée, création de compte ni signature réalisés lors de cette décision. Le verdict commercial demeure NO-GO tant que les contrôles indispensables ne sont pas prouvés.
