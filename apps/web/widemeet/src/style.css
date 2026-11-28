@@ -51,3 +51,5 @@
 .wm-signin-brand p{font-size:14px;line-height:1.4}
 .wm-signin-copy h1{text-align:center}
 .shell[data-wm-auth="signin"] main>p{background:var(--wm-card);color:var(--naxa-text);padding:12px;border-radius:12px;max-width:440px}
+
+.wm-auth-language{display:flex;gap:2px;padding:3px;background:var(--wm-card);border-radius:14px;align-items:center}.wm-auth-language button{min-height:44px;min-width:44px;padding:6px 8px;border:0;font-weight:600}.wm-auth-language button[aria-pressed=true]{background:var(--wm-deep);color:white}[data-theme=dark] .wm-auth-language button[aria-pressed=true]{background:var(--wm-green);color:#121714}.wm-signin-copy>.wm-signup-link{border:1px solid var(--wm-line);font-weight:700;background:var(--wm-card)}.wm-signup h1{text-align:center;font-size:clamp(26px,5vw,32px)}.wm-signup select{font:inherit;min-height:48px;width:100%;border:1px solid var(--wm-line);border-radius:12px;padding:10px 12px;background:var(--naxa-surface);color:var(--naxa-text)}.wm-signup-notice{font-size:14px;padding:12px;border:1px solid var(--wm-line);border-radius:12px;line-height:1.4}.wm-signup button:disabled{opacity:.55;cursor:default}

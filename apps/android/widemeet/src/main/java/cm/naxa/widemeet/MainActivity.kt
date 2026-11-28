@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -92,6 +93,7 @@ class MainActivity:ComponentActivity(){
  Scaffold(containerColor=if(signIn)Color.Transparent else colors.background,contentWindowInsets=WindowInsets.safeDrawing,topBar={
  Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
   if(!signIn)Surface(color=White,shape=MaterialTheme.shapes.medium,modifier=Modifier.weight(1f)){Image(painterResource(R.drawable.widemeet_logo),contentDescription="WideMeet",modifier=Modifier.height(44.dp).padding(6.dp))}else Spacer(Modifier.weight(1f))
+  if(signIn)Surface(color=colors.surface,shape=MaterialTheme.shapes.medium){Row{listOf(false,true).forEach{en->TextButton(onClick={english=en},colors=ButtonDefaults.textButtonColors(containerColor=if(english==en)colors.primary else Color.Transparent,contentColor=if(english==en)colors.onPrimary else colors.onSurface),modifier=Modifier.testTag(if(en)"wm-auth-en" else "wm-auth-fr").semantics{contentDescription=if(en)"English" else "Français";selected=english==en}){Text(if(en)"EN" else "FR")}}}}
   TextButton(onClick={toggle()},colors=if(signIn)ButtonDefaults.textButtonColors(containerColor=colors.surface,contentColor=colors.onSurface)else ButtonDefaults.textButtonColors(),modifier=Modifier.testTag("wm-theme").semantics{contentDescription=tr(if(dark)"Mode clair" else "Mode nuit",if(dark)"Light mode" else "Dark mode")}){Text(if(dark)"☀" else "☾",fontSize=22.sp)}
   if(!signIn)TextButton(onClick={menu=true},modifier=Modifier.testTag("wm-menu").semantics{contentDescription=tr("Options","Options")}){Text("☰",fontSize=22.sp)}
  }
