@@ -16,7 +16,7 @@
 .action{grid-template-rows:auto auto 1fr;gap:10px;align-items:start;padding:14px;overflow:hidden;box-shadow:0 6px 18px #07552c0a}
 .action strong{font-size:clamp(13px,2vw,16px)}
 .action .wm-action-icon{font-weight:500}
-.wm-signin{display:grid;gap:20px;align-items:start}
+.wm-signin{display:grid;gap:20px;align-items:start;width:100%;max-width:440px;margin-inline:auto;padding:clamp(20px,5vw,32px)}
 .wm-signin form label{display:grid;gap:6px}
 .wm-signin form label:has(input[type=checkbox]){display:flex;align-items:center;gap:9px}
 .wm-signin input:not([type=checkbox]){width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--wm-line);border-radius:12px;color:var(--naxa-text);background:var(--naxa-surface);font:inherit}
@@ -31,7 +31,16 @@
 @media(hover:hover){[data-motion=on] .action:hover{transform:translateY(-3px);box-shadow:0 12px 26px #07552c20;border-color:var(--wm-green)}}
 @keyframes wm-visual-arrive{from{transform:translateY(12px)}to{transform:translateY(0)}}
 @keyframes wm-drawer-in{from{transform:translateX(24px)}to{transform:translateX(0)}}
-@media(min-width:760px){.wm-hero{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}.wm-signin{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.wm-signin .wm-signin-copy{grid-column:2;grid-row:1}.wm-signin>.wm-visual{grid-column:1;grid-row:1;position:sticky;top:110px}.action{min-height:190px}}
+@media(min-width:760px){.wm-hero{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}.action{min-height:190px}}
 @media(prefers-reduced-motion:reduce){[data-motion=on] .wm-visual,[data-motion=on] .overlay aside,[data-motion=on] .tour{animation:none!important}[data-motion=on] .action,[data-motion=on] nav button{transition:none!important}}
 
 .wm-signin-copy{display:grid;gap:12px;min-width:0}
+
+.shell[data-wm-auth="signin"]{padding-bottom:env(safe-area-inset-bottom)}
+.shell[data-wm-auth="signin"] .brand{animation:none}
+.shell[data-wm-auth="signin"] main{min-height:calc(100dvh - 110px);align-content:center;justify-items:center}
+.shell[data-wm-auth="signin"] main>.card{width:100%;max-width:440px}
+.wm-signin-copy>button{border-color:transparent;background:transparent;color:var(--wm-deep);min-height:44px;padding:6px 10px}
+[data-theme=dark] .wm-signin-copy>button{color:var(--wm-green)}
+.wm-signin-copy>button:disabled{opacity:.55;cursor:default}
+.wm-signin-copy h1{font-size:clamp(26px,5vw,32px)}

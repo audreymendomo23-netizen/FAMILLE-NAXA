@@ -9,10 +9,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import cm.naxa.widemeet.BuildConfig
-import cm.naxa.widemeet.WideMeetPhoto
 import java.util.UUID
 
-@Composable fun SignIn(english:Boolean,configured:Boolean,gateway:AuthGateway,onSession:(Session)->Unit,onBack:()->Unit,animate:Boolean=false){
+@Composable fun SignIn(english:Boolean,configured:Boolean,gateway:AuthGateway,onSession:(Session)->Unit,onBack:()->Unit){
  var identifier by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var show by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var recoveryError by remember{mutableStateOf(false)};var recoveryNotice by remember{mutableStateOf(false)}
  var keep by remember{mutableStateOf(false)};var pin by remember{mutableStateOf("")};var pinConfirm by remember{mutableStateOf("")}
  var signup by remember{mutableStateOf(false)};var enterprise by remember{mutableStateOf(false)};var display by remember{mutableStateOf("")};var workspace by remember{mutableStateOf("")};var confirm by remember{mutableStateOf("")};var accepted by remember{mutableStateOf(false)};var registered by remember{mutableStateOf("")};var requestId by remember{mutableStateOf(UUID.randomUUID().toString())}
@@ -42,7 +41,6 @@ import java.util.UUID
  Card(Modifier.fillMaxWidth()){
  Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
  Text(tr("Connexion","Sign in"),style=MaterialTheme.typography.headlineMedium,modifier=Modifier.testTag("wm-signin-title"))
- WideMeetPhoto("signin",animate,122.dp)
  OutlinedTextField(identifier,{identifier=it.take(27)},enabled=!busy,label={Text(tr("Identifiant WideMeet","WideMeet ID"))},singleLine=true,modifier=Modifier.fillMaxWidth())
  OutlinedTextField(password,{password=it.take(256)},enabled=!busy,label={Text(tr("Mot de passe","Password"))},singleLine=true,visualTransformation=if(show)VisualTransformation.None else PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
  TextButton(onClick={show=!show}){Text(if(show)tr("Masquer le mot de passe","Hide password")else tr("Afficher le mot de passe","Show password"))}
@@ -51,7 +49,7 @@ import java.util.UUID
  OutlinedTextField(pin,{pin=it.filter{c->c in '0'..'9'}.take(4)},enabled=!busy,label={Text(tr("Code local à 4 chiffres","4-digit local PIN"))},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth())
  OutlinedTextField(pinConfirm,{pinConfirm=it.filter{c->c in '0'..'9'}.take(4)},enabled=!busy,label={Text(tr("Confirmer le code","Confirm PIN"))},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth())
  }
- Button(modifier=Modifier.testTag("wm-signin-submit"),enabled=configured&&!busy&&identifier.isNotBlank()&&password.isNotBlank()&&(!keep||pin.length==4&&pin==pinConfirm),onClick={busy=true;error=false;recoveryError=false;recoveryNotice=false;scope.launch{try{onSession(gateway.login(identifier,password,keep,pin))}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true}finally{password="";pin="";pinConfirm="";busy=false}}}){Text(if(busy)tr("Connexion…","Signing in…")else tr("Se connecter","Sign in"))}
+ Button(modifier=Modifier.fillMaxWidth().testTag("wm-signin-submit"),enabled=configured&&!busy&&identifier.isNotBlank()&&password.isNotBlank()&&(!keep||pin.length==4&&pin==pinConfirm),onClick={busy=true;error=false;recoveryError=false;recoveryNotice=false;scope.launch{try{onSession(gateway.login(identifier,password,keep,pin))}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true}finally{password="";pin="";pinConfirm="";busy=false}}}){Text(if(busy)tr("Connexion…","Signing in…")else tr("Se connecter","Sign in"))}
  if(!configured)Text(tr("Connexion momentanément indisponible.","Sign-in temporarily unavailable."))
  if(error)Text(tr("Connexion impossible. Vérifiez vos identifiants ou réessayez plus tard.","Unable to sign in. Check your credentials or try again later."),color=MaterialTheme.colorScheme.error)
  TextButton(enabled=configured&&!busy&&identifier.isNotBlank(),onClick={busy=true;error=false;recoveryError=false;recoveryNotice=false;scope.launch{try{gateway.requestRecovery(identifier);recoveryNotice=true}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){recoveryError=true}finally{busy=false}}}){Text(tr("Mot de passe oublié ?","Forgot password?"))}
@@ -60,7 +58,7 @@ import java.util.UUID
  if(recoveryNotice)Text(tr("Demande reçue. Un contrôle d’identité est nécessaire avant toute récupération.","Request received. Identity verification is required before recovery."))
  if(recoveryError)Text(tr("Demande non confirmée. Vérifiez votre identifiant ou réessayez plus tard.","Request not confirmed. Check your ID or try again later."),color=MaterialTheme.colorScheme.error)
  if(BuildConfig.WIDEMEET_SIGNUP_TEST)TextButton(enabled=configured&&!busy,onClick={signup=true;error=false;password=""}){Text(tr("Créer un compte","Create an account"))}
- TextButton(onClick=onBack){Text(tr("Retour","Back"))}
+ TextButton(onClick=onBack,modifier=Modifier.testTag("wm-signin-back")){Text(tr("Retour","Back"))}
  }
  }
 }
