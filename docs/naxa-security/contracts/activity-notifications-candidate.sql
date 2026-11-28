@@ -2,7 +2,7 @@
 begin;
 create table public.sec_activity_notifications(
  id uuid primary key default gen_random_uuid(),organization_id uuid not null,site_id uuid not null,user_id uuid not null references auth.users(id),
- source text not null check(source in ('support','shift','safety','fire','warning')),
+ source text not null check(source in ('support','shift','safety','fire','warning','alarm')),
  source_id uuid not null,event_type text not null,created_at timestamptz not null default now(),read_at timestamptz,
  unique(user_id,source,source_id,event_type),foreign key(organization_id,site_id) references public.sec_sites(organization_id,id)
 );
