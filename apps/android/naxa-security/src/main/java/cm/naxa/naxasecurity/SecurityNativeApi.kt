@@ -86,6 +86,9 @@ internal object SecurityNativeApi {
  suspend fun activityChannels(s:SecurityNativeSession,site:SecurityNativeSite):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);val v=JSONObject(call("/rest/v1/rpc/sec_activity_channels",s.token,JSONObject().put("p_org",site.organization).put("p_site",site.id)));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("user_id")==s.user);val a=v.getJSONObject("channels");check(listOf("fcm","web_push","sms","whatsapp","email").all{a.opt(it) is Boolean});a
  }
+ suspend fun tracker(s:SecurityNativeSession,site:SecurityNativeSite,history:Boolean,body:JSONObject):JSONObject=withContext(Dispatchers.IO){
+  checkScope(s,site);val p=JSONObject(body.toString()).put("p_org",site.organization).put("p_site",site.id);val v=JSONObject(call("/rest/v1/rpc/"+if(history)"sec_tracker_history" else "sec_tracker_manage",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id);if(history){check(v.optString("device_id")==p.optString("p_device")&&v.opt("position_authenticated")==false);v.getJSONArray("rows");v.getJSONArray("zones")}else{check(v.optString("actor_id")==s.user&&v.opt("asset_only")==true);v.getJSONArray("trackers")};v
+ }
  suspend fun billingStatus(s:SecurityNativeSession,site:SecurityNativeSite):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);val v=JSONObject(call("/rest/v1/rpc/sec_billing_status",s.token,JSONObject().put("p_org",site.organization).put("p_site",site.id)));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user&&v.opt("local_protection_unchanged")==true);v.getJSONArray("history");v
  }

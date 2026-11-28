@@ -13,7 +13,7 @@ begin
  status:=case when current_plan.id is not null then case when covered then 'active' else 'site_not_covered' end when last_end is null then 'not_subscribed' when last_end<=now() then 'expired' else 'scheduled' end;
  if r in ('owner','manager') then
  select coalesce(jsonb_agg(to_jsonb(h) order by h.starts_at desc),'[]'::jsonb) into history from (
-  select s.id,s.plan,s.period,s.starts_at,s.ends_at,p.amount_fcfa,p.provider_confirmed_at from public.sec_subscriptions s join public.sec_payment_receipts p on p.id=s.receipt_id and p.organization_id=s.organization_id and p.site_id=s.site_id where s.organization_id=p_org order by s.starts_at desc limit 100) h;
+  select s.id,s.plan,s.period,s.starts_at,s.ends_at,p.amount_fcfa,p.provider_confirmed_at from public.sec_subscriptions s join public.sec_payment_receipts p on p.id=s.receipt_id and p.organization_id=s.organization_id and p.site_id=s.site_id where s.organization_id=p_org and (r='owner' or s.site_id=p_site) order by s.starts_at desc limit 100) h;
  else history:='[]'::jsonb;end if;
  return jsonb_build_object('organization_id',p_org,'site_id',p_site,'actor_id',auth.uid(),'status',status,'covered',covered,
  'current_plan',current_plan.plan,'current_ends_at',current_plan.ends_at,'next_plan',next_plan.plan,'next_starts_at',next_plan.starts_at,
