@@ -312,7 +312,14 @@ end $fn$;
 create function public.grillad_drive_claim() returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
 declare d grillad_private.drive_connections%rowtype;p grillad_private.backup_preferences%rowtype;local_ts timestamp:=now() at time zone 'Africa/Douala';slot text;candidate record;
 begin
- for candidate in select c.org,c.site,c.actor from grillad_private.drive_connections c where (c.leased_at is null or c.leased_at<now()-interval '15 minutes') order by c.leased_at nulls first limit 100 loop
+ for candidate in select c.org,c.site,c.actor from grillad_private.drive_connections c left join grillad_private.backup_preferences bp on bp.org=c.org and bp.site=c.site and bp.actor=c.actor
+ where (c.leased_at is null or c.leased_at<now()-interval '15 minutes')
+ and (c.requested is not null or (bp.frequency<>'off' and extract(hour from local_ts)*60+extract(minute from local_ts)>=bp.local_minute and
+ ((bp.frequency='daily' and c.last_slot is distinct from 'daily-'||local_ts::date::text)
+ or (bp.frequency='weekly' and extract(isodow from local_ts)=bp.weekday and c.last_slot is distinct from 'weekly-'||local_ts::date::text)
+ or (bp.frequency='monthly' and extract(day from local_ts)=bp.monthday and c.last_slot is distinct from 'monthly-'||to_char(local_ts,'YYYY-MM')))))
+ and grillad_private.drive_owner(c.org,c.site,c.actor)
+ order by c.leased_at nulls first,c.last_success nulls first,c.org,c.site,c.actor limit 100 loop
   select * into d from grillad_private.drive_connections where org=candidate.org and site=candidate.site and actor=candidate.actor for update skip locked;
   if not found or (d.leased_at is not null and d.leased_at>=now()-interval '15 minutes') or not grillad_private.drive_owner(d.org,d.site,d.actor) then continue;end if;
   select * into p from grillad_private.backup_preferences where org=d.org and site=d.site and actor=d.actor;

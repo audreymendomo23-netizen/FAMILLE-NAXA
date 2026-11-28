@@ -186,6 +186,7 @@ jobs:
           else
             psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_auth_bridge_assertions.sql
             psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_operations_assertions.sql
+            psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_transverse_assertions.sql
           fi
   api-contracts:
     name: lot-01 (50 API contracts)
