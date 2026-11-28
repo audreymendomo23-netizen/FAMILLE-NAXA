@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from "react";
 import {BriefingQuestions} from "./briefing-questions";
+import {BriefingReminders} from "./briefing-reminders";
 import {privateRequest} from "./private-request";
 import {downloadLocal} from "./calendar-export";
 import type {WebAuthAccount} from "../auth/session";
@@ -197,5 +198,5 @@ function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Prop
  <button className="btn primary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>{if(playing){stop();return;}void load().then(r=>{if(r&&mounted.current&&!r.abort.signal.aborted&&controller.current===r.abort)speak(r.data);});}}>{playing?t.stop:t.play}</button>
  {playing&&<button className="btn secondary" onClick={()=>{if(!audio.current)return;if(paused)window.speechSynthesis.resume();else window.speechSynthesis.pause();setPaused(!paused);}}>{({fr:paused?"Reprendre":"Pause",en:paused?"Resume":"Pause","ff-CM":paused?"Jokku":"Fowtu",es:paused?"Continuar":"Pausa",it:paused?"Riprendi":"Pausa","zh-CN":paused?"继续":"暂停"})[lang]}</button>}
  <button className="btn secondary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>void load()}>{t.load}</button>
- {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang)}</p>}<PeriodBriefing key={day} account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} day={day} lang={lang}/></section>;
+ {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang)}</p>}<BriefingReminders account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} lang={lang}/><PeriodBriefing key={day} account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} day={day} lang={lang}/></section>;
 }

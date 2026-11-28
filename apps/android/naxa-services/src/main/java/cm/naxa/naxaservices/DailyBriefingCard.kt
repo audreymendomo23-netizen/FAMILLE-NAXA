@@ -20,6 +20,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import org.json.JSONArray
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -76,6 +77,20 @@ internal fun briefingText(report:JSONObject,language:String):String {
   append(w.missing)
  }
 }
+internal fun nativeBriefingPeriod(rows:List<JSONObject>,end:LocalDate,days:Int):Map<String,Long?> {
+ require(days in setOf(2,7,30)&&rows.size==days)
+ rows.forEachIndexed{i,r->validateNativeBriefing(r,end.minusDays((days-1-i).toLong()).toString())}
+ require(rows.all{it.getString("scope")==rows.first().getString("scope")})
+ fun total(values:List<Long?>):Long? {
+  if(values.any{it==null})return null
+  return values.fold(0L){a,b->Math.addExact(a,b!!)}.also{require(it<=9007199254740991L)}
+ }
+ val site=rows.first().getString("scope")=="site"
+ val metrics=linkedMapOf<String,Long?>("appointments" to total(rows.map{briefingCount(it.getJSONObject("appointments").opt("scheduled_count"))}),"completed" to total(rows.map{briefingCount(it.getJSONObject("appointments").opt("completed_count"))}))
+ if(site)for((key,field) in listOf("revenue" to "revenue_xaf","sales" to "confirmed_sales_count","uncosted" to "uncosted_sales_count"))metrics[key]=total(rows.map{it.optJSONObject("finance")?.let{f->briefingCount(f.opt(field))}})
+ metrics["clocks"]=total(rows.map{it.optJSONObject("personal_clock_events")?.let{p->briefingCount(p.opt("event_count"))}})
+ return metrics
+}
 @Composable
 internal fun DailyBriefingCard(session:AuthSession,siteId:String){
  if(!BuildConfig.BRIEFING_ENABLED||siteId.isBlank()||session.requirePasswordChange)return
@@ -101,6 +116,11 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   var busy by remember{mutableStateOf(false)}
   var error by remember{mutableStateOf(false)}
   var report by remember{mutableStateOf<JSONObject?>(null)}
+  var periodDays by remember{mutableStateOf(7)}
+  var period by remember{mutableStateOf<Map<String,Long?>?>(null)}
+  var archiveIds by remember{mutableStateOf<List<Pair<String,String>>>(emptyList())}
+  var reminderMode by remember{mutableStateOf("off")}
+  var notice by remember{mutableStateOf(false)}
   val w=briefingWords.getValue(language)
   DisposableEffect(context){
    var disposed=false
@@ -126,7 +146,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
    playing=tts.speak(spokenText.substring(segmentBase),TextToSpeech.QUEUE_FLUSH,null,id)==TextToSpeech.SUCCESS
    if(!playing){activeUtterance=null;paused=true;error=true}else error=false
   }
-  fun play(r:JSONObject){
+  fun playText(text:String){
    val tts=engine
    if(!ready||tts==null){error=true;return}
    val wanted=Locale.forLanguageTag(language)
@@ -135,13 +155,13 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
    stop()
    if(tts.setVoice(voice)!=TextToSpeech.SUCCESS){error=true;return}
    tts.setSpeechRate(speed)
-   spokenText=briefingText(r,language);spokenOffset=0;speakRemaining()
+   spokenText=text;spokenOffset=0;speakRemaining()
   }
   fun load(andPlay:Boolean){
    if(!foreground||!briefingDateAllowed(date))return
    val requestedDay=date.toString()
    loadJob?.cancel();val generation=++requestGeneration
-   stop();busy=true;error=false;report=null
+   stop();busy=true;error=false;report=null;period=null;archiveIds=emptyList();notice=false
    loadJob=scope.launch{
     try{
      val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_daily_briefing",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_day",requestedDay)))
@@ -149,15 +169,35 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
      briefingText(r,language)
      if(!foreground||generation!=requestGeneration)return@launch
      report=r
-     if(andPlay)play(r)
+     if(andPlay)playText(briefingText(r,language))
     }catch(c:CancellationException){throw c}catch(_:Exception){if(generation==requestGeneration&&foreground)error=true}finally{if(generation==requestGeneration)busy=false}
+   }
+  }
+  fun label(fr:String,en:String,ff:String,es:String,it:String,zh:String)=when(language){"en"->en;"ff-CM"->ff;"es"->es;"it"->it;"zh-CN"->zh;else->fr}
+  fun metricLabel(k:String)=when(k){"appointments"->w.appointment;"completed"->w.completed;"revenue"->w.revenue;"sales"->w.sales;"clocks"->w.attendance;else->label("Ventes sans coût","Uncosted sales","Jaaygol alaa njaru","Ventas sin coste","Vendite senza costo","未记录成本的销售")}
+  fun periodAction(action:String,id:String?=null){
+   if(!foreground||busy||!briefingDateAllowed(date))return
+   val end=date;val days=periodDays;val generation=++requestGeneration
+   loadJob?.cancel();stop();busy=true;error=false;notice=false
+   loadJob=scope.launch{
+    try{
+     suspend fun rpc(name:String,body:JSONObject=JSONObject()):String=StaffRosterApi.call(latest,"rpc/"+name,body.put("p_org",latest.account.organizationId).put("p_site",siteId))
+     fun current()=foreground&&generation==requestGeneration
+     when(action){
+      "load"->{val start=end.minusDays((days-1).toLong());require(briefingDateAllowed(start));val rows=(0 until days).map{i->JSONObject(rpc("ns_daily_briefing",JSONObject().put("p_day",start.plusDays(i.toLong()).toString())))};val result=nativeBriefingPeriod(rows,end,days);if(current())period=result}
+      "save"->{require(period!=null&&end.isBefore(briefingToday()));val receipt=JSONObject(rpc("ns_archive_briefing",JSONObject().put("p_id",UUID.randomUUID().toString()).put("p_start",end.minusDays((days-1).toLong()).toString()).put("p_end",end.toString())));UUID.fromString(receipt.getString("id"));if(current())notice=true}
+      "list"->{val rows=JSONArray(rpc("ns_list_briefing_archives"));require(rows.length()<=100);val result=(0 until rows.length()).map{i->val r=rows.getJSONObject(i);val rid=r.getString("id");UUID.fromString(rid);val a=LocalDate.parse(r.getString("period_start"));val b=LocalDate.parse(r.getString("period_end"));require(!a.isAfter(b));rid to "$a — $b"};if(current())archiveIds=result}
+      "open"->{val r=JSONObject(rpc("ns_read_briefing_archive",JSONObject().put("p_id",id)));require(r.getString("id")==id);val rows=r.getJSONArray("snapshot");val ending=LocalDate.parse(r.getString("period_end"));val values=(0 until rows.length()).map{rows.getJSONObject(it)};require(values.all{it.getString("scope")==r.getString("scope")});val result=nativeBriefingPeriod(values,ending,rows.length());if(current()){period=null;report=null;playText(result.entries.joinToString(". "){(k,v)->metricLabel(k)+": "+(v?.toString()?:w.error)});notice=true}}
+      "reminder"->{val result=JSONObject(rpc("ns_set_briefing_reminder",JSONObject().put("p_mode",reminderMode)));require(result.getString("mode")==reminderMode);if(current())notice=true}
+     }
+    }catch(c:CancellationException){throw c}catch(_:Exception){if(foreground&&generation==requestGeneration){period=null;archiveIds=emptyList();error=true}}finally{if(generation==requestGeneration)busy=false}
    }
   }
   DisposableEffect(owner){
    val observer=LifecycleEventObserver{_,event->
     when(event){
      Lifecycle.Event.ON_RESUME->foreground=true
-     Lifecycle.Event.ON_PAUSE,Lifecycle.Event.ON_STOP->{foreground=false;requestGeneration++;loadJob?.cancel();loadJob=null;stop();report=null;busy=false;error=false}
+     Lifecycle.Event.ON_PAUSE,Lifecycle.Event.ON_STOP->{foreground=false;requestGeneration++;loadJob?.cancel();loadJob=null;stop();report=null;period=null;archiveIds=emptyList();notice=false;busy=false;error=false}
      else->Unit
     }
    }
@@ -173,7 +213,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
      val dialog=DatePickerDialog(context,{_,year,month,day->
       val chosen=LocalDate.of(year,month+1,day)
       if(foreground&&briefingDateAllowed(chosen)){
-       requestGeneration++;loadJob?.cancel();loadJob=null;stop();report=null;busy=false;error=false;date=chosen
+       requestGeneration++;loadJob?.cancel();loadJob=null;stop();report=null;period=null;archiveIds=emptyList();notice=false;busy=false;error=false;date=chosen
       }
      },selected.year,selected.monthValue-1,selected.dayOfMonth)
      val zone=ZoneId.systemDefault()
@@ -190,6 +230,18 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
     OutlinedButton(onClick={load(false)},enabled=!busy&&briefingDateAllowed(date)){Text(when(language){"en"->"Refresh";"ff-CM"->"Hesɗitin";"es"->"Actualizar";"it"->"Aggiorna";"zh-CN"->"刷新";else->"Actualiser"})}
     if(error)Text(w.error,color=MaterialTheme.colorScheme.error)
     report?.let{Text(briefingText(it,language))}
+    HorizontalDivider()
+    Text(label("Bilan par période","Period report","Jaŋtol sahaa","Informe por período","Resoconto per periodo","期间报告"),style=MaterialTheme.typography.titleMedium)
+    Row{listOf(2,7,30).forEach{d->TextButton(onClick={stop();periodDays=d;period=null},enabled=!busy&&foreground){Text((if(d==periodDays)"✓ " else "")+d.toString())}}}
+    OutlinedButton(onClick={periodAction("load")},enabled=!busy&&foreground){Text(label("Calculer la période","Calculate period","Lim sahaa","Calcular período","Calcola periodo","计算期间"))}
+    period?.forEach{(k,v)->TextButton(onClick={playText(metricLabel(k)+": "+v)},enabled=!busy&&foreground&&v!=null){Text(metricLabel(k)+": "+(v?.toString()?:w.error))}}
+    OutlinedButton(onClick={periodAction("save")},enabled=!busy&&foreground&&period!=null&&date.isBefore(briefingToday())){Text(label("Archiver","Archive","Resnu","Archivar","Archivia","归档"))}
+    OutlinedButton(onClick={periodAction("list")},enabled=!busy&&foreground){Text(label("Charger les archives","Load archives","Loow rese","Cargar archivos","Carica archivio","加载档案"))}
+    archiveIds.forEach{(id,title)->TextButton(onClick={periodAction("open",id)},enabled=!busy&&foreground){Text(title)}}
+    Text(label("Rappel du bilan","Report reminder","Tintinol jaŋtol","Recordatorio","Promemoria","报告提醒"))
+    Row{listOf("off","daily","weekly").forEach{m->TextButton(onClick={reminderMode=m;notice=false},enabled=!busy&&foreground){Text((if(reminderMode==m)"✓ " else "")+when(m){"daily"->label("Jour","Day","Ñalnde","Día","Giorno","日");"weekly"->label("Semaine","Week","Yontere","Semana","Settimana","周");else->label("Arrêt","Off","Ñifti","No","No","关闭")})}}}
+    OutlinedButton(onClick={periodAction("reminder")},enabled=!busy&&foreground){Text(label("Enregistrer le rappel","Save reminder","Resnu tintinol","Guardar recordatorio","Salva promemoria","保存提醒"))}
+    if(notice)Text(label("Action confirmée","Action confirmed","Kuugal tabbitii","Acción confirmada","Azione confermata","操作已确认"))
    }
   }
  }

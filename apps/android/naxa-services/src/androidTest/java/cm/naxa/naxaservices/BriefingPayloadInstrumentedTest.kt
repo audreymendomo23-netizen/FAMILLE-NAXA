@@ -5,6 +5,12 @@ import org.junit.Test
 class BriefingPayloadInstrumentedTest {
  private fun report()=JSONObject("""{"day":"2026-11-27","generated_at":"2026-11-27T12:00:00Z","scope":"personal","coverage":"partial_confirmed_server_facts","finance":null,"appointments":{"scheduled_count":2,"completed_count":1},"personal_clock_events":{"event_count":3}}""")
  private fun denied(r:JSONObject){assertTrue(runCatching{validateNativeBriefing(r,"2026-11-27")}.isFailure)}
+ @Test fun periodPreservesScopeAndUnknownFinance(){
+  val a=report().put("day","2026-11-26");val b=report()
+  val result=nativeBriefingPeriod(listOf(a,b),java.time.LocalDate.parse("2026-11-27"),2)
+  assertEquals(4L,result["appointments"]);assertEquals(6L,result["clocks"]);assertFalse(result.containsKey("revenue"))
+  assertTrue(runCatching{nativeBriefingPeriod(listOf(a,b.put("scope","site")),java.time.LocalDate.parse("2026-11-27"),2)}.isFailure)
+ }
  @Test fun acceptsConfirmedAndRejectsLeaksAndMalformedCounts(){
   validateNativeBriefing(report(),"2026-11-27")
   denied(report().put("finance",JSONObject("""{"revenue_xaf":200,"confirmed_sales_count":1,"uncosted_sales_count":0}""")))
