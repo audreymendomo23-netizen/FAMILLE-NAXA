@@ -74,4 +74,13 @@ grant execute on function sec_private.catalog_action(uuid,uuid,uuid,text,uuid,js
 create function public.sec_catalog_action(p_org uuid,p_site uuid,p_event uuid,p_op text,p_target uuid,p_detail jsonb) returns jsonb language sql security invoker set search_path=pg_catalog as $r$select sec_private.catalog_action(p_org,p_site,p_event,p_op,p_target,p_detail)$r$;
 revoke all on function public.sec_catalog_action(uuid,uuid,uuid,text,uuid,jsonb) from public,anon;
 grant execute on function public.sec_catalog_action(uuid,uuid,uuid,text,uuid,jsonb) to authenticated;
+create or replace view public.sec_audit_timeline with(security_invoker=true) as
+ select 'field'::text as source,id,organization_id,site_id,actor_id,operation,coalesce(result->>'state','recorded') as state,created_at,target_id as object_id,'field_rpc'::text as origin,id as correlation_id from public.sec_field_events
+ union all select 'service',id,organization_id,site_id,actor_id,operation,coalesce(receipt->>'state','recorded'),created_at,target_id,'service_rpc',id from public.sec_service_action_log
+ union all select 'erp',id,organization_id,site_id,actor_id,operation,coalesce(receipt->>'state','recorded'),created_at,target_id,'erp_rpc',id from public.sec_erp_events
+ union all select 'support',id,organization_id,site_id,actor_id,operation,coalesce(receipt->>'state','recorded'),created_at,case_id,'support_rpc',id from public.sec_support_events
+ union all select 'fire_ack',event_id,organization_id,site_id,actor_id,'acknowledge','recorded',created_at,event_id,'fire_rpc',event_id from public.sec_fire_acknowledgments
+ union all select 'admin',id,organization_id,site_id,actor_id,'site_membership',case when enabled then 'enabled' else 'revoked' end,created_at,target_id,'admin_rpc',id from public.sec_site_admin_log
+ union all select 'access',id,organization_id,site_id,actor_id,operation,outcome,created_at,object_id,'access_rpc',id from public.sec_access_audit
+ union all select 'catalog',id,organization_id,site_id,actor_id,operation,receipt->>'state',created_at,target_id,'catalog_rpc',id from public.sec_business_catalog_events;
 commit;

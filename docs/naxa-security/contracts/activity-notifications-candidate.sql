@@ -119,4 +119,14 @@ create view sec_private.activity_delivery_eligible with (security_invoker=true) 
  join public.sec_organizations o on o.id=n.organization_id
  where d.state='pending' and d.expires_at>now() and p.enabled and m.active and sm.active and s.active and o.active and m.role in ('owner','manager','operator');
 revoke all on sec_private.activity_delivery_eligible from public,anon,authenticated;
+create function sec_private.activity_channels(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $f$
+begin
+ if coalesce(sec_private.field_role(p_org,p_site),'') not in ('owner','manager','operator') then raise exception 'denied' using errcode='42501';end if;
+ return jsonb_build_object('organization_id',p_org,'site_id',p_site,'user_id',auth.uid(),'channels',(select jsonb_object_agg(c.channel,coalesce(p.enabled,false)) from unnest(array['fcm','web_push','sms','whatsapp','email']) c(channel) left join sec_private.activity_channel_preferences p on p.organization_id=p_org and p.site_id=p_site and p.user_id=auth.uid() and p.channel=c.channel));
+end $f$;
+revoke all on function sec_private.activity_channels(uuid,uuid) from public,anon,authenticated;
+grant execute on function sec_private.activity_channels(uuid,uuid) to authenticated;
+create function public.sec_activity_channels(p_org uuid,p_site uuid) returns jsonb language sql security invoker set search_path=pg_catalog as $r$select sec_private.activity_channels(p_org,p_site)$r$;
+revoke all on function public.sec_activity_channels(uuid,uuid) from public,anon;
+grant execute on function public.sec_activity_channels(uuid,uuid) to authenticated;
 commit;

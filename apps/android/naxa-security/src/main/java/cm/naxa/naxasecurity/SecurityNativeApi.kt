@@ -83,12 +83,15 @@ internal object SecurityNativeApi {
    else check(v.optString("operation")==p.optString("p_op")&&v.optString("case_id")==p.optString("p_case"))}
   v
  }
+ suspend fun activityChannels(s:SecurityNativeSession,site:SecurityNativeSite):JSONObject=withContext(Dispatchers.IO){
+  checkScope(s,site);val v=JSONObject(call("/rest/v1/rpc/sec_activity_channels",s.token,JSONObject().put("p_org",site.organization).put("p_site",site.id)));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("user_id")==s.user);val a=v.getJSONObject("channels");check(listOf("fcm","web_push","sms","whatsapp","email").all{a.opt(it) is Boolean});a
+ }
  suspend fun catalogAction(s:SecurityNativeSession,site:SecurityNativeSite,id:String,op:String,target:String?,detail:JSONObject):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);require(op in setOf("create","archive","stock_move"));val event=SecurityNativeContract.uuid(id);val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_event",event).put("p_op",op).put("p_target",target?:JSONObject.NULL).put("p_detail",detail)
   val v=JSONObject(call("/rest/v1/rpc/sec_catalog_action",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user&&v.optString("event_id")==event&&v.optString("operation")==op&&v.optString("target_id")== (target?:event)&&v.opt("physical_access")==false);v
  }
  suspend fun auditPage(s:SecurityNativeSession,site:SecurityNativeSite,source:String,before:JSONObject?):JSONObject=withContext(Dispatchers.IO){
-  checkScope(s,site);require(source in setOf("all","field","service","erp","support","fire_ack","admin","access"))
+  checkScope(s,site);require(source in setOf("all","field","service","erp","support","fire_ack","admin","access","catalog"))
   val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_source",source).put("p_before",before?:JSONObject.NULL)
   val v=JSONObject(call("/rest/v1/rpc/sec_audit_page",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("source")==source)
   val a=v.getJSONArray("rows");check(a.length()<=100&&(0 until a.length()).all{j->val x=a.getJSONObject(j);x.optString("organization_id")==site.organization&&x.optString("site_id")==site.id&&(source=="all"||x.optString("source")==source)});v

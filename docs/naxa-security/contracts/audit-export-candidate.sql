@@ -9,7 +9,7 @@ create function sec_private.audit_export(p_org uuid,p_site uuid,p_source text,p_
 declare data jsonb; n integer; trace uuid:=gen_random_uuid();
 begin
  if coalesce(sec_private.field_role(p_org,p_site),'') not in ('owner','manager','operator') then raise exception 'export denied' using errcode='42501';end if;
- if p_source is null or p_source not in ('all','field','service','erp','support','fire_ack','admin','access') or p_start is null or p_end is null or p_end<=p_start or p_end-p_start>interval '366 days' or p_end>now()+interval '1 minute' then raise exception 'invalid interval or source' using errcode='22023';end if;
+ if p_source is null or p_source not in ('all','field','service','erp','support','fire_ack','admin','access','catalog') or p_start is null or p_end is null or p_end<=p_start or p_end-p_start>interval '366 days' or p_end>now()+interval '1 minute' then raise exception 'invalid interval or source' using errcode='22023';end if;
  select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc,x.source desc,x.id desc,x.actor_id desc),'[]'::jsonb) into data from
  (select * from public.sec_audit_timeline a where a.organization_id=p_org and a.site_id=p_site and a.created_at>=p_start and a.created_at<p_end and (p_source='all' or a.source=p_source) order by a.created_at desc,a.source desc,a.id desc,a.actor_id desc limit 10001)x;
  n:=jsonb_array_length(data);
