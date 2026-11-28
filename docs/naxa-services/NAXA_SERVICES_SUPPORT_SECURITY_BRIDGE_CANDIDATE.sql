@@ -16,9 +16,9 @@ create policy ns_v1_security_link_read on public.ns_v1_security_site_links
 for select to authenticated using (
   public.ns_current_account_id() is not null
   and public.ns_can_access_site(org_id,site_id)
-  and exists(select 1 from public.ns_sites s where s.id=site_id and s.org_id=org_id and s.status='active')
-  and exists(select 1 from public.sec_sites s where s.id=security_site_id and s.organization_id=security_org_id and s.active)
-  and exists(select 1 from public.sec_site_memberships m where m.organization_id=security_org_id and m.site_id=security_site_id and m.user_id=auth.uid() and m.active)
+  and exists(select 1 from public.ns_sites s where s.id=ns_v1_security_site_links.site_id and s.org_id=ns_v1_security_site_links.org_id and s.status='active')
+  and exists(select 1 from public.sec_sites s where s.id=ns_v1_security_site_links.security_site_id and s.organization_id=ns_v1_security_site_links.security_org_id and s.active)
+  and exists(select 1 from public.sec_site_memberships m where m.organization_id=ns_v1_security_site_links.security_org_id and m.site_id=ns_v1_security_site_links.security_site_id and m.user_id=auth.uid() and m.active)
 );
 create function public.ns_v1_security_snapshot(p_org uuid,p_site uuid)
 returns jsonb language plpgsql stable security invoker set search_path='' as $$
