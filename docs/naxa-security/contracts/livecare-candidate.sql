@@ -70,8 +70,8 @@ begin
  h:=encode(sha256(convert_to(p_detail::text,'UTF8')),'hex');
  select * into old from public.sec_support_events where id=p_event;
  if found then
+  if not coalesce(customer or (agent and (c.agent_id=auth.uid() or (p_op='transfer' and old.actor_id=auth.uid() and old.organization_id=p_org and old.site_id=p_site and old.case_id=p_case and old.operation='transfer'))),false) then raise exception 'case denied' using errcode='42501';end if;
   if old.actor_id<>auth.uid() or old.organization_id<>p_org or old.site_id<>p_site or old.case_id<>p_case or old.operation<>p_op or old.detail_hash<>h then raise exception 'event conflict' using errcode='23505';end if;
-  if not coalesce(customer or (agent and (c.agent_id=auth.uid() or p_op='transfer')),false) then raise exception 'case denied' using errcode='42501';end if;
   return old.receipt;
  end if;
  if not coalesce(customer or (agent and (c.agent_id=auth.uid() or (c.agent_id is null and p_op='claim'))),false) then raise exception 'case denied' using errcode='42501';end if;
