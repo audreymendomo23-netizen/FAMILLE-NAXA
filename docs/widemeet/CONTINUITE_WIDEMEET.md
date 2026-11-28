@@ -575,3 +575,5 @@ Complément : parcours Chromium à deux comptes du sondage, création/vote/clôt
 
 ## 28/11/2026 — Pièces jointes privées des publications et isolation du runner B5
 Réutilisation du ledger wm_chat_media/Storage privé (PDF, JPEG, PNG, 1 Mio) avec scope post_id exclusif, FK, autorisation auteur à l'envoi, membre actif de l'entreprise à la lecture, revalidation après lecture et révocation des fichiers au retrait du post. Web/Android : ouverture des pièces jointes sous une publication déjà créée (Actualités et Annonces), sans carte supplémentaire, feature flag existant. Pas de vidéo ni aperçu intégré, limites d'origine maintenues; recette réelle stockage ajoutée. B5 140955772153: collision port PostgreSQL 54322; plage locale 5542x dédiée et assertions de loopback adaptées. Pas de migration hébergée. Qualification en attente.
+
+Complément B5 : script de replay et permission réseau Deno alignés sur le port dédié 55421, valeurs loopback explicitement bornées (54321/55421). Aucun relâchement de la vérification d'environnement. Recette encore à constater.

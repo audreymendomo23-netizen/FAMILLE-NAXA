@@ -7,7 +7,7 @@ import {createServer} from "node:https";
 import {resolve,extname,sep} from "node:path";
 import {chromium} from "@playwright/test";
 const base=process.env.SUPABASE_URL,service=process.env.SUPABASE_SERVICE_ROLE_KEY,anon=process.env.SUPABASE_ANON_KEY;
-assert.equal(base,"http://127.0.0.1:54321");assert.ok(service&&anon);
+const localPort=process.env.WM_SUPPORT_REPLAY_PORT??"54321";assert.ok(["54321","55421"].includes(localPort));assert.equal(base,"http://127.0.0.1:"+localPort);assert.ok(service&&anon);
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const children=[];
 let server,browser;
@@ -31,7 +31,7 @@ async function fixture(w,role){
  await rest("wm_memberships",{account_id:a.id,workspace_id:w,role});return{id:a.id,login,password};
 }
 async function launch(file,port){
- const child=spawn("deno",["run","--allow-env","--allow-net=127.0.0.1:54321,0.0.0.0:"+port+",127.0.0.1:"+port,file],{stdio:["ignore","ignore","inherit"]});children.push(child);
+ const child=spawn("deno",["run","--allow-env","--allow-net=127.0.0.1:"+localPort+",0.0.0.0:"+port+",127.0.0.1:"+port,file],{stdio:["ignore","ignore","inherit"]});children.push(child);
  for(let i=0;i<60;i++){try{if((await fetch("http://127.0.0.1:"+port,{method:"OPTIONS"})).ok)return;}catch{}if(child.exitCode!==null)break;await wait(250)}
  throw Error("GATEWAY_START_FAILED_"+port);
 }
