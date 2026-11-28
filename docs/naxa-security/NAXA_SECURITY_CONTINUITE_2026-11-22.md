@@ -531,3 +531,51 @@ RPC de réponse client avec reçu idempotent et notification de l’agent affect
 
 ### Clôture de passe et réserves
 Échec 46090811502 sur d5379ee confirmé par log PostgreSQL : ambiguïté de colonne source_id dans le conflit du trigger activity_notify. Correctif 39cd316 : ON CONFLICT DO NOTHING, contrainte unique inchangée, plus réponse client Livecare. Le runner 46090871691 a désormais passé l'étape psql intégrale, y compris les assertions de notification et de réponse client ; son replay Chromium/PostgreSQL étendu n'est pas encore terminé. Web d5379ee 46090811493 job 140811031870 SUCCESS, contrats 46090811489 SUCCESS. Nouvelle vague 39cd316 : 46090871678 Android/Web, 46090871736 contrats, 46090871670 navigation, 46090871677 replay, 46090871691 SQL/E2E ; résultats finaux encore attendus au constat. Jauge stricte 50,0% inchangée. NS-06 : ronde manuelle, pas preuves physiques QR/NFC/BLE/GPS ni totalité des fonctions du chapitre 10. NS-25 : conversation bidirectionnelle, pas média, chatbot/FAQ et pièces jointes complets. NS-26 : notifications internes, pas livraison externe FCM/SMS/WhatsApp/e-mail. Ces trois modules renforcés restent jaunes ; 32 autres modules à terminer. Gate commun : révision précédente annulée, dernier échec historique hors SECURITY non corrigé dans ce périmètre. Aucun merge main, migration hébergée ni déploiement. Deux commits de code et cette note.
+
+
+## Passe cible 80% — rapprochement du cahier v1.1 et notifications externes (28 novembre 2026)
+
+Reprise sur d7bf54c, branche dédiée exclusivement. Les cinq workflows sur 39cd316 sont désormais SUCCESS : SQL/E2E 46090871691, Android/Web 46090871678, contrats B1–B6 46090871736, navigation 46090871670, replay 46090871677. Ceci valide les parcours existants, pas les modules intégralement.
+
+Audit documentaire du cahier v1.1 (35 modules, sections 5–23, 28.5 et 31) rapproché des preuves précédentes de continuité. Registre synthétique des réserves dominantes à fermer ; il ne constitue pas une inspection exhaustive de chaque fichier ni une acceptation des risques :
+| Module | Réserve dominante / preuve de sortie |
+|---|---|
+| NS-01 Core | Auth réelle, révocation session, MFA et matrice complète des droits |
+| NS-02 Video | Flux sécurisé local/distant, lecture, recherche et export sur modèles testés |
+| NS-03 Audio | Interphonie et audio autorisés, transport et matériel réels |
+| NS-04 GPS | Sources réelles, consentement, cartographie et géopérimètres qualifiés |
+| NS-05 Presence | QR/NFC, horaires, pauses, exceptions, parité native et terminal |
+| NS-06 Patrol | QR/NFC/BLE/GPS, fenêtres, remplaçant, anomalies, preuves et rapport signé |
+| NS-07 Access | Contrôleurs réels, politiques, révocation et sécurité des issues |
+| NS-08 Alarms | Sources et sirènes locales, escalades, test sur banc autorisé |
+| NS-09 Remote | Autorisation renforcée, anti-rejeu et états réels du matériel |
+| NS-10 AI Security | Modèles vidéo/audio mesurés, faux positifs, pas d'action vitale autonome |
+| NS-11 Fire | Centrale et matériel adaptés, alarme indépendante, recette professionnelle |
+| NS-12 Environment | Capteurs et passerelles réels, calibration et défauts |
+| NS-13 Visitors | QR, entrées/sorties, historique et droits complets |
+| NS-14 Vehicles | Identité véhicule, registre, accès/parking et flotte selon périmètre |
+| NS-15 Personal safety | SOS, escalade réelle et procédure du client |
+| NS-16 Incidents | P1, preuves partagées contrôlées, qualification native complète |
+| NS-17 Control 360 | Supervision complète temps réel, périmètres et mode dégradé |
+| NS-18 Edge | Runtime, identité passerelle, transport sécurisé et reconnexion |
+| NS-19 Compatibility | Matrice modèle/firmware et résultats de banc |
+| NS-20 Maintenance | Inventaire, pièces, garanties, historique et équipement réel |
+| NS-21 ERP | Contrats, équipes, remplacements, coûts et droits de formule |
+| NS-22 Reporting | Exhaustivité sources, exports et parité Android |
+| NS-23 Subscriptions | Quotas arbitrés, périodes, droits et impayés réels |
+| NS-24 Payments | Fournisseurs, rapprochement et confirmation serveur réelle |
+| NS-25 Livecare | FAQ/chatbot, transfert, pièces jointes, consentement média et partage écran |
+| NS-26 Notifications | Préférences/intentions persistantes renforcées ; adaptateurs, destinations vérifiées, livraison, horaires/escalade et audio local à qualifier |
+| NS-27 Assistant | IA réelle, droits, qualité et limites |
+| NS-28 Languages | FR/EN/Fulfulde exhaustifs, relecture professionnelle des messages critiques |
+| NS-29 Admin | Gestion complète des droits, configuration et audit de l'admin |
+| NS-30 Audit | Connexions, accès/consultations, conservation et export complet |
+| NS-31 Evidence | Partage contrôlé, stockage privé hébergé, intégrité, rétention et export |
+| NS-32 Offline | File durable multi-parcours, conflits, chiffrement et reprise sans rejeu dangereux |
+| NS-33 Integrations | Contrats inter-apps autorisés, E2E indépendants et révocation |
+| NS-34 Backup | Restauration complète sur environnement dédié, intégrité et RPO/RTO |
+| NS-35 Partners | Registre, habilitation, périmètre contractuel, révocation et suivi |
+
+Développement NS-26 : a619259 ajoute préférences personnelles par site, consentement explicite et intention de diffusion privée pour FCM, Web Push, SMS, WhatsApp, e-mail ; déduplication par notification/canal, expiration 24h (choix technique de recette non SLA commercial), révocation sans réactivation des anciens éléments, exclusion des sites/membres inactifs, pas de destination ni payload sensible. 11d800f ajoute assertions opt-in, refus canal inconnu/inter-site, non exposition des tables/vues, révocation, réactivation, expiration et membre inactif. Runner 46092420261 : étape psql intégrale SUCCESS, build Web SUCCESS, replay standard de ce commit encore en cours au constat. 9780ddf/2edc5d1 : RPC et UI Web de consentement avec reçu personnel vérifié. 56a565a/ee7e1d8 : parité Compose et validation du reçu natif. 4c1eb8f : scénario Chromium/PostgreSQL de consentement par UI, création d'intentions réelles puis révocation et refus intersite ; nouvelle qualification à constater. Gates 46092461914, 46092461901, 46092461908 sur ee7e1d8 encore en file au constat. Le contrôle UI permet une action explicite mais ne relit pas encore toutes les préférences persistantes au chargement. Aucun worker fournisseur, aucun statut delivered, aucune livraison FCM/SMS/WhatsApp/email réellement réalisée. Aucun changement de comportement des alarmes physiques ; les paramètres de fournisseurs et de SLA du §31 restent ouverts.
+
+Jauge stricte : 50,0% (35 jaunes, 0 module complet isolé à 75%, 0 vert intégral). Cible 80% à barème constant = 42 paliers unitaires de 25 points sur 35 modules (par exemple 28 modules à 75% et 7 à 100%). Cible non atteinte ; aucune reclassification sur le seul socle logiciel. 7 commits de développement et assertions sur la branche, avant la présente note. Aucun merge main, déploiement, migration hébergée, changement des autres applications ou équipement réel. Le dépôt local n'a pas pu être cloné dans cette session (DNS indisponible) ; modifications via GitHub, qualifications sur runners distants. 
