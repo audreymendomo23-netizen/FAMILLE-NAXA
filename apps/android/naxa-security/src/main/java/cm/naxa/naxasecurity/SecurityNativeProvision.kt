@@ -1,0 +1,21 @@
+package cm.naxa.naxasecurity
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.util.UUID
+@Composable internal fun SecurityNativeProvision(screen:String){
+ if(screen !in setOf("B2.14","B2.15","B2.17","B2.18","B2.21","B2.22","B6.28","B6.29"))return
+ val n=LocalSecurityNative.current;val s=n.session?:return;val site=n.site?:return;val g=n.generation;val scope=rememberCoroutineScope()
+ var rows by remember(screen,g){mutableStateOf<List<JSONObject>>(emptyList())};var next by remember(screen,g){mutableStateOf<String?>(null)};var can by remember(screen,g){mutableStateOf(false)};var fields by remember(screen,g){mutableStateOf<Map<String,String>>(mapOf("kind" to "camera"))};var gateway by remember(screen,g){mutableStateOf("")};var device by remember(screen,g){mutableStateOf("")};var busy by remember(screen,g){mutableStateOf(false)};var status by remember(screen,g){mutableStateOf("")};var pending by remember(screen,g){mutableStateOf<Pair<String,String>?>(null)}
+ val labels=mapOf("label" to "Libellé équipement","manufacturer" to "Fabricant","model" to "Modèle","firmware" to "Firmware déclaré","reference" to "Référence interne")
+ fun load(after:String?=null){if(busy)return;busy=true;scope.launch{try{val v=SecurityNativeApi.deviceInventory(s,site,after);if(n.generation==g){val a=v.getJSONArray("devices");rows=(0 until a.length()).map{a.getJSONObject(it)};next=if(v.isNull("next"))null else v.getString("next");can=v.getBoolean("can_provision");status="Inventaire serveur confirmé."}}catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g){rows=emptyList();next=null;can=false;status="Inventaire indisponible."}}finally{if(n.generation==g)busy=false}}}
+ fun act(op:String,p:JSONObject){if(busy)return;busy=true;scope.launch{try{val sig=op+p.toString();val id=pending?.takeIf{it.first==sig}?.second?:UUID.randomUUID().toString();pending=sig to id;val v=SecurityNativeApi.deviceProvision(s,site,id,op,p);if(n.generation==g){pending=null;rows=emptyList();next=null;status="Provisionnement administratif confirmé : "+v.optString("state")+" — actualisez."}}catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g)status="Opération refusée ou non confirmée."}finally{if(n.generation==g)busy=false}}}
+ Text("Inventaire et liaisons EDGE");Text("Aucun secret de transport, aucune découverte réseau ni certification matérielle.")
+ Button(enabled=!busy,onClick={load()}){Text("Actualiser l’inventaire")}
+ rows.forEach{r->Text(r.optString("label")+" · "+r.optString("kind")+" · "+r.optString("model")+" · "+r.optString("firmware"));Text(r.optString("id")+" · "+r.optString("observed_at","inconnu"));TextButton(enabled=!busy,onClick={if(r.optString("kind")=="gateway")gateway=r.getString("id") else device=r.getString("id")}){Text("Sélectionner "+r.optString("label"))};val b=r.getJSONArray("bindings");(0 until b.length()).forEach{i->val x=b.getJSONObject(i);Text(x.optString("gateway_id")+" · "+if(x.optBoolean("enabled"))"Liée" else "Révoquée");if(can&&x.optBoolean("enabled"))Button(enabled=!busy,onClick={act("revoke",JSONObject().put("gateway_id",x.getString("gateway_id")).put("device_id",r.getString("id")))}){Text("Révoquer cette liaison")}}}
+ next?.let{cursor->Button(enabled=!busy,onClick={load(cursor)}){Text("Page suivante")}}
+ if(can){listOf("camera","gateway","smoke","fire","audio","tracker","access","environment").forEach{k->FilterChip(selected=fields["kind"]==k,enabled=!busy,onClick={fields=fields+("kind" to k)},label={Text(k)})};labels.forEach{(k,l)->OutlinedTextField(fields[k].orEmpty(),{fields=fields+(k to it)},enabled=!busy,label={Text(l)})};Button(enabled=!busy&&labels.keys.all{!fields[it].isNullOrBlank()},onClick={val p=JSONObject();fields.forEach{(k,v)->p.put(k,v)};act("register",p)}){Text("Enregistrer l’équipement")};OutlinedTextField(gateway,{gateway=it},enabled=!busy,label={Text("Identifiant passerelle")});OutlinedTextField(device,{device=it},enabled=!busy,label={Text("Identifiant équipement")});Button(enabled=!busy&&gateway.isNotBlank()&&device.isNotBlank(),onClick={act("bind",JSONObject().put("gateway_id",gateway.trim()).put("device_id",device.trim()))}){Text("Lier à la passerelle")}}
+ Text(status)
+}

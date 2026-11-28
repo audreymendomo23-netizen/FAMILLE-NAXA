@@ -86,6 +86,12 @@ internal object SecurityNativeApi {
  suspend fun activityChannels(s:SecurityNativeSession,site:SecurityNativeSite):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);val v=JSONObject(call("/rest/v1/rpc/sec_activity_channels",s.token,JSONObject().put("p_org",site.organization).put("p_site",site.id)));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("user_id")==s.user);val a=v.getJSONObject("channels");check(listOf("fcm","web_push","sms","whatsapp","email").all{a.opt(it) is Boolean});a
  }
+ suspend fun deviceInventory(s:SecurityNativeSession,site:SecurityNativeSite,after:String?):JSONObject=withContext(Dispatchers.IO){
+  checkScope(s,site);val p=JSONObject().put("p_org",site.organization).put("p_site",site.id);if(after!=null)p.put("p_after",SecurityNativeContract.uuid(after));val v=JSONObject(call("/rest/v1/rpc/sec_device_inventory",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user&&v.opt("physical_action")==false);v.getJSONArray("devices");v
+ }
+ suspend fun deviceProvision(s:SecurityNativeSession,site:SecurityNativeSite,id:String,op:String,detail:JSONObject):JSONObject=withContext(Dispatchers.IO){
+  checkScope(s,site);require(op in setOf("register","bind","revoke"));val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_event",SecurityNativeContract.uuid(id)).put("p_op",op).put("p_detail",detail);val v=JSONObject(call("/rest/v1/rpc/sec_device_provision",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user&&v.optString("event_id")==id&&v.optString("operation")==op&&v.opt("physical_action")==false&&v.opt("transport_configured")==false&&v.optString("device_id")==if(op=="register")id else detail.optString("device_id"));v
+ }
  suspend fun presenceReport(s:SecurityNativeSession,site:SecurityNativeSite,shift:String):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);val v=JSONObject(call("/rest/v1/rpc/sec_presence_report",s.token,JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_shift",SecurityNativeContract.uuid(shift))));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("shift_id")==shift&&v.opt("physical_presence_certified")==false);v
  }
