@@ -43,6 +43,7 @@ async function fixture(page:Page,role='owner',withRequest=false,billingOnly=fals
      case 'set_team_assignment':expect(p.user).toBe(seller);expect(p.reason).toBe('Renfort');expect(['seller','none']).toContain(p.role);assigned=p.role;break;
      case 'set_site_enabled':expect(p.reason).toBe('Pause temporaire');expect(p.site).not.toBe(site);directory=directory.map(x=>x.site===p.site?{...x,enabled:p.enabled}:x);break;
      case 'dimension_target':expect(p).toEqual({day:p.day,kind:'family',subject:'Poulet',amount:5000,reason:'Objectif'});targets=[{...p,label:'Poulet',actual:0}];break;
+     case 'sell':expect(p).toEqual({item,qty:1,price:1000,received:1000,method:'orange_money'});cashSales=[{id:b.event,item,qty:1,total:1000,source:'direct',cancelled:false}];state.remaining--;break;
      case 'sell_basket':expect(p).toEqual({lines:[{item,qty:2,price:1000}],received:2000});cashSales=[{id:b.event,item,qty:2,total:2000,source:'direct',cancelled:false}];state.remaining-=2;break;
      case 'schedule_service_hours':expect(p.start_minute).toBe(1200);expect(p.reason).toBe('Horaire futur');schedules.push(p);break;
      case 'employee_request':expect(p).toEqual({name:'Collaborateur test',phone:'+237699000009',role:'seller'});centralRequests.push({id:b.event,kind:'employee',label:p.name,role:p.role,status:'pending'});break;
