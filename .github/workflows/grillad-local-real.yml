@@ -42,7 +42,7 @@ jobs:
         run: |
           export VITE_GRILLAD_PUBLIC_KEY="$GRILLAD_LOCAL_ANON"
           node scripts/grillad/cloudflare-pages-build.mjs
-          npm exec --workspace @famille/grillad-web -- playwright test --config playwright.local-real.config.ts --grep '@${{ matrix.suite }}'
+          npm exec --workspace @famille/grillad-web -- playwright test --config playwright.local-real.config.ts --grep '@${{ matrix.suite }}( |$)'
       - name: Destroy isolated stack and credentials
         if: always()
         run: |
