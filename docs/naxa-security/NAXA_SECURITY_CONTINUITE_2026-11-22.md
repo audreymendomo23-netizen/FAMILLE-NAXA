@@ -499,3 +499,6 @@ Maturité stricte : 50,0% (35 jaunes, aucun module complet isolé à 75%, aucun 
 
 ## Passe cible 70% — ERP et opérations
 Relance des cinq workflows SECURITY sur 33b17b5. Le précédent 95a51f1 est vert sur les cinq, y compris Livecare 8 écritures, reporting 110 lignes et cycle incident 8 notes dans Chromium/PostgreSQL ; gate commun échec hors SECURITY. Nouveau lot : vacations datées avec contrôle de chevauchement par agent et organisation, acceptation/annulation/fin déclarative, maintenance appareil/technicien/date, diagnostic/coût et revue distincte avant clôture, journal et reçu idempotent. Web 10 destinations sous TRUST. SQL assertions positives/négatives, pas de paie, preuve de présence ou certification appareil. Aucun déploiement.
+
+### Codes de contrôle visiteurs/véhicules
+Code aléatoire à usage unique, empreinte privée, émission par responsable après examen, validité plafonnée par le dossier, révocation, reçu idempotent, contrôle intersite. Web sous TRUST. Contrôle manuel uniquement : ni QR graphique, ni ouverture, ni enregistrement automatique d'entrée/sortie ; le journal de passages existant est distinct. Assertions SQL de rejeu et révocation. Aucun matériel ou migration hébergée.
