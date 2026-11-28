@@ -33,6 +33,8 @@ export async function handle(request,env,fetcher=fetch){
    if(!/^\+[1-9]\d{7,14}$/.test(phone))return reply(400,{error:'INVALID_PHONE'});
    const recovery=body.action==='recovery';
    if(!recovery&&(typeof body.password!=='string'||body.password.length<1||body.password.length>256||!uuid.test(body.installation)||!['web','android'].includes(body.platform)))return reply(400,{error:'INVALID_LOGIN'});
+   const hasInvite=!recovery&&(body.request!=null||body.invite!=null);
+   if(hasInvite&&(!uuid.test(body.request)||typeof body.invite!=='string'||!/^[A-Za-z0-9_-]{32,128}$/.test(body.invite)))return reply(400,{error:'INVALID_INVITATION'});
    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('grillad:'+phone));const hash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
    async function control(path,data){const r=await fetcher(base+'/rest/v1/rpc/'+path,{method:'POST',headers:{apikey:env.service,Authorization:'Bearer '+env.service,'Content-Type':'application/json'},body:JSON.stringify(data),redirect:'error',signal:AbortSignal.timeout(15000)});return r.ok&&await r.json()===true}
    const allowed=await control('grillad_auth_begin',{p_hash:hash,p_recovery:recovery});
@@ -42,6 +44,7 @@ export async function handle(request,env,fetcher=fetch){
    if(!x.ok)return reply(401,{error:'INVALID_CREDENTIALS'});
    const s=x.result;if(!s?.access_token||!s?.refresh_token||!uuid.test(s.user?.id)||s.user?.app_metadata?.must_change_password)return reply(403,{error:'ACCOUNT_SETUP_REQUIRED'});
    let sid;try{sid=JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id}catch{return reply(403,{error:'SESSION'})}
+   if(hasInvite){const accepted=await post('/rest/v1/rpc/grillad_employee_accept',{p_request:body.request,p_token:body.invite},s.access_token);if(!accepted.ok||accepted.result?.status!=='processed')return reply(403,{error:'INVITATION_DENIED'});}
    if(!uuid.test(sid)||!await control('grillad_auth_finish',{p_hash:hash,p_user:s.user.id,p_session:sid,p_installation:body.installation,p_platform:body.platform}))return reply(403,{error:'DEVICE_OR_GRANT_DENIED'});
    const w=await workspaceFor(s.access_token);if(!w)return reply(403,{error:'NO_WORKSPACE'});
    return reply(200,{result:{user_id:s.user.id,access:s.access_token,refresh:s.refresh_token,...w}});

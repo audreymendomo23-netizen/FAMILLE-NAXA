@@ -52,4 +52,30 @@ do $test$ declare e uuid:='c2000000-0000-0000-0000-000000000002';v jsonb;begin
  if v->>'status'<>'processed' or public.grillad_employee_accept(e,repeat('b',40))<>v then raise exception 'employee accept replay';end if;
 end $test$;
 reset role;
+-- Partner fixtures only; exercise central proof and real relational source contract.
+create table public.sec_organizations(id uuid primary key,active boolean not null);
+create table public.sec_sites(id uuid primary key,organization_id uuid not null,active boolean not null);
+create table public.sec_devices(id uuid primary key,organization_id uuid not null,site_id uuid not null,label text,kind text,observed_at timestamptz);
+create table public.sec_incidents(id uuid primary key,organization_id uuid not null,site_id uuid not null,device_id uuid,occurred_at timestamptz);
+insert into famille_core.organizations(id,legal_name,organization_type,status) values('c3000000-0000-0000-0000-000000000001','ZIPPLE test','retail','active'),('c3000000-0000-0000-0000-000000000002','SECURITY test','retail','active');
+update famille_core.applications set status='active' where code in ('zipple','naxa_security');
+insert into famille_core.organization_apps(organization_id,app_id,status) select case code when 'zipple' then 'c3000000-0000-0000-0000-000000000001'::uuid else 'c3000000-0000-0000-0000-000000000002'::uuid end,id,'active' from famille_core.applications where code in ('zipple','naxa_security');
+insert into famille_core.locations(id,organization_id,name) values('c4000000-0000-0000-0000-000000000001','c3000000-0000-0000-0000-000000000001','Snack test'),('c4000000-0000-0000-0000-000000000002','c3000000-0000-0000-0000-000000000002','Cam test');
+insert into famille_core.plans(app_id,code,name,amount_fcfa,billing_period) select id,'fixture-plan','Fixture',1,'monthly' from famille_core.applications where code in ('zipple','naxa_security');
+insert into famille_core.subscriptions(organization_id,app_id,plan_id,status,starts_at,ends_at) select o.organization_id,p.app_id,p.id,'active',now(),now()+interval '1 day' from famille_core.plans p join famille_core.organization_apps o on o.app_id=p.app_id where p.code='fixture-plan';
+insert into grillad_private.security_links(org,site,security_org,security_site,enabled) values(current_setting('grillad.test.org')::uuid,current_setting('grillad.test.site')::uuid,'c3000000-0000-0000-0000-000000000002','c4000000-0000-0000-0000-000000000002',true);
+insert into public.sec_organizations values('c3000000-0000-0000-0000-000000000002',true);
+insert into public.sec_sites values('c4000000-0000-0000-0000-000000000002','c3000000-0000-0000-0000-000000000002',true);
+insert into public.sec_devices values('c5000000-0000-0000-0000-000000000001','c3000000-0000-0000-0000-000000000002','c4000000-0000-0000-0000-000000000002','Caméra test','camera',now());
+insert into public.sec_incidents values('c5000000-0000-0000-0000-000000000002','c3000000-0000-0000-0000-000000000002','c4000000-0000-0000-0000-000000000002','c5000000-0000-0000-0000-000000000001',now());
+set role service_role;
+do $test$ declare o uuid:=current_setting('grillad.test.org')::uuid;s uuid:=current_setting('grillad.test.site')::uuid;op uuid:='c1000000-0000-0000-0000-000000000002';zo uuid:='c3000000-0000-0000-0000-000000000001';zs uuid:='c4000000-0000-0000-0000-000000000001';so uuid:='c3000000-0000-0000-0000-000000000002';ss uuid:='c4000000-0000-0000-0000-000000000002';v jsonb;e uuid:=gen_random_uuid();begin
+ begin perform public.grillad_partner_zipple(e,o,s,zo,zs,repeat('c',64),now()+interval '1 day');raise exception 'missing consent accepted';exception when insufficient_privilege then null;end;
+ perform public.grillad_partner_approval('zipple',o,s,zo,zs,op,repeat('a',64),repeat('b',64));
+ if not public.grillad_partner_zipple(e,o,s,zo,zs,repeat('c',64),now()+interval '1 day') or public.grillad_connect_catalog(repeat('c',64))->>'merchant'<>'GRILLAD' then raise exception 'zipple bridge';end if;
+ perform public.grillad_partner_approval('security',o,s,so,ss,op,repeat('d',64),repeat('e',64));
+ v:=public.grillad_security_project(o,s,so,ss);if (v->>'cameras')::int<>1 or (v->>'incidents')::int<>1 or (v->>'live_available')::boolean then raise exception 'security projection';end if;
+ v:=public.grillad_security_project(o,s,so,ss);if (v->>'incidents')::int<>0 then raise exception 'security duplicate';end if;
+end $test$;
+reset role;
 rollback;

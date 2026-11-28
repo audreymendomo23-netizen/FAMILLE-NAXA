@@ -15,5 +15,5 @@ import java.util.UUID
  val q=qty.toLongOrNull()
  Button({if(q!=null){lines.add(obj("event" to UUID.randomUUID().toString(),"operation" to "prepare","payload" to obj("item" to item,"qty" to q)));qty=""}},enabled=enabled&&item.isNotBlank()&&q!=null&&q in 1L..1000000L&&lines.size<30){Text("Ajouter au lot")}
  lines.toList().forEach{x->Row{Text((items.firstOrNull{it.optString("id")==x.optJSONObject("payload")?.optString("item")}?.optString("name")?:"Article")+" × "+x.optJSONObject("payload")?.optString("qty"));TextButton({lines.remove(x)},enabled=enabled){Text("Retirer")}}}
- Button({val a=JSONArray();lines.forEach{a.put(it)};submit(a);lines.clear()},enabled=enabled&&lines.isNotEmpty()){Text("Enregistrer et synchroniser le lot")}
+ Button({val a=JSONArray();lines.forEach{a.put(it)};submit(a)},enabled=enabled&&lines.isNotEmpty()){Text("Enregistrer et synchroniser le lot")}
 }

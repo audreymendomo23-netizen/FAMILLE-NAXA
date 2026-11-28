@@ -151,8 +151,27 @@ create function grillad_private.partner_zipple(p_id uuid,p_org uuid,p_site uuid,
 language plpgsql security definer set search_path=pg_catalog as $fn$
 begin
  if p_id is null or p_hash is null or p_hash!~'^[0-9a-f]{64}$' or p_expires is null or p_expires<=now() or p_expires>now()+interval '1 year' then raise exception 'GRILLAD_PARTNER_INPUT' using errcode='22023';end if;
+ if not exists(select 1 from grillad_private.partner_approvals where kind='zipple' and org=p_org and site=p_site and partner_org=p_zipple_org and partner_site=p_zipple_site) then raise exception 'GRILLAD_PARTNER_PROOF' using errcode='42501';end if;
  insert into grillad_private.connect_links(id,org,site,zipple_org,zipple_site,token_hash,enabled,grillad_approved,zipple_approved,expires_at) values(p_id,p_org,p_site,p_zipple_org,p_zipple_site,p_hash,true,true,true,p_expires) on conflict(id) do nothing;
  if not exists(select 1 from grillad_private.connect_links where id=p_id and org=p_org and site=p_site and zipple_org=p_zipple_org and zipple_site=p_zipple_site and token_hash=p_hash and expires_at=p_expires) or not grillad_private.connect_active(p_id) then raise exception 'GRILLAD_PARTNER_UNAVAILABLE' using errcode='22023';end if;return true;
+end $fn$;
+-- Central approval evidence is tracked separately from partner state.
+create table grillad_private.partner_approvals(
+ kind text not null check(kind in ('zipple','security')), org uuid not null,site uuid not null,partner_org uuid not null,partner_site uuid not null,
+ operator_id uuid not null references auth.users(id),grillad_evidence text not null check(grillad_evidence~'^[0-9a-f]{64}$'),
+ partner_evidence text not null check(partner_evidence~'^[0-9a-f]{64}$'),created_at timestamptz not null default now(),
+ primary key(kind,org,site,partner_org,partner_site),foreign key(org,site) references grillad_private.enabled_sites(org,site)
+);
+alter table grillad_private.partner_approvals enable row level security;
+revoke all on grillad_private.partner_approvals from public,anon,authenticated;
+create function grillad_private.partner_approval(p_kind text,p_org uuid,p_site uuid,p_partner_org uuid,p_partner_site uuid,p_operator uuid,p_grillad_proof text,p_partner_proof text) returns boolean
+language plpgsql security definer set search_path=pg_catalog as $fn$
+begin
+ if p_kind not in ('zipple','security') or not exists(select 1 from auth.users where id=p_operator) or p_grillad_proof is null or p_grillad_proof!~'^[0-9a-f]{64}$' or p_partner_proof is null or p_partner_proof!~'^[0-9a-f]{64}$' or p_grillad_proof=p_partner_proof then raise exception 'GRILLAD_PARTNER_PROOF' using errcode='22023';end if;
+ if not exists(select 1 from grillad_private.enabled_sites where org=p_org and site=p_site and enabled) then raise exception 'GRILLAD_SCOPE' using errcode='42501';end if;
+ insert into grillad_private.partner_approvals(kind,org,site,partner_org,partner_site,operator_id,grillad_evidence,partner_evidence) values(p_kind,p_org,p_site,p_partner_org,p_partner_site,p_operator,p_grillad_proof,p_partner_proof) on conflict do nothing;
+ if not exists(select 1 from grillad_private.partner_approvals where kind=p_kind and org=p_org and site=p_site and partner_org=p_partner_org and partner_site=p_partner_site and operator_id=p_operator and grillad_evidence=p_grillad_proof and partner_evidence=p_partner_proof) then raise exception 'GRILLAD_PARTNER_CONFLICT' using errcode='22023';end if;
+ return true;
 end $fn$;
 -- No physical camera command or streaming URL. Explicit same-site mapping between the two independent schemas.
 create table grillad_private.security_source_map(
@@ -165,6 +184,7 @@ create function grillad_private.security_project(p_org uuid,p_site uuid,p_source
 language plpgsql security definer set search_path=pg_catalog as $fn$
 declare n bigint; m bigint;
 begin
+ if not exists(select 1 from grillad_private.partner_approvals where kind='security' and org=p_org and site=p_site and partner_org=p_source_org and partner_site=p_source_site) then raise exception 'GRILLAD_PARTNER_PROOF' using errcode='42501';end if;
  -- Explicit pre-approved family link; never infer equivalence from site names.
  if not exists(select 1 from grillad_private.security_links l join famille_core.applications a on a.code='naxa_security' and a.status='active' join famille_core.organization_apps o on o.organization_id=l.security_org and o.app_id=a.id and o.status='active' join famille_core.subscriptions b on b.organization_id=l.security_org and b.app_id=a.id and b.status='active' and b.ends_at>now() where l.org=p_org and l.site=p_site and l.enabled) then raise exception 'GRILLAD_SECURITY_LINK' using errcode='42501';end if;
  if not exists(select 1 from public.sec_sites s join public.sec_organizations o on o.id=s.organization_id and o.active where s.id=p_source_site and s.organization_id=p_source_org and s.active) then raise exception 'GRILLAD_SECURITY_SOURCE' using errcode='42501';end if;
@@ -205,4 +225,7 @@ grant execute on function grillad_private.security_project(uuid,uuid,uuid,uuid),
 create function public.grillad_employee_accept(p_request uuid,p_token text) returns jsonb language sql security invoker set search_path=pg_catalog as $fn$select grillad_private.employee_accept(p_request,p_token)$fn$;
 revoke all on function grillad_private.employee_accept(uuid,text),public.grillad_employee_accept(uuid,text) from public,anon,authenticated;
 grant execute on function grillad_private.employee_accept(uuid,text),public.grillad_employee_accept(uuid,text) to authenticated;
+create function public.grillad_partner_approval(p_kind text,p_org uuid,p_site uuid,p_partner_org uuid,p_partner_site uuid,p_operator uuid,p_grillad_proof text,p_partner_proof text) returns boolean language sql security invoker set search_path=pg_catalog as $fn$select grillad_private.partner_approval(p_kind,p_org,p_site,p_partner_org,p_partner_site,p_operator,p_grillad_proof,p_partner_proof)$fn$;
+revoke all on function grillad_private.partner_approval(text,uuid,uuid,uuid,uuid,uuid,text,text),public.grillad_partner_approval(text,uuid,uuid,uuid,uuid,uuid,text,text) from public,anon,authenticated;
+grant execute on function grillad_private.partner_approval(text,uuid,uuid,uuid,uuid,uuid,text,text),public.grillad_partner_approval(text,uuid,uuid,uuid,uuid,uuid,text,text) to service_role;
 commit;

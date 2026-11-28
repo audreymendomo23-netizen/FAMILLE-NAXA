@@ -44,3 +44,5 @@ Complément §24 : un parcours Chromium métier de réactivation après confirma
 Complément profil : un test API et un parcours Chromium métier (profil individuel), assertions SQL lifecycle enrichies. Total 184 unités (180 tests nommés, 3 suites SQL et 1 drill), lots 50/50/47/37. À qualifier sur le SHA de code.
 
 Complément opérations : 1 test API nommé + 1 suite SQL intégrée lifecycle (provisionnement, paiement, lot et invitation). Total 186 unités (181 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/39 ; qualification en cours.
+
+Complément invitation : 1 test API supplémentaire, assertions partenaires ZIPPLE/SECURITY ajoutées à la suite SQL opérations. Total 187 unités (182 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/40.
