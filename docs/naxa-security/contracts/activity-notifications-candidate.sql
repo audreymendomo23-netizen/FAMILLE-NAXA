@@ -58,4 +58,65 @@ grant execute on function sec_private.read_activity(uuid,uuid,uuid) to authentic
 create function public.sec_read_activity(p_org uuid,p_site uuid,p_id uuid) returns jsonb language sql security invoker set search_path=pg_catalog as $r$select sec_private.read_activity(p_org,p_site,p_id)$r$;
 revoke all on function public.sec_read_activity(uuid,uuid,uuid) from public,anon;
 grant execute on function public.sec_read_activity(uuid,uuid,uuid) to authenticated;
+
+-- External delivery intent only: no provider call, no destination or sensitive payload.
+create table sec_private.activity_channel_preferences(
+ organization_id uuid not null,site_id uuid not null,user_id uuid not null references auth.users(id),
+ channel text not null check(channel in ('fcm','web_push','sms','whatsapp','email')),
+ enabled boolean not null default false,updated_at timestamptz not null default now(),
+ primary key(organization_id,site_id,user_id,channel),
+ foreign key(organization_id,site_id,user_id) references public.sec_site_memberships(organization_id,site_id,user_id)
+);
+create table sec_private.activity_delivery_intents(
+ notification_id uuid not null references public.sec_activity_notifications(id) on delete cascade,
+ channel text not null check(channel in ('fcm','web_push','sms','whatsapp','email')),
+ state text not null default 'pending' check(state in ('pending','cancelled')),
+ created_at timestamptz not null default now(),expires_at timestamptz not null,
+ primary key(notification_id,channel),check(expires_at>created_at)
+);
+revoke all on sec_private.activity_channel_preferences,sec_private.activity_delivery_intents from public,anon,authenticated;
+create function sec_private.set_activity_channel(p_org uuid,p_site uuid,p_channel text,p_enabled boolean) returns jsonb
+ language plpgsql security definer set search_path=pg_catalog as $f$
+begin
+ if coalesce(sec_private.field_role(p_org,p_site),'') not in ('owner','manager','operator') then raise exception 'denied' using errcode='42501';end if;
+ if p_channel is null or p_channel not in ('fcm','web_push','sms','whatsapp','email') or p_enabled is null then raise exception 'invalid channel' using errcode='22023';end if;
+ -- Serialize consent changes and enqueue per recipient/site, including first opt-in.
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text||':'||auth.uid()::text,26));
+ insert into sec_private.activity_channel_preferences(organization_id,site_id,user_id,channel,enabled)
+ values(p_org,p_site,auth.uid(),p_channel,p_enabled)
+ on conflict(organization_id,site_id,user_id,channel) do update set enabled=excluded.enabled,updated_at=now();
+ if not p_enabled then
+  update sec_private.activity_delivery_intents d set state='cancelled' from public.sec_activity_notifications n
+   where d.notification_id=n.id and n.organization_id=p_org and n.site_id=p_site and n.user_id=auth.uid() and d.channel=p_channel and d.state='pending';
+ end if;
+ return jsonb_build_object('organization_id',p_org,'site_id',p_site,'user_id',auth.uid(),'channel',p_channel,'enabled',p_enabled);
+end $f$;
+revoke all on function sec_private.set_activity_channel(uuid,uuid,text,boolean) from public,anon,authenticated;
+grant execute on function sec_private.set_activity_channel(uuid,uuid,text,boolean) to authenticated;
+create function public.sec_set_activity_channel(p_org uuid,p_site uuid,p_channel text,p_enabled boolean) returns jsonb
+ language sql security invoker set search_path=pg_catalog as $f$select sec_private.set_activity_channel(p_org,p_site,p_channel,p_enabled)$f$;
+revoke all on function public.sec_set_activity_channel(uuid,uuid,text,boolean) from public,anon;
+grant execute on function public.sec_set_activity_channel(uuid,uuid,text,boolean) to authenticated;
+create function sec_private.queue_activity_delivery() returns trigger language plpgsql security definer set search_path=pg_catalog as $f$
+begin
+ perform pg_advisory_xact_lock(hashtextextended(new.organization_id::text||':'||new.site_id::text||':'||new.user_id::text,26));
+ insert into sec_private.activity_delivery_intents(notification_id,channel,expires_at)
+ select new.id,p.channel,now()+interval '24 hours' from sec_private.activity_channel_preferences p
+ where p.organization_id=new.organization_id and p.site_id=new.site_id and p.user_id=new.user_id and p.enabled
+ on conflict do nothing;
+ return new;
+end $f$;
+revoke all on function sec_private.queue_activity_delivery() from public,anon,authenticated;
+create trigger activity_delivery_queue after insert on public.sec_activity_notifications for each row execute function sec_private.queue_activity_delivery();
+-- Private view for future trusted dispatch adapter: expired, revoked or disabled intents are never eligible.
+create view sec_private.activity_delivery_eligible with (security_invoker=true) as
+ select d.notification_id,d.channel,d.created_at,d.expires_at,n.organization_id,n.site_id,n.user_id,n.source
+ from sec_private.activity_delivery_intents d join public.sec_activity_notifications n on n.id=d.notification_id
+ join sec_private.activity_channel_preferences p on p.organization_id=n.organization_id and p.site_id=n.site_id and p.user_id=n.user_id and p.channel=d.channel
+ join public.sec_memberships m on m.organization_id=n.organization_id and m.user_id=n.user_id
+ join public.sec_site_memberships sm on sm.organization_id=n.organization_id and sm.site_id=n.site_id and sm.user_id=n.user_id
+ join public.sec_sites s on s.organization_id=n.organization_id and s.id=n.site_id
+ join public.sec_organizations o on o.id=n.organization_id
+ where d.state='pending' and d.expires_at>now() and p.enabled and m.active and sm.active and s.active and o.active and m.role in ('owner','manager','operator');
+revoke all on sec_private.activity_delivery_eligible from public,anon,authenticated;
 commit;
