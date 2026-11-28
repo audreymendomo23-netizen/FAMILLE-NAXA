@@ -13,7 +13,7 @@ const cases=[
 ["03.1",["PASS V2 enterprise feed and official announcement","PASS V2 private company post attachment","PASS V2 company team targeting"],"Ciblage équipe/agence, vidéo, aperçu et qualification UI"],
 ["03.2",["B4 actual Edge majority rules","PASS V2 company interactions","PASS V2 Chromium reaction","PASS V2 company poll","PASS V2 Chromium company poll"],"Réactions/commentaires/favoris/sondages dans le fil, modération et vidéos"],
 ["03.3",["actual N4 recipient-scoped in-app notice","PASS V2 enterprise feed and official announcement"],"Ciblage, pièces jointes et qualification UI"],
-["03.4",[],"Navigation et interface Mon entreprise sur Web et Android"],
+["03.4",["PASS V2 Chromium enterprise news","PASS V2 Chromium private image preview","PASS V2 company notices"],"Fiche professionnelle cliquable, notifications UI et parité complète à qualifier"],
 ["04.1",[],"Courrier interne, brouillons, destinataires, signature, réponses"],
 ["04.2",["actual N4 closed-room minutes versioning","B2 actual private Storage chat file/voice integrity"],"Index transversal sans copies, provenance et révocation"],
 ["04.3",[],"Raccord des 4 lots, administration, navigation et abonnements"],

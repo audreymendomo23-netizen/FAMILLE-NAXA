@@ -1047,12 +1047,10 @@ try{
   await gf.getByRole("button",{name:"Annonces",exact:true}).click();
   console.log("PASS V2 Chromium company poll creation, voting and closure");
   const previewPng=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aC1sAAAAASUVORK5CYII=","base64");
-  const previewId=randomUUID();
-  const previewPost=(await identity(hs.access_token,"center-company-list",{kind:"news"})).items.find(p=>p.body==="Sondage réel Chromium");
-  assert.ok(previewPost);
-  await cmOk(hs.access_token,"upload",{post_id:previewPost.id,id:previewId,kind:"file",mime:"image/png",name:"preview.png",content:previewPng.toString("base64")});
   await hPoll.getByRole("button",{name:"Pièces jointes",exact:true}).click();
   const previewSection=hPoll.getByRole("region",{name:"Pièces jointes"});
+  await previewSection.getByLabel("Choisir une pièce jointe",{exact:true}).setInputFiles({name:"preview.png",mimeType:"image/png",buffer:previewPng});
+  await previewSection.getByRole("button",{name:"Envoyer le fichier",exact:true}).click();
   await previewSection.getByRole("button",{name:"Afficher l’image",exact:true}).click();
   const picture=previewSection.getByRole("img",{name:"preview.png"});
   await picture.waitFor();
