@@ -85,6 +85,32 @@ Deno.serve(async request=>{
  const decoder=new TextDecoder();let raw="",size=0;for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit){await reader.cancel().catch(()=>{});return send(413,{error:"request_too_large"})}raw+=decoder.decode(value,{stream:true})}raw+=decoder.decode();
  const body=JSON.parse(raw);
  if(!body||body.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
+ if(action==="central"){
+ if(Deno.env.get("WM_CENTRAL_QUALIFIED")!=="true"||!origin||origin!==Deno.env.get("WM_CENTRAL_ORIGIN"))return send(503,{error:"unavailable"});
+ const jwt=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
+ if(jwt.length>8192||!/^[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+\.[-_A-Za-z0-9]+$/.test(jwt))return send(401,{error:"credentials"});
+ const verified=await fetch(url+"/auth/v1/user",{headers:{apikey:anon,Authorization:"Bearer "+jwt},redirect:"error",cache:"no-store"});
+ if(!verified.ok)return send(401,{error:"credentials"});
+ const user=await verified.json();
+ const rawClaim=jwt.split(".")[1].replace(/-/g,"+").replace(/_/g,"/");
+ const claims=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(rawClaim.padEnd(Math.ceil(rawClaim.length/4)*4,"=")),c=>c.charCodeAt(0))));
+ if(claims.sub!==user.id||claims.iss!==url+"/auth/v1"||claims.role!=="authenticated"||claims.aal!=="aal2"||!uuid.test(claims.sub??"")||!uuid.test(claims.session_id??"")||!Number.isSafeInteger(claims.exp)||claims.exp*1000<=Date.now())return send(403,{error:"scope"});
+ const name=body.action,data=body.data;
+ if(typeof name!=="string"||!data||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
+ const support=name.startsWith("support-"),mediaReady=Deno.env.get("WM_SUPPORT_MEDIA_QUALIFIED")==="true";
+ if(support&&Deno.env.get("WM_SUPPORT_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ if(name==="support-call-grant"&&!mediaReady)return send(503,{error:"unavailable"});
+ const handle=token();
+ const v=await rest("rpc/wm_central_dispatch",{method:"POST",body:JSON.stringify({p_user:claims.sub,p_session:claims.session_id,p_exp:new Date(claims.exp*1000).toISOString(),p_new_hash:token(),p_action:name,p_data:name==="support-call-grant"?{...data,handle}:data})});
+ if(!v)return send(403,{error:"scope"});
+ if(name==="support-call-grant"){
+ if(!uuid.test(data.call_id??"")||v.room!=="wm-support-"+data.call_id.toLowerCase()||!uuid.test(v.identity??"")||v.sources?.includes("screen_share"))return send(403,{error:"scope"});
+ return send(200,await supportGrant(v,handle));
+ }
+ if(name==="capabilities")v.agent=v.agent===true&&Deno.env.get("WM_SUPPORT_QUALIFIED")==="true";
+ if(support)v.transport_ready=mediaReady;
+ return send(200,v);
+ }
  if(action==="register"){
  if(Deno.env.get("WM_SIGNUP_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
  const domain=(Deno.env.get("WM_AUTH_ALIAS_DOMAIN")??"").trim().toLowerCase();
