@@ -1,0 +1,47 @@
+name: GRILLAD — isolated real Auth E2E (local, public runner)
+on:
+  push:
+    branches: [work/grillad-foundation-20261127]
+    paths:
+      - '.github/workflows/grillad-local-real.yml'
+      - 'scripts/grillad/local-real-*'
+      - 'apps/web/grillad/e2e-local-real/**'
+      - 'apps/web/grillad/playwright.local-real.config.ts'
+      - 'supabase/local-tests/grillad_real_auth_seed.sql'
+permissions:
+  contents: read
+concurrency:
+  group: grillad-local-real
+  cancel-in-progress: false
+jobs:
+  local-real:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: supabase/setup-cli@v3
+        with:
+          version: '2.122.1'
+      - name: Local Supabase and real isolated test identities
+        run: bash scripts/grillad/local-real-setup.sh
+      - run: npm install --workspace @famille/grillad-web --include-workspace-root=false --ignore-scripts
+      - run: npx --workspace @famille/grillad-web playwright install --with-deps chromium
+      - name: Build and run local browser E2E
+        env:
+          VITE_GRILLAD_API_URL: https://grillad-local-ci.supabase.co/functions/v1/grillad
+        run: |
+          export VITE_GRILLAD_PUBLIC_KEY="$GRILLAD_LOCAL_ANON"
+          node scripts/grillad/cloudflare-pages-build.mjs
+          npm exec --workspace @famille/grillad-web -- playwright test --config playwright.local-real.config.ts
+      - name: Destroy isolated stack and credentials
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/grillad-local-stack/supabase" ]; then
+            (cd "$RUNNER_TEMP/grillad-local-stack" && supabase stop --no-backup)
+          fi
+          rm -f "$RUNNER_TEMP/grillad-local.env" "$RUNNER_TEMP/grillad-real-accounts.json"
