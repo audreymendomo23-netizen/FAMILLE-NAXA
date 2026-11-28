@@ -98,3 +98,6 @@ article button{margin:4px 4px 4px 0;max-width:100%;white-space:normal}
 .atelier-steam-wisp.wisp-1{animation-delay:-1.9s;animation-duration:6.5s}.atelier-steam-wisp.wisp-2{animation-delay:-3.8s;animation-duration:7.1s}
 @keyframes atelier-steam-rise{0%{opacity:0;transform:translate(0,12px) scale(.82,.70)}22%{opacity:.26}58%{opacity:.15;transform:translate(6px,-14px) scale(1.12,1.08)}100%{opacity:0;transform:translate(-8px,-36px) scale(1.3,1.23)}}
 @media(prefers-reduced-motion:reduce){.atelier-steam{display:none}.atelier-steam-wisp{animation:none}}
+
+/* Authentication artwork is fixed; only the independent steam layer animates. */
+.atelier-auth .atelier-photo{opacity:1;transition:none}
