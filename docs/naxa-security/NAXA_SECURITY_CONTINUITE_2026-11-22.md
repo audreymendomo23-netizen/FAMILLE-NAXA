@@ -475,3 +475,6 @@ Bilan : 35 jaunes, 0 orange, 0 rouge, 0 bleu, 0 vert intégral ; (35*50)/35 = 50
 
 ## Passe cible 65% — finalisation de parcours logiciels
 Départ d3b6b7b : SQL, JS, replay, 543 navigation verts sur 6f6daf5 ; gate Android dédié échoue sur Maven 429 JUnit/Hamcrest malgré retries ; gate historique échoue en compilation NAXA SERVICES/ZIPPLE, hors périmètre. Livecare : agent explicitement provisionné par site, prise en charge, conversation privée, escalade, échéance de recette (24h/4h), résolution/réouverture/clôture et satisfaction, reçus idempotents, refus manager non habilité et accès direct. Web sous flag TRUST, assertions SQL. Pas de chatbot, média, SLA contractuel ou déploiement. Ne pas reclasser NS-25 à 75% sans la totalité des exigences et la qualification des parcours.
+
+### Qualification navigateur + PostgreSQL réel (jetable)
+Ajout d'un replay Livecare UI Chromium → adaptateur REST de recette strict → PostgreSQL réel avec rôle authenticated et auth.uid fixture. Huit écritures métier, personas distinctes, conversation, affectation, escalade, résolution, réouverture, clôture/satisfaction et refus inter-site. L'adaptateur n'est pas PostgREST ni un service de production ; aucune authentification réelle, aucun trafic externe. Résultat à constater sur runner SQL étendu.

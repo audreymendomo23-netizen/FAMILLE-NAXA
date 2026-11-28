@@ -1,0 +1,50 @@
+// Chromium UI -> restricted test REST adapter -> actual disposable PostgreSQL RLS and functions.
+import{chromium}from"playwright";import{execFileSync}from"node:child_process";import assert from"node:assert/strict";
+assert.equal(process.env.PGHOST,"localhost");assert.equal(process.env.PGDATABASE,"security_test");assert.equal(process.env.SECURITY_DB_E2E,"1");
+const origin="http://127.0.0.1:4173",api="https://idupfjbkwjcavyisxteo.supabase.co";
+const O="10000000-0000-0000-0000-000000000141",S="20000000-0000-0000-0000-000000000141",T="20000000-0000-0000-0000-000000000142";
+const users={customer:"00000000-0000-0000-0000-000000000141",agent:"00000000-0000-0000-0000-000000000142",other:"00000000-0000-0000-0000-000000000143"};
+const literal=v=>v===null?"null":"convert_from(decode('"+Buffer.from(String(v),"utf8").toString("hex")+"','hex'),'UTF8')";
+const uuid=v=>literal(v)+"::uuid",json=v=>literal(JSON.stringify(v))+"::jsonb";
+function query(user,sql){assert.ok(Object.values(users).includes(user));const command="begin;set local role authenticated;select set_config('request.jwt.claim.sub',"+literal(user)+",true);"+sql+";commit;";
+ const out=execFileSync("psql",["-X","-qAt","-v","ON_ERROR_STOP=1"],{input:command,encoding:"utf8",timeout:10000,stdio:["pipe","pipe","pipe"]}).trim().split("\n");return JSON.parse(out.at(-1))}
+const reads=new Set(["sec_sites","sec_support_cases","sec_support_messages","sec_module_requests","sec_incidents","sec_work_orders","sec_preferences","sec_inbox"]);
+const browser=await chromium.launch({headless:true});const ctx=await browser.newContext({viewport:{width:420,height:900},serviceWorkers:"block"});
+let lastCase=null,dbWrites=0,denials=0;
+await ctx.route("**/*",async route=>{const req=route.request(),u=new URL(req.url());if(u.origin===origin)return route.continue();if(u.origin!==api)return route.abort();
+ const respond=(body,status=200)=>route.fulfill({status,contentType:"application/json",headers:{"access-control-allow-origin":"*","access-control-allow-headers":"*","access-control-allow-methods":"GET,POST,OPTIONS"},body:JSON.stringify(body)});
+ if(req.method()==="OPTIONS")return respond({});
+ if(u.pathname==="/auth/v1/token"){const name=String(req.postDataJSON().email).split("@")[0];return users[name]?respond({access_token:"synthetic-"+name,user:{id:users[name]},expires_in:3600}):respond({},401)}
+ const name=(req.headers().authorization??"").replace("Bearer synthetic-",""),user=users[name];if(!user)return respond({},401);
+ if(u.pathname==="/auth/v1/logout")return respond({});
+ try{
+ const table=u.pathname.split("/").at(-1),body=req.method()==="POST"?req.postDataJSON():null;
+ if(req.method()==="GET"&&reads.has(table)){
+  const filters=[];for(const col of ["organization_id","site_id","id","request_id"]){const value=u.searchParams.get(col);if(value){assert.ok(value.startsWith("eq."));filters.push(col+"="+uuid(value.slice(3)))}}
+  const sql="select coalesce(jsonb_agg(to_jsonb(x)),'[]') from (select * from public."+table+(filters.length?" where "+filters.join(" and "):"")+" limit 100)x";return respond(query(user,sql))
+ }
+ if(req.method()==="POST"&&table==="sec_module_requests"){const cols=["organization_id","site_id","reporter_id","request_id","kind","payload"];assert.ok(cols.every(k=>Object.hasOwn(body,k)));const vals=cols.map(k=>k==="kind"?literal(body[k]):k==="payload"?json(body[k]):uuid(body[k]));const rows=query(user,"with x as(insert into public.sec_module_requests("+cols.join(",")+") values("+vals.join(",")+") returning *) select jsonb_agg(to_jsonb(x)) from x");lastCase=body.request_id;dbWrites++;return respond(rows)}
+ if(req.method()==="POST"&&u.pathname==="/rest/v1/rpc/sec_support_action"){const row=query(user,"select public.sec_support_action("+[uuid(body.p_org),uuid(body.p_site),uuid(body.p_case),uuid(body.p_event),literal(body.p_op),json(body.p_detail)].join(",")+")");dbWrites++;return respond(row)}
+ if(req.method()==="POST"&&table==="sec_support_messages"){const cols=["id","organization_id","site_id","request_id","author_id","body"];const vals=cols.map(k=>k==="body"?literal(body[k]):uuid(body[k]));const rows=query(user,"with x as(insert into public.sec_support_messages("+cols.join(",")+") values("+vals.join(",")+") returning *) select jsonb_agg(to_jsonb(x)) from x");dbWrites++;return respond(rows)}
+ return respond({},404)
+ }catch{denials++;return respond({message:"test database denied operation"},403)}
+});
+const page=await ctx.newPage();
+async function login(name){await page.goto(origin+"/");await page.getByText("Connexion SECURITY",{exact:true}).click();await page.getByLabel("Identifiant de recette (e-mail provisionné)").fill(name+"@example.invalid");await page.getByLabel("Mot de passe",{exact:true}).fill("synthetic");await page.getByRole("button",{name:"Connexion",exact:true}).click();await page.getByText("Accès SECURITY confirmé.").waitFor()}
+async function logout(){await page.getByRole("button",{name:"Déconnexion",exact:true}).click();await page.getByText("Connexion SECURITY",{exact:true}).waitFor()}
+async function load(){await page.goto(origin+"/#/B6.12");await page.getByRole("button",{name:"Actualiser les dossiers Livecare"}).click();await page.getByText("Dossiers autorisés chargés.").waitFor()}
+async function open(){await page.getByRole("button",{name:"Ouvrir le dossier "+lastCase.slice(0,8)}).click()}
+async function act(label,state){await page.getByRole("button",{name:label,exact:true}).click();await page.getByText("Action support confirmée : "+state+" — actualisez.").waitFor()}
+try{
+ await login("customer");await page.goto(origin+"/#/B6.11");await page.getByLabel("Catégorie",{exact:true}).selectOption("technical");await page.getByLabel("Description (sans secret ni donnée sensible)",{exact:true}).fill("Synthetic E2E ticket");await page.getByRole("button",{name:"Vérifier / transmettre la demande"}).click();await page.getByText("Demande enregistrée — consultez son statut dans le suivi.").waitFor();assert.ok(lastCase);await load();await open();assert.equal(query(users.customer,"select to_jsonb(c) from public.sec_support_cases c where id="+uuid(lastCase)).state,"open");await logout();
+ await login("agent");await load();await open();await act("Prendre en charge","assigned");await load();await open();await page.getByLabel("Réponse agent",{exact:true}).fill("Synthetic E2E agent reply");await act("Répondre au dossier","waiting_customer");await load();await open();await act("Escalader le dossier","waiting_customer");await load();await open();await act("Résoudre le dossier","resolved");await logout();
+ await login("customer");await load();await open();await act("Rouvrir le dossier","assigned");await logout();
+ await login("agent");await load();await open();await act("Résoudre le dossier","resolved");await logout();
+ await login("customer");await load();await open();await act("Clôturer et noter","closed");
+ const persisted=query(users.customer,"select to_jsonb(c) from public.sec_support_cases c where id="+uuid(lastCase));assert.equal(persisted.state,"closed");assert.equal(persisted.rating,5);assert.equal(persisted.priority,"high");
+ assert.equal(query(users.customer,"select to_jsonb(count(*)) from public.sec_support_messages where request_id="+uuid(lastCase)),2);
+ await logout();await login("other");await load();assert.equal(await page.getByRole("button",{name:/Ouvrir le dossier/}).count(),0);
+ assert.equal(query(users.other,"select to_jsonb(count(*)) from public.sec_support_cases"),0);
+ assert.throws(()=>query(users.other,"select public.sec_support_action("+[uuid(O),uuid(S),uuid(lastCase),uuid("50000000-0000-0000-0000-000000000141"),literal("claim"),json({})].join(",")+")"));
+ assert.equal(dbWrites,8);console.log("PASS Chromium + real PostgreSQL: 8 persistent support actions, private messages, cross-site denial");
+}finally{await ctx.close();await browser.close()}
