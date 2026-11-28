@@ -59,7 +59,7 @@ begin
  'safety_closed',sum((x->'safety'->>'closed')::bigint),'visitor_passes_used',sum((x->'visitor_passes'->>'used')::bigint),'visitor_passes_revoked',sum((x->'visitor_passes'->>'revoked')::bigint),
  'subscriptions_started',sum((x->'subscriptions'->>'started')::bigint),
  'register_visitors',sum((x->'register'->>'visitors')::bigint),'register_vehicles',sum((x->'register'->>'vehicles')::bigint),'register_partners',sum((x->'register'->>'partners')::bigint),'register_compatibility',sum((x->'register'->>'compatibility')::bigint),
- 'visible_support_cases',sum((x->>'visible_support_cases')::bigint),'personal_notifications',sum((x->>'personal_notifications')::bigint),
+ 'visible_support_cases',sum((x->>'visible_support_cases')::bigint),'personal_notifications',sum((x->>'personal_notifications')::bigint)) || jsonb_build_object(
  'diagnostics_total',sum((x->'diagnostics'->>'total')::bigint),'diagnostics_completed',sum((x->'diagnostics'->>'completed')::bigint),'diagnostics_expired_or_overdue',sum((x->'diagnostics'->>'expired_or_overdue')::bigint),
  'fire_alarm',sum((x->'fire_states'->>'alarm')::bigint),'fire_prealarm',sum((x->'fire_states'->>'prealarm')::bigint),'fire_evacuation',sum((x->'fire_states'->>'evacuation')::bigint),'fire_fault',sum((x->'fire_states'->>'fault')::bigint),'fire_restored',sum((x->'fire_states'->>'restored')::bigint),
  'telemetry_total',sum((x->'telemetry'->>'total')::bigint),'telemetry_online',sum((x->'telemetry'->>'online')::bigint),'telemetry_offline',sum((x->'telemetry'->>'offline')::bigint),'telemetry_fault',sum((x->'telemetry'->>'fault')::bigint),
