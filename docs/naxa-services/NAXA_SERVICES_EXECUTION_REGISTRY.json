@@ -1,0 +1,311 @@
+{
+  "schemaVersion": 1,
+  "reviewedCommit": "2f849eb5da1ee51c0355f08b51684da5cc4fce1d",
+  "branch": "work/naxa-services-completion-20261120",
+  "scope": "Inventaire initial des domaines connus, non exhaustif au niveau atomique du CDC. Ancres de code, non preuve de complétude.",
+  "coverageComplete": false,
+  "constructionPercentage": null,
+  "referenceDocuments": [
+    "docs/naxa-services/NAXA_SERVICES_CONTINUITY_2026-11-21.md",
+    "docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md",
+    "docs/naxa-services/NAXA_SERVICES_ACTIVITY_PARITY_MATRIX_2026-11-23.md",
+    "docs/naxa-services/NAXA_SERVICES_AUDIT_FERMETURE_2026-11-26.md",
+    "docs/naxa-services/NAXA_SERVICES_GLOBAL_QUALIFICATION_2026-11-27.json"
+  ],
+  "domains": [
+    {
+      "id": "auth",
+      "title": "Auth, profil, PIN, récupération",
+      "construction": "partial",
+      "criteria": [
+        "B1-01",
+        "B5-02"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/main.tsx",
+        "apps/web/naxa-services/src/auth/session.ts"
+      ]
+    },
+    {
+      "id": "org",
+      "title": "Organisation, sites, postes et droits",
+      "construction": "partial",
+      "criteria": [
+        "B1-01",
+        "B4-05"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/main.tsx"
+      ]
+    },
+    {
+      "id": "sync",
+      "title": "Room, outbox et offline",
+      "construction": "partial",
+      "criteria": [
+        "B1-03",
+        "B1-04",
+        "B4-05"
+      ],
+      "anchors": [
+        "docs/naxa-services/NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.json"
+      ]
+    },
+    {
+      "id": "activities",
+      "title": "13 profils × 3 modes : cycles dossiers",
+      "construction": "scoped",
+      "criteria": [
+        "B4-01"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/erp/activity-workflows.ts"
+      ]
+    },
+    {
+      "id": "agenda",
+      "title": "Rendez-vous et catalogue",
+      "construction": "partial",
+      "criteria": [
+        "B4-01",
+        "B4-05"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/main.tsx"
+      ]
+    },
+    {
+      "id": "cash",
+      "title": "Caisse, ventes, factures et avoirs",
+      "construction": "partial",
+      "criteria": [
+        "B4-01",
+        "B4-05",
+        "B4-06"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/main.tsx"
+      ]
+    },
+    {
+      "id": "stock",
+      "title": "Stock, inventaire et achats",
+      "construction": "partial",
+      "criteria": [
+        "B4-01",
+        "B4-05"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/main.tsx"
+      ]
+    },
+    {
+      "id": "crm",
+      "title": "Clients, CRM et fidélité",
+      "construction": "partial",
+      "criteria": [
+        "B4-01",
+        "B4-05"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/main.tsx"
+      ]
+    },
+    {
+      "id": "hr",
+      "title": "RH, planning et pointage",
+      "construction": "partial",
+      "criteria": [
+        "B1-02",
+        "B1-05",
+        "B1-06",
+        "B1-07"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/erp/staff-roster.tsx",
+        "apps/web/naxa-services/src/erp/attendance-proof.tsx"
+      ]
+    },
+    {
+      "id": "meetings",
+      "title": "Réunions et collaboration",
+      "construction": "partial",
+      "criteria": [
+        "B2-01",
+        "B2-02"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/erp/internal-meetings.tsx"
+      ]
+    },
+    {
+      "id": "media",
+      "title": "SFU, caméra et partage écran",
+      "construction": "incomplete",
+      "criteria": [
+        "B2-03",
+        "B2-04",
+        "B2-05"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "recording",
+      "title": "Consentement et enregistrement",
+      "construction": "partial",
+      "criteria": [
+        "B3-01",
+        "B3-02",
+        "B3-03"
+      ],
+      "anchors": [
+        "supabase/drafts/naxa_services_v14_recording_request.sql"
+      ]
+    },
+    {
+      "id": "ai",
+      "title": "IA, voix, traduction",
+      "construction": "incomplete",
+      "criteria": [
+        "B3-04",
+        "B3-05",
+        "B3-08"
+      ],
+      "anchors": []
+    },
+    {
+      "id": "reports",
+      "title": "Bilans, objectifs et archives",
+      "construction": "partial",
+      "criteria": [
+        "B3-06",
+        "B3-07"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/erp/daily-briefing.tsx",
+        "supabase/drafts/naxa_services_v27_briefing_archive.sql"
+      ]
+    },
+    {
+      "id": "commission",
+      "title": "Commissions",
+      "construction": "partial",
+      "criteria": [
+        "B4-02",
+        "B4-03",
+        "B4-04"
+      ],
+      "anchors": [
+        "supabase/drafts/naxa_services_v24_commission_configuration.sql",
+        "supabase/drafts/naxa_services_v29_commission_deferred.sql"
+      ]
+    },
+    {
+      "id": "finance",
+      "title": "Comptabilité et paie",
+      "construction": "partial",
+      "criteria": [
+        "B4-07"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/main.tsx"
+      ]
+    },
+    {
+      "id": "subscription",
+      "title": "Abonnements et Mobile Money",
+      "construction": "partial",
+      "criteria": [
+        "B5-03"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/erp/subscription.tsx"
+      ]
+    },
+    {
+      "id": "notifications",
+      "title": "Notifications et FCM",
+      "construction": "partial",
+      "criteria": [
+        "B5-04"
+      ],
+      "anchors": [
+        "supabase/functions/naxa-services-notifications/index.ts"
+      ]
+    },
+    {
+      "id": "integration",
+      "title": "Sécurité, WhatsApp et support",
+      "construction": "partial",
+      "criteria": [
+        "B5-05"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/main.tsx"
+      ]
+    },
+    {
+      "id": "backup",
+      "title": "Sauvegarde et restauration",
+      "construction": "partial",
+      "criteria": [
+        "B5-06",
+        "B5-07"
+      ],
+      "anchors": [
+        ".github/workflows/naxa-services-backup-restore.yml"
+      ]
+    },
+    {
+      "id": "promotion",
+      "title": "Parrainage et promotion",
+      "construction": "partial",
+      "criteria": [
+        "B5-09"
+      ],
+      "anchors": [
+        "supabase/functions/naxa-services-customer-promotions/index.ts"
+      ]
+    },
+    {
+      "id": "hosting",
+      "title": "Parité Edge et PWA hébergée",
+      "construction": "partial",
+      "criteria": [
+        "B5-01",
+        "B5-08"
+      ],
+      "anchors": [
+        ".github/workflows/naxa-services-cloudflare-preflight.yml"
+      ]
+    },
+    {
+      "id": "ux",
+      "title": "Langues, CGU et accessibilité",
+      "construction": "partial",
+      "criteria": [
+        "B6-01",
+        "B6-02",
+        "B6-03"
+      ],
+      "anchors": [
+        "apps/web/naxa-services/src/main.tsx"
+      ]
+    },
+    {
+      "id": "delivery",
+      "title": "Sécurité, Android et release",
+      "construction": "partial",
+      "criteria": [
+        "B6-04",
+        "B6-05",
+        "B6-06",
+        "B6-07"
+      ],
+      "anchors": [
+        ".github/workflows/naxa-services-technical-gate.yml",
+        ".github/workflows/naxa-services-release-readiness.yml"
+      ]
+    }
+  ]
+}

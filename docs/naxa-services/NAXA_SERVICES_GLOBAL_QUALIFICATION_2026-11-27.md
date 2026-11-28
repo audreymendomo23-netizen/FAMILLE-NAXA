@@ -31,12 +31,12 @@ Les sept workflows de qualification sont déclenchés sur le même commit par la
 | B3-04 | Traduction/transcription vocale six langues | development | technical-gate | FR/EN/FF/ES/IT/mandarin, original conservé, streaming, mesures latence/qualité et échantillons consentis ; aucun faux résultat. |
 | B3-05 | Résumé IA et validation humaine | development | technical-gate | Résumé sourcé, décisions éditables, refus de fabrication, validation humaine, isolation et consentement. |
 | B3-06 | Bilan historique daté et cloisonnement | replay | replay-isolated | Promoteur/invité, veille, limite 366 jours, dates future/ancienne refusées ; aucune finance pour personnel. |
-| B3-07 | Bilan complet multi-périodes, archives, notifications et Q&A vocal | development | technical-gate | Consolidations autorisées, rubriques complètes, archive, notification et interaction vocale ; aucune donnée inventée. |
+| B3-07 | Bilan complet multi-périodes, archives, notifications et Q&A vocal | partial | technical-gate | Consolidations autorisées, rubriques complètes, archive, notification et interaction vocale ; aucune donnée inventée. |
 | B3-08 | Six voix et lecture sur appareils | external | hosted-device-test | Voix locales qualifiées, arrêt arrière-plan, consentement, voix indisponible signalée ; revue Fulfulde. |
 | B4-01 | 39 combinaisons activité/mode et interactions ERP | replay | replay-isolated | 39 cycles Chromium ; facturation/avoirs, stocks/transferts, CRM/fidélité, objectifs, charges et concurrence déjà testés. |
 | B4-02 | Confidentialité des rémunérations et moteur financier | replay | technical-gate | Dix cas supplémentaires REST/sync dans replay ; moteur fixe/proportionnel, part, bornes et règle manquante ; pas de virement. |
-| B4-03 | Configuration facultative des commissions, défaut désactivé | development | technical-gate | Promoteur uniquement ; règles par collaborateur/prestation/activité/site, aucune valeur par défaut, absence de règle sans commission ; contrôle priorités explicites. |
-| B4-04 | Raccordement automatique prestations/exécutants/encaissements | development | replay-isolated | Cas terminé + paiement confirmé + allocation explicite ; idempotence, concurrence, annulation et extournes transactionnelles ; sans taux universel. |
+| B4-03 | Configuration facultative des commissions, défaut désactivé | partial | technical-gate | Promoteur uniquement ; règles par collaborateur/prestation/activité/site, aucune valeur par défaut, absence de règle sans commission ; contrôle priorités explicites. |
+| B4-04 | Raccordement automatique prestations/exécutants/encaissements | partial | replay-isolated | Cas terminé + paiement confirmé + allocation explicite ; idempotence, concurrence, annulation et extournes transactionnelles ; sans taux universel. |
 | B4-05 | Parité Android/Web/PWA, rôles et deux appareils | partial | technical-gate | Builds, Chromium et instrumentation existants ; compléter toutes opérations par rôle, mode et poste, exports natifs et conflits. |
 | B4-06 | Impression et export matériel | external | hosted-device-test | PDF/reçu, Bluetooth/imprimante réelle, pas de doublon ni perte, rapprochement des totaux et exports natifs. |
 | B4-07 | Fiscalité SYSCOHADA, paie et commissions réglementaires | external | release-readiness | Visa professionnel daté, comptes et taux validés ; tests moteur ne valent pas certification. |
@@ -58,3 +58,9 @@ Les sept workflows de qualification sont déclenchés sur le même commit par la
 | B6-07 | Release signée, distribution et autorisation finale | external | release-readiness | Signature commerciale uniquement après autorisation, même SHA, installation et distribution contrôlées ; workflow release non déclenché. |
 
 Clôture : preuve terminale par ID et périmètre, aucun succès par association à un workflow voisin. Les points development/external sont des spécifications de recette et ne sont pas encore exécutables intégralement. La campagne ne certifie pas le lancement commercial.
+
+## Réalignement 28 novembre
+- B3-07 : Bilan multi-jours et archive privée construits ; notifications, Q&A vocal et rubriques exhaustives restent ouverts.
+- B4-03 : V24 et contrôles promoteur, chevauchements, défaut désactivé prouvés ; compléter toutes les dimensions des règles et la parité native.
+- B4-04 : V25–V29 rapprochement, approbation, remboursement intégral, allocation multiligne et file différée ; événement automatique, partage d'une ligne, extourne partielle et autres sources ouverts.
+Aucun PASS automatique. Voir le registre d'exécution distinct.

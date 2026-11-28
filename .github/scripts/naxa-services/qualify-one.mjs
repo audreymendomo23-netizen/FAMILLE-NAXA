@@ -1,3 +1,4 @@
+import {classifyQualification} from "./qualification-status.mjs";
 import {readFile,mkdir,writeFile,appendFile} from "node:fs/promises";
 import {execFileSync,spawnSync} from "node:child_process";
 const baseline=process.env.GITHUB_SHA;
@@ -200,7 +201,8 @@ const evidence={
     {
       "job": "replay",
       "markers": [
-        "PASS real scoped partial briefing text and language selection"
+        "PASS real scoped partial briefing text and language selection",
+        "PASS B3 private server report archive: create, read, cross-member denial and delete"
       ]
     }
   ],
@@ -248,15 +250,8 @@ const evidence={
       ]
     }
   ],
-  "B4-03": [{"job":"finance","markers":["# fail 0"]},{"job":"replay","markers":["PASS B4 real browser commission configuration: default disabled, promoter approval, employee denied, retirement and disable"]}],
-  "B4-04": [
-    {
-      "job": "finance",
-      "markers": [
-        "# pass "
-      ]
-    }
-  ],
+  "B4-03": [{"job":"finance","markers":["# fail 0"]},{"job":"sql","markers":["PASS: automatic commission configuration, promoter scope, default disabled, explicit rates, exact retry, overlap, retirement and no ledger mutation"]},{"job":"replay","markers":["PASS B4 real browser commission configuration: default disabled, promoter approval, employee denied, retirement and disable"]}],
+  "B4-04": [{"job":"sql","markers":["PASS: transverse operational cockpit, commission approval, exact replay and confirmed full refund adjustment","PASS: explicit multiline commission allocation, two executors, exact replay, scoped approval and no duplicate","PASS: deferred explicit commission plan, unpaid wait, completion and payment recheck, one pending entry and exact replay"]},{"job":"finance","markers":["# fail 0"]}],
   "B4-05": [
     {
       "job": "web",
@@ -517,7 +512,7 @@ if(process.env.NS_COLLECT==="true"){
 const id=process.env.NS_CRITERION;
 const item=matrix.items.find(x=>x.id===id);
 if(!item||!Object.hasOwn(evidence,id)||matrix.items.length!==43)throw Error("Unknown criterion or incomplete matrix");
-const result={id,title:item.title,acceptance:item.acceptance,classification:item.status,campaignCommit:baseline,orchestrationCommit:baseline,checks:[],status:"UNVERIFIED"};
+const result={id,title:item.title,acceptance:item.acceptance,classification:item.status,residual:item.residual??item.acceptance,campaignCommit:baseline,orchestrationCommit:baseline,checks:[],status:"UNVERIFIED"};
 const proof=JSON.parse(await readFile(proofFile,"utf8"));
 if(proof.candidateCommit!==baseline||proof.branch!==branch)throw Error("Evidence scope mismatch");
 async function verify(spec){
@@ -535,12 +530,7 @@ try{
  const checks=await Promise.all(evidence[id].map(async spec=>{try{return await verify(spec)}catch(e){return {source:spec.job,passed:false,status:"EVIDENCE_ERROR",error:String(e.message).slice(0,300)}}}));
  result.checks.push(...checks);
  for(const check of checks)if(!check.passed)console.log(JSON.stringify({source:check.source,status:check.status,error:check.error??null,missingMarkers:check.markers?.filter(m=>!m.found).map(m=>m.marker)??[]}));
- const passing=result.checks.length>0&&result.checks.every(x=>x.passed);
- if(item.status==="development")result.status="BLOCKED_DEVELOPMENT";
- else if(item.status==="external")result.status="BLOCKED_EXTERNAL";
- else if(!passing)result.status="FAILED_OR_UNVERIFIED";
- else if(item.status==="partial")result.status="PARTIAL_PROOF";
- else result.status="PASS_SCOPED";
+ Object.assign(result,classifyQualification(item.status,result.checks));
 }catch(e){result.status="FAILED_OR_UNVERIFIED";result.error=String(e.message).slice(0,300);}
 await mkdir("artifacts/individual-qualification",{recursive:true});
 await writeFile("artifacts/individual-qualification/"+id+".json",JSON.stringify(result,null,2));

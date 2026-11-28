@@ -1,11 +1,13 @@
 # NAXA SERVICES — document de continuité dédié
 
 **Version :** 1.4  
-**Date de mise à jour :** 22 novembre 2026  
+**Date de mise à jour :** 28 novembre 2026  
 **Dépôt :** `audreymendomo23-netizen/FAMILLE-NAXA`  
 **Branche de travail :** `work/naxa-services-completion-20261120`  
 **HEAD applicatif validé par le gate N3 :** `b076898f568961a0c22bdd430d57db7a9e667b61`  
-**Statut global :** **N1 VERT 55/55 ; N2 VERT 44/44 ; N3 VERT COMPLET — PUSH/PULL, ROOM ET RECETTE BIDIRECTIONNELLE VALIDÉS ; CI 12/12 SUCCESS ; ACTIVATION PRODUCTION NON DÉPLOYÉE**
+**Acquis historiques N1–N3 (22 novembre, non verdict du HEAD courant) :** **N1 VERT 55/55 ; N2 VERT 44/44 ; N3 VERT COMPLET — PUSH/PULL, ROOM ET RECETTE BIDIRECTIONNELLE VALIDÉS ; CI 12/12 SUCCESS ; ACTIVATION PRODUCTION NON DÉPLOYÉE**
+
+**Synthèse au 28 novembre :** HEAD audité `2f849eb5da1ee51c0355f08b51684da5cc4fce1d`, Gate 13/13, Chromium 39/39. Les 8/43 historiques sont les réserves, non la construction. V25–V29 réconciliés ; le candidat de pilotage doit être qualifié à son propre SHA.
 
 Ce document est le point de reprise spécifique de NAXA SERVICES. Il complète `docs/CONTINUITE.md` et le registre `NAXA_SERVICES_REMAINING_RED_GATES_2026-11-21.md`. Il ne remplace pas les cahiers des charges ni les décisions métier.
 
@@ -1861,3 +1863,10 @@ Statut : principe fonctionnel validé ; raccordement métier et recette E2E enco
 
 - HEAD 98929a8 : Gate 46066131295 13/13 SUCCESS, Cloudflare 46066131330 SUCCESS ; Replay 46066131335 FAILURE, job 140731761253 : SyntaxError Identifier archived has already been declared. Le scénario ne démarrait pas ; renommage local archivedReport pour l’archive de bilan, recette planning inchangée.
 - v29 : enregistrement anticipé d’associations explicites vente/ligne/rendez-vous, 1 à 30 lignes, verrou organisation, déduplication, état en attente et file du promoteur. Au traitement explicite, revalidation de la fin de prestation et du paiement intégral confirmé, appel aux moteurs v25/v28, réception idempotente, mise en revue des conflits et annulations ; aucune sortie de fonds. Écran connecté sous flag commission settlement existant. Tests isolés attente avant règlement, fin de prestation, confirmation, reprise exacte et absence de doublon. Limites : la file est traitée sur action du promoteur, pas encore automatiquement par événement/scheduler ; les parcours directs v25/v28 peuvent être utilisés indépendamment et un conflit est signalé, pas de réservation globale de leurs appels. Pas de ventilation d’une ligne entre plusieurs exécutants, extourne partielle, sources sans rendez-vous, audiovisuel/IA réelle et native encore ouverts. Aucun vert global anticipé, aucun main, déploiement, migration hébergée ni paiement.
+
+
+### 28 novembre — Réalignement du pilotage
+
+- 3775ed5 → 2f849eb : +5 commits, 0 retard, 23 fichiers modifiés/ajoutés, aucune suppression entière. Gate 46067857308 13/13, replay 46067857448 39/39. Pas de garantie de non-régression exhaustive.
+- B3-07, B4-03, B4-04 reclassés partiels, nouvelles preuves ciblées, conditions résiduelles conservées. Registre distinct de 24 domaines connus reliés aux 43 réserves ; non exhaustif du CDC, aucun pourcentage global inventé.
+- Déclencheurs des huit workflows synchronisés, collecte SHA exact, tests du verdict et inventaire. Aucun changement fonctionnel, migration hébergée, paiement, signature ou workflow de release commerciale ajouté.

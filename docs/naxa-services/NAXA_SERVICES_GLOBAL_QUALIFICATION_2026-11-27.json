@@ -4,10 +4,11 @@
   "scope": "Registre des recettes résiduelles connues d'après continuité §22.119 et §22.129–130, audit fermeture, contradictions C01–C24, red gates et workflows. Ce n'est pas un audit exhaustif de tout le code ni la preuve d'absence d'autres défauts.",
   "policy": {
     "replay": "Recette existante relancée ; succès à constater, périmètre limité.",
-    "partial": "Recette partielle relancée ; reste non qualifié.",
+    "partial": "Implémentation ou preuve partielle ; preuves ciblées distinctes des conditions résiduelles.",
     "development": "Critère documenté, implémentation/recette E2E manquante ; workflow voisin ne peut pas le déclarer vert.",
     "external": "Preuve réelle, autorisation ou expertise externe requise ; workflow voisin ne peut pas le déclarer vert.",
-    "exactCandidate": "Campagne de qualification : SHA GitHub courant, mêmes branche et workflows ; aucune preuve historique substituée. Les preuves partielles, développement et externes ne deviennent pas PASS_SCOPED automatiquement."
+    "exactCandidate": "Campagne de qualification : SHA GitHub courant, mêmes branche et workflows ; aucune preuve historique substituée. Les preuves partielles, développement et externes ne deviennent pas PASS_SCOPED automatiquement.",
+    "execution": "Ne pas assimiler le registre des réserves à la construction globale."
   },
   "workflows": [
     "technical-gate",
@@ -168,8 +169,9 @@
       "bulk": "B3",
       "title": "Bilan complet multi-périodes, archives, notifications et Q&A vocal",
       "workflow": "technical-gate",
-      "status": "development",
-      "acceptance": "Consolidations autorisées, rubriques complètes, archive, notification et interaction vocale ; aucune donnée inventée."
+      "status": "partial",
+      "acceptance": "Consolidations autorisées, rubriques complètes, archive, notification et interaction vocale ; aucune donnée inventée.",
+      "residual": "Bilan multi-jours et archive privée construits ; notifications, Q&A vocal et rubriques exhaustives restent ouverts."
     },
     {
       "id": "B3-08",
@@ -200,16 +202,18 @@
       "bulk": "B4",
       "title": "Configuration facultative des commissions, défaut désactivé",
       "workflow": "technical-gate",
-      "status": "development",
-      "acceptance": "Promoteur uniquement ; règles par collaborateur/prestation/activité/site, aucune valeur par défaut, absence de règle sans commission ; contrôle priorités explicites."
+      "status": "partial",
+      "acceptance": "Promoteur uniquement ; règles par collaborateur/prestation/activité/site, aucune valeur par défaut, absence de règle sans commission ; contrôle priorités explicites.",
+      "residual": "V24 et contrôles promoteur, chevauchements, défaut désactivé prouvés ; compléter toutes les dimensions des règles et la parité native."
     },
     {
       "id": "B4-04",
       "bulk": "B4",
       "title": "Raccordement automatique prestations/exécutants/encaissements",
       "workflow": "replay-isolated",
-      "status": "development",
-      "acceptance": "Cas terminé + paiement confirmé + allocation explicite ; idempotence, concurrence, annulation et extournes transactionnelles ; sans taux universel."
+      "status": "partial",
+      "acceptance": "Cas terminé + paiement confirmé + allocation explicite ; idempotence, concurrence, annulation et extournes transactionnelles ; sans taux universel.",
+      "residual": "V25–V29 rapprochement, approbation, remboursement intégral, allocation multiligne et file différée ; événement automatique, partage d'une ligne, extourne partielle et autres sources ouverts."
     },
     {
       "id": "B4-05",
@@ -363,5 +367,14 @@
       "status": "external",
       "acceptance": "Signature commerciale uniquement après autorisation, même SHA, installation et distribution contrôlées ; workflow release non déclenché."
     }
-  ]
+  ],
+  "revisionReview": {
+    "date": "2026-11-28",
+    "reviewedCommit": "2f849eb5da1ee51c0355f08b51684da5cc4fce1d",
+    "changes": [
+      "B3-07",
+      "B4-03",
+      "B4-04"
+    ]
+  }
 }
