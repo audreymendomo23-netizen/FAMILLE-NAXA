@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test apps/web/widemeet/e2e/pages-proxy.test.mjs
+      - run: node --test apps/web/widemeet/e2e/pages-proxy.test.mjs scripts/widemeet/cloudflare-pages-build.test.mjs
       - run: npm install --no-audit --no-fund
       - run: node scripts/widemeet/cloudflare-pages-build.mjs
         env:
