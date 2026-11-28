@@ -314,3 +314,20 @@ test('@central-review verified identity, actual recovery request and unchanged s
   const again=await login(request,'owner');await close(request,again);
  }finally{await close(request,owner)}
 });
+
+test('@transverse shared support registry, private ticket, exact replay and central administrator denial',async({request})=>{
+ const owner=await login(request,'owner'),seller=await login(request,'seller'),o=scoped(request,owner),s=scoped(request,seller);
+ try{
+  const event=randomUUID(),body={action:'support_open',event,subject:'Assistance locale',description:'Mon dossier de recette sans donnée privée'};
+  await invoke(request,{...body,org,site},undefined,401);
+  await s({...body,site:other},403);
+  await s({...body,description:'x'},400);
+  const t=await s(body);expect(t).toMatchObject({id:event,status:'open'});expect(await s(body)).toEqual(t);
+  await s({...body,subject:'Autre demande'},403);
+  expect((await s({action:'support_list'})).map(x=>x.id)).toEqual([event]);
+  expect(await o({action:'support_list'})).toEqual([]);
+  expect(Number(localSql("select count(*) from famille_core.support_tickets t join famille_core.applications a on a.id=t.app_id where a.code='grillad' and t.id='"+event+"'"))).toBe(1);
+  await invoke(request,{action:'central_overview'},owner,403);
+  await invoke(request,{action:'central_overview'},seller,403);
+ }finally{await close(request,seller);await close(request,owner)}
+});

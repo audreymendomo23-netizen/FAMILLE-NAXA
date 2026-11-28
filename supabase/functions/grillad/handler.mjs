@@ -105,9 +105,12 @@ const c=ctx.result;const parsed=parsePromoteurPaymentSms(body.sms,c.channel,leve
   if(body.action==='logout'){const r=await fetcher(base+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:env.key,Authorization:bearer},redirect:'error',signal:AbortSignal.timeout(15000)});return r.ok?reply(200,{result:true}):reply(401,{error:'SESSION'});}
   // RPCs run under the caller token, never under service_role.
   if(body.action==='employee_accept'&&uuid.test(body.request)&&typeof body.invite==='string'&&/^[A-Za-z0-9_-]{32,128}$/.test(body.invite))return upstream(await post('/rest/v1/rpc/grillad_employee_accept',{p_request:body.request,p_token:body.invite},token));
+  if(body.action==='central_overview')return upstream(await post('/rest/v1/rpc/grillad_central_overview',{},token));
   if(body.action==='workspace')return upstream(await post('/rest/v1/rpc/grillad_workspace',{},token));
   if(!uuid.test(body.org)||!uuid.test(body.site))return reply(400,{error:'SCOPE'});
   const scope={p_org:body.org,p_site:body.site};
+  if(body.action==='support_list')return upstream(await post('/rest/v1/rpc/grillad_support_list',scope,token));
+  if(body.action==='support_open'&&uuid.test(body.event)&&typeof body.subject==='string'&&typeof body.description==='string'&&body.subject.length<=120&&body.description.length<=2000)return upstream(await post('/rest/v1/rpc/grillad_support_open',{...scope,p_event:body.event,p_subject:body.subject,p_description:body.description},token));
   if(body.action==='push_register'&&typeof body.enabled==='boolean'){
    if(body.enabled&&(typeof body.token!=='string'||body.token.length<30||body.token.length>4096||!env.firebaseProject||body.project!==env.firebaseProject))return reply(400,{error:'PUSH_NOT_CONFIGURED'});
    return upstream(await post('/rest/v1/rpc/grillad_push_register',{...scope,p_token:body.enabled?body.token:null,p_project:body.enabled?body.project:null,p_enabled:body.enabled},token));
