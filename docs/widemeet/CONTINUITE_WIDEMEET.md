@@ -567,3 +567,6 @@ Réactions (J’aime, J’adore, Bravo, une par compte), favoris privés et filt
 
 ## 28/11/2026 — Six réactions professionnelles validées
 [V] Actualités : J’aime 👍, Bravo 👏, J’adore ❤️, Instructif 💡, Soutien 🤝, Amusant 😂 ; une réaction active par compte/publication, remplaçable ou retirable. Les commentaires restent libres. FR/EN, contrôles serveur stricts et tests Edge/Chromium des six choix. Android : disposition sur deux colonnes pour éviter le débordement. Pas de changement des droits ni de la production. Qualification du nouveau candidat à vérifier.
+
+## 28/11/2026 — V2-03 sondages et corrections CI Android
+Sondage autonome dans Actualités : 2 à 6 choix distincts, question dans le texte, vote unique non modifiable (rejeu identique accepté), résultats agrégés après vote ou clôture, fermeture auteur/promoteur, refus interentreprises et post retiré, RLS et accès serveur uniquement. Web/Android FR/EN, recette Edge ajoutée ; recette UI dédiée et qualification restent nécessaires. B6 Android : reprise exacte de la stratégie bornée Gate pour erreur du résolveur Gradle, sans affaiblissement des tests. Capture FLAG_SECURE : contrôle positif élargi à une grille de pixels et attente bornée, puis cinq captures négatives; sécurité de l’application inchangée. Échec audio Egress restant à diagnostiquer. Aucun changement hébergé ni déploiement.

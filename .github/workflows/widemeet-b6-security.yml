@@ -60,7 +60,7 @@ jobs:
         with:
           packages: platform-tools
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Native build and unit tests (retry Maven throttling only)
+      - name: Native build and unit tests (bounded Maven resolution retry)
         run: |
           set -euo pipefail
           tasks=(:widemeet:testDebugUnitTest :widemeet:assembleDebug :widemeet:assembleDebugAndroidTest)
@@ -69,13 +69,30 @@ jobs:
             echo "WM_CI_CENTRAL_ALTERNATE=false" >> "$GITHUB_ENV"
             exit 0
           fi
+          refresh=()
           for attempt in 1 2 3 4; do
             if [ "$attempt" -eq 2 ] || [ "$attempt" -eq 4 ]; then export WM_CI_CENTRAL_ALTERNATE=true; else export WM_CI_CENTRAL_ALTERNATE=false; fi
-            if gradle --no-daemon --max-workers=2 --stacktrace "${tasks[@]}" 2>&1 | tee "$RUNNER_TEMP/wm-gradle-build.log"; then
+            if gradle --no-daemon --max-workers=2 --stacktrace "${refresh[@]}" "${tasks[@]}" 2>&1 | tee "$RUNNER_TEMP/wm-gradle-build.log"; then
               echo "WM_CI_CENTRAL_ALTERNATE=$WM_CI_CENTRAL_ALTERNATE" >> "$GITHUB_ENV"
               exit 0
             fi
-            if ! grep -Eq 'Received status code (429|502|503) from server' "$RUNNER_TEMP/wm-gradle-build.log" || [ "$attempt" -eq 4 ]; then exit 1; fi
+            if [ "$attempt" -eq 4 ]; then exit 1; fi
+            if grep -Eq 'Received status code (429|502|503) from server' "$RUNNER_TEMP/wm-gradle-build.log"; then
+              echo "Retrying transient Maven HTTP failure on alternate official endpoint"
+            elif grep -Eq 'https://(repo\.maven\.apache\.org|repo1\.maven\.org)/maven2/.*Received status code 403 from server' "$RUNNER_TEMP/wm-gradle-build.log"; then
+              echo "Public Maven endpoint returned HTTP 403; retry the same pinned dependencies at the other official endpoint"
+            elif grep -Fq "Could not resolve all files for configuration ':widemeet:debugRuntimeClasspath'" "$RUNNER_TEMP/wm-gradle-build.log" && grep -Eq 'Could not find (org\.jetbrains\.kotlin:kotlin-stdlib-jdk8:1\.8\.21|io\.github\.webrtc-sdk:android-prefixed:125\.6422\.06\.1|org\.jetbrains\.kotlinx:kotlinx-serialization-json:1\.5\.0|com\.google\.protobuf:protobuf-javalite:3\.22\.0|com\.google\.dagger:dagger:2\.46|com\.vdurmont:semver4j:3\.1\.0|com\.squareup\.okio:okio:3\.6\.0)\.' "$RUNNER_TEMP/wm-gradle-build.log" && grep -Eq 'https://(repo\.maven\.apache\.org|repo1\.maven\.org)/maven2/' "$RUNNER_TEMP/wm-gradle-build.log"; then
+              # Known published fixed versions: refresh cached misses before trying the other official endpoint.
+              refresh=(--refresh-dependencies)
+              echo "Refreshing known Maven Central dependency metadata after resolution miss"
+            elif grep -Fq "ModuleVersionResolveException.getMessage" "$RUNNER_TEMP/wm-gradle-build.log" && grep -Fq 'Cannot invoke "java.util.List.get(int)" because "path" is null' "$RUNNER_TEMP/wm-gradle-build.log"; then
+              # Retry the exact same tasks when Gradle masks the Maven resolver error.
+              # Persistent failure remains fatal; no tests or compilation are skipped.
+              refresh=(--refresh-dependencies)
+              echo "Retrying bounded Gradle resolver diagnostic failure with fresh metadata"
+            else
+              exit 1
+            fi
             sleep $((attempt * 20))
           done
       - run: test -s apps/android/widemeet/build/outputs/apk/debug/widemeet-debug.apk

@@ -33,17 +33,28 @@ class B6SecureWindowTest {
             }
             fun visible(): Boolean {
                 val bitmap=instrumentation.uiAutomation.takeScreenshot() ?: return false
-                try { val pixel=bitmap.getPixel(bitmap.width/2,bitmap.height/2);return Color.red(pixel)>200 && Color.blue(pixel)>200 && Color.green(pixel)<60 }
+                try {
+                    // A grid across the interior is resilient to transient status/navigation overlays.
+                    var hits=0
+                    for(x in 2..8) for(y in 2..8) {
+                        val pixel=bitmap.getPixel(bitmap.width*x/10,bitmap.height*y/10)
+                        if(Color.red(pixel)>200 && Color.blue(pixel)>200 && Color.green(pixel)<60) hits++
+                    }
+                    return hits>=3
+                }
                 finally { bitmap.recycle() }
             }
             try {
                 instrumentation.waitForIdleSync()
                 var control=false
-                repeat(15) { if(!control){Thread.sleep(150);control=visible()} }
+                repeat(60) { if(!control){Thread.sleep(200);control=visible()} }
                 assertTrue("Synthetic capture positive control must be visible",control)
             } finally { scenario.onActivity { it.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) } }
-            instrumentation.waitForIdleSync();Thread.sleep(600)
-            assertFalse("Secure content must not be visible to system screenshot",visible())
+            instrumentation.waitForIdleSync();Thread.sleep(1000)
+            repeat(5) {
+                assertFalse("Secure content must not be visible to system screenshot",visible())
+                Thread.sleep(150)
+            }
         }
     }
 }

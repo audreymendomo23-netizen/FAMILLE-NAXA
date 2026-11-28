@@ -554,9 +554,22 @@ alter table public.wm_company_favorites enable row level security;
 alter table public.wm_company_comments enable row level security;
 revoke all on public.wm_company_reactions,public.wm_company_favorites,public.wm_company_comments from public,anon,authenticated;
 grant select,insert,update,delete on public.wm_company_reactions,public.wm_company_favorites,public.wm_company_comments to service_role;
+create table public.wm_company_polls(
+ post_id uuid primary key references public.wm_company_posts(id), options jsonb not null,
+ closed_at timestamptz,
+ check(jsonb_typeof(options)='array' and jsonb_array_length(options) between 2 and 6)
+);
+create table public.wm_company_votes(
+ post_id uuid not null references public.wm_company_polls(post_id),account_id uuid not null references public.wm_accounts(id),
+ choice integer not null check(choice between 0 and 5),primary key(post_id,account_id)
+);
+alter table public.wm_company_polls enable row level security;
+alter table public.wm_company_votes enable row level security;
+revoke all on public.wm_company_polls,public.wm_company_votes from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_company_polls,public.wm_company_votes to service_role;
 create function public.wm_company_action(p_hash text,p_action text,p_data jsonb) returns jsonb
 language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; item public.wm_company_posts%rowtype; pid uuid; cid uuid; k text; content text; result jsonb; comment_row public.wm_company_comments%rowtype; only_favorites boolean;
+declare a record; item public.wm_company_posts%rowtype; pid uuid; cid uuid; k text; content text; result jsonb; comment_row public.wm_company_comments%rowtype; only_favorites boolean; poll_options jsonb; choice_idx integer; existing_choice integer; poll_row public.wm_company_polls%rowtype;
 begin
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
  select * into a from public.wm_lock_room_actor_for(p_hash,null);
@@ -567,6 +580,10 @@ begin
   only_favorites:=coalesce((p_data->>'favorites')::boolean,false);
   select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc,x.id desc),'[]'::jsonb) into result from (
    select p.id,p.kind,p.author_id,ac.display_name,mb.job_title,p.body,p.created_at,
+    (select jsonb_build_object('options',cp.options,'closed',cp.closed_at is not null,'my_vote',(select v.choice from public.wm_company_votes v where v.post_id=p.id and v.account_id=a.account_id),
+     'counts',case when cp.closed_at is not null or exists(select 1 from public.wm_company_votes v where v.post_id=p.id and v.account_id=a.account_id) then
+       (select jsonb_agg((select count(*) from public.wm_company_votes v join public.wm_memberships mm on mm.account_id=v.account_id and mm.workspace_id=p.workspace_id and mm.enabled join public.wm_accounts aa on aa.id=mm.account_id and aa.enabled where v.post_id=p.id and v.choice=i) order by i) from generate_series(0,jsonb_array_length(cp.options)-1) i) else null end)
+     from public.wm_company_polls cp where cp.post_id=p.id) as poll,
     exists(select 1 from public.wm_company_favorites f where f.post_id=p.id and f.account_id=a.account_id) as favorite,
     (select r.reaction from public.wm_company_reactions r where r.post_id=p.id and r.account_id=a.account_id) as my_reaction,
     (select count(*) from public.wm_company_reactions r join public.wm_memberships m on m.account_id=r.account_id and m.workspace_id=p.workspace_id and m.enabled join public.wm_accounts ca on ca.id=m.account_id and ca.enabled where r.post_id=p.id) as reaction_count,
@@ -585,15 +602,47 @@ begin
  if jsonb_typeof(p_data->'id') is distinct from 'string' or coalesce(p_data->>'id','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then return null;end if;
  pid:=(p_data->>'id')::uuid;
  if p_action='center-company-publish' then
-  if (p_data-'id'-'kind'-'body')<>'{}'::jsonb or jsonb_typeof(p_data->'kind') is distinct from 'string' or jsonb_typeof(p_data->'body') is distinct from 'string' then return null;end if;
+  if (p_data-'id'-'kind'-'body'-'poll_options')<>'{}'::jsonb or jsonb_typeof(p_data->'kind') is distinct from 'string' or jsonb_typeof(p_data->'body') is distinct from 'string' then return null;end if;
   k:=p_data->>'kind';content:=btrim(p_data->>'body');
   if k not in ('news','announcement') or length(content) not between 1 and 4000 or (k='announcement' and a.role not in ('promoteur','manager')) then return null;end if;
+  if p_data ? 'poll_options' then
+   if k<>'news' or jsonb_typeof(p_data->'poll_options') is distinct from 'array' then return null;end if;
+   if jsonb_array_length(p_data->'poll_options') not between 2 and 6 then return null;end if;
+   if exists(select 1 from jsonb_array_elements(p_data->'poll_options') v where jsonb_typeof(v)<>'string' or length(btrim(v#>>'{}')) not between 1 and 120) then return null;end if;
+   if (select count(distinct lower(btrim(v))) from jsonb_array_elements_text(p_data->'poll_options') v)<>jsonb_array_length(p_data->'poll_options') then return null;end if;
+   select jsonb_agg(btrim(v) order by ord) into poll_options from jsonb_array_elements_text(p_data->'poll_options') with ordinality t(v,ord);
+  end if;
+  if exists(select 1 from public.wm_company_posts where id=pid) then
+   if (select options from public.wm_company_polls where post_id=pid) is distinct from poll_options then return null;end if;
+  end if;
   insert into public.wm_company_posts(id,workspace_id,author_id,kind,body) values(pid,a.workspace_id,a.account_id,k,content) on conflict(id) do nothing;
   select * into item from public.wm_company_posts where id=pid and workspace_id=a.workspace_id and author_id=a.account_id and kind=k and body=content and removed_at is null;
-  if not found then return null;end if;return jsonb_build_object('id',pid,'published',true);
+  if not found then return null;end if;
+  if poll_options is not null then insert into public.wm_company_polls(post_id,options) values(pid,poll_options) on conflict do nothing;end if;
+  return jsonb_build_object('id',pid,'published',true);
  end if;
  select p.* into item from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=p.author_id and ac.enabled where p.id=pid and p.workspace_id=a.workspace_id;
  if not found then return null;end if;
+ if p_action in ('center-company-vote','center-company-poll-close') then
+  if item.removed_at is not null or item.kind<>'news' then return null;end if;
+  select * into poll_row from public.wm_company_polls where post_id=pid;
+  if not found then return null;end if;
+  if p_action='center-company-poll-close' then
+   if (p_data-'id')<>'{}'::jsonb or (item.author_id<>a.account_id and a.role<>'promoteur') then return null;end if;
+   update public.wm_company_polls set closed_at=coalesce(closed_at,clock_timestamp()) where post_id=pid;
+   return jsonb_build_object('closed',true);
+  end if;
+  if (p_data-'id'-'choice')<>'{}'::jsonb or jsonb_typeof(p_data->'choice') is distinct from 'number' or coalesce(p_data->>'choice','') !~ '^[0-5]$' then return null;end if;
+  choice_idx:=(p_data->>'choice')::integer;
+  if choice_idx>=jsonb_array_length(poll_row.options) then return null;end if;
+  select choice into existing_choice from public.wm_company_votes where post_id=pid and account_id=a.account_id;
+  if found then
+   if existing_choice<>choice_idx then return null;end if;return jsonb_build_object('voted',true);
+  end if;
+  if poll_row.closed_at is not null then return null;end if;
+  insert into public.wm_company_votes(post_id,account_id,choice) values(pid,a.account_id,choice_idx);
+  return jsonb_build_object('voted',true);
+ end if;
  if p_action in ('center-company-reaction','center-company-favorite','center-company-comments','center-company-comment','center-company-comment-remove') then
   if item.removed_at is not null or item.kind<>'news' then return null;end if;
   if p_action='center-company-reaction' then
