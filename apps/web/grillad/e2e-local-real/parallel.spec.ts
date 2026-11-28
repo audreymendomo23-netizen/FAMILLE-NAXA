@@ -333,6 +333,9 @@ test('@transverse shared support registry, private ticket, exact replay and cent
   expect(Number(localSql("select count(*) from famille_core.support_tickets t join famille_core.applications a on a.id=t.app_id where a.code='grillad' and t.id='"+event+"'"))).toBe(1);
   await invoke(request,{action:'central_overview'},owner,403);
   await invoke(request,{action:'central_overview'},seller,403);
+  await s({action:'drive_control',operation:'status'},403);
+  expect(await o({action:'drive_control',operation:'status'})).toMatchObject({connected:false,status:'not_connected',last_success:null});
+  await o({action:'drive_control',operation:'now'},400);
   await s({action:'backup_export'},403);
   await s({action:'backup_preferences'},403);
   const pref=await o({action:'backup_preferences',frequency:'weekly',minute:360,weekday:1,monthday:1});

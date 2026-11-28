@@ -40,6 +40,12 @@ while IFS= read -r tbl; do
   q="select count(*),md5(coalesce(string_agg(to_jsonb(x)::text,E'\\n' order by to_jsonb(x)::text),'')) from grillad_private.$tbl x"
   [[ "$(psql -XAt -v ON_ERROR_STOP=1 -c "$q")" == "$(PGDATABASE=grillad_restore_test psql -XAt -v ON_ERROR_STOP=1 -c "$q")" ]]
 done < <(psql -XAt -v ON_ERROR_STOP=1 -c "select tablename from pg_tables where schemaname='grillad_private' order by tablename")
+# Full synthetic shared-core and GRILLAD reference data round-trip; never run on hosted data.
+while IFS='|' read -r schema tbl; do
+ [[ "$schema" =~ ^[a-z_]+$ && "$tbl" =~ ^[a-z_]+$ ]]
+ q="select count(*),md5(coalesce(string_agg(to_jsonb(x)::text,E'\\n' order by to_jsonb(x)::text),'')) from $schema.$tbl x"
+ [[ "$(psql -XAt -v ON_ERROR_STOP=1 -c "$q")" == "$(PGDATABASE=grillad_restore_test psql -XAt -v ON_ERROR_STOP=1 -c "$q")" ]]
+done < <(psql -XAt -v ON_ERROR_STOP=1 -c "select schemaname,tablename from pg_tables where schemaname in ('famille_core','famille_private','auth') order by 1,2")
 PGDATABASE=grillad_restore_test psql -X -v ON_ERROR_STOP=1 <<'SQL'
 begin;
 set role authenticated;

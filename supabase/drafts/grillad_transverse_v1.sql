@@ -221,7 +221,7 @@ alter table grillad_private.backup_preferences enable row level security;
 revoke all on grillad_private.backup_preferences from public,anon,authenticated;
 create function public.grillad_backup_preferences(p_org uuid,p_site uuid,p_frequency text default null,p_minute integer default null,p_weekday integer default null,p_monthday integer default null) returns jsonb
 language plpgsql security definer set search_path=pg_catalog as $fn$
-declare v grillad_private.backup_preferences%rowtype;
+declare v grillad_private.backup_preferences%rowtype;cloud jsonb;
 begin
  if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_BACKUP_DENIED' using errcode='42501';end if;
  if p_frequency is not null then
@@ -230,7 +230,8 @@ begin
   on conflict(org,site,actor) do update set frequency=excluded.frequency,local_minute=excluded.local_minute,weekday=excluded.weekday,monthday=excluded.monthday,updated_at=now();
  end if;
  select * into v from grillad_private.backup_preferences where org=p_org and site=p_site and actor=auth.uid();
- return jsonb_build_object('frequency',coalesce(v.frequency,'off'),'minute',coalesce(v.local_minute,360),'weekday',coalesce(v.weekday,1),'monthday',coalesce(v.monthday,1),'timezone','Africa/Douala','destination','google_drive','cloud_status','not_connected','last_success',null);
+ select jsonb_build_object('status',last_status,'last_success',last_success) into cloud from grillad_private.drive_connections where org=p_org and site=p_site and actor=auth.uid();
+ return jsonb_build_object('frequency',coalesce(v.frequency,'off'),'minute',coalesce(v.local_minute,360),'weekday',coalesce(v.weekday,1),'monthday',coalesce(v.monthday,1),'timezone','Africa/Douala','destination','google_drive','cloud_status',coalesce(cloud->>'status','not_connected'),'last_success',cloud->'last_success');
 end $fn$;
 create function grillad_private.backup_data(p_org uuid,p_site uuid) returns jsonb
 language plpgsql stable security definer set search_path=pg_catalog as $fn$
@@ -309,7 +310,7 @@ begin
  return jsonb_build_object('connected',d.actor is not null,'last_success',d.last_success,'status',coalesce(d.last_status,'not_connected'),'queued',d.requested is not null);
 end $fn$;
 create function public.grillad_drive_claim() returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
-declare d grillad_private.drive_connections%rowtype;p grillad_private.backup_preferences%rowtype;localtime timestamp:=now() at time zone 'Africa/Douala';slot text;candidate record;
+declare d grillad_private.drive_connections%rowtype;p grillad_private.backup_preferences%rowtype;local_ts timestamp:=now() at time zone 'Africa/Douala';slot text;candidate record;
 begin
  for candidate in select c.org,c.site,c.actor from grillad_private.drive_connections c where (c.leased_at is null or c.leased_at<now()-interval '15 minutes') order by c.leased_at nulls first limit 100 loop
   select * into d from grillad_private.drive_connections where org=candidate.org and site=candidate.site and actor=candidate.actor for update skip locked;
@@ -317,10 +318,10 @@ begin
   select * into p from grillad_private.backup_preferences where org=d.org and site=d.site and actor=d.actor;
   slot:=null;
   if d.requested is not null then slot:='manual-'||d.requested::text;
-  elsif p.frequency is not null and p.frequency<>'off' and extract(hour from localtime)*60+extract(minute from localtime)>=p.local_minute then
-   if p.frequency='daily' then slot:='daily-'||localtime::date::text;
-   elsif p.frequency='weekly' and extract(isodow from localtime)=p.weekday then slot:='weekly-'||localtime::date::text;
-   elsif p.frequency='monthly' and extract(day from localtime)=p.monthday then slot:='monthly-'||to_char(localtime,'YYYY-MM');end if;
+  elsif p.frequency is not null and p.frequency<>'off' and extract(hour from local_ts)*60+extract(minute from local_ts)>=p.local_minute then
+   if p.frequency='daily' then slot:='daily-'||local_ts::date::text;
+   elsif p.frequency='weekly' and extract(isodow from local_ts)=p.weekday then slot:='weekly-'||local_ts::date::text;
+   elsif p.frequency='monthly' and extract(day from local_ts)=p.monthday then slot:='monthly-'||to_char(local_ts,'YYYY-MM');end if;
   end if;
   if slot is null or slot=d.last_slot then continue;end if;
   update grillad_private.drive_connections set lease=gen_random_uuid(),leased_at=now(),last_status='running' where org=d.org and site=d.site and actor=d.actor returning * into d;
@@ -335,7 +336,7 @@ begin
 end $fn$;
 create function public.grillad_drive_finish(p_org uuid,p_site uuid,p_actor uuid,p_lease uuid,p_slot text,p_ok boolean) returns boolean language plpgsql security definer set search_path=pg_catalog as $fn$
 begin
- update grillad_private.drive_connections set last_status=case when p_ok then 'uploaded' else 'failed' end,last_success=case when p_ok then now() else last_success end,last_slot=case when p_ok then p_slot else last_slot end,requested=case when p_ok and p_slot='manual-'||requested::text then null else requested end,lease=null,leased_at=case when p_ok then null else now() end
+ update grillad_private.drive_connections set last_status=case when p_ok then 'uploaded' else 'failed' end,last_success=case when p_ok then now() else last_success end,last_slot=case when p_ok and p_slot not like 'manual-%' then p_slot else last_slot end,requested=case when p_ok and p_slot='manual-'||requested::text then null else requested end,lease=null,leased_at=case when p_ok then null else now() end
  where org=p_org and site=p_site and actor=p_actor and lease=p_lease;
  return found;
 end $fn$;
