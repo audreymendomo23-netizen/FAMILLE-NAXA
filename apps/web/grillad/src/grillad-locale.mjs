@@ -1,5 +1,22 @@
 // Shared NAXA vocabulary and candidate Cameroonian Fulfulde translations; native linguistic review pending.
 export const labels={
+ "Créer mon compte": ["Create my account","Sos konte am"],
+ "Vérifier mon adresse e-mail": ["Verify my email","Ƴeewto iimeel am"],
+ "Créer un nouveau mot de passe": ["Create a new password","Sos finnde hesere"],
+ "Nom et prénom": ["Full name","Innde e yettoode"],
+ "Adresse e-mail": ["Email address","Iimeel"],
+ "Nom de l’entreprise": ["Business name","Innde liggeere"],
+ "Premier point de vente": ["First outlet","Nokku jaaygol aranol"],
+ "Code ou lien de vérification": ["Verification code or link","Kod walla jokkol ƴeewtagol"],
+ "Continuer": ["Continue","Jokku"],
+ "Démarrer mon essai gratuit": ["Start my free trial","Fuɗɗo ƴeewtagol meere"],
+ "Enregistrer le nouveau mot de passe": ["Save new password","Danndu finnde hesere"],
+ "Connexion par e-mail ou téléphone": ["Sign in with email or phone","Naatnu iimeel walla telefoŋ"],
+ "Récupérer par e-mail": ["Recover by email","Heɓtu e iimeel"],
+ "72 heures gratuites, sans paiement.": ["72 free hours, no payment.","Waktu 72 meere, alaa yoɓugol."],
+ "Conditions d’utilisation et confidentialité": ["Terms and privacy","Sarɗiiji e suturo"],
+ "J’accepte les conditions d’utilisation et la politique de confidentialité": ["I accept the terms and privacy policy","Mi jaɓii sarɗiiji e suturo"],
+ "Copiez le code ou le lien de vérification reçu par e-mail, sans ouvrir le lien.": ["Copy the code or verification link from your email without opening the link.","Natto kod walla jokkol iimeel."],
   "Accueil": [
     "Home",
     "Jaɓɓorgo"
