@@ -74,7 +74,8 @@ set role service_role;
 do $test$ declare o uuid:=current_setting('grillad.test.org')::uuid;s uuid:=current_setting('grillad.test.site')::uuid;op uuid:='c1000000-0000-0000-0000-000000000002';zo uuid:='c3000000-0000-0000-0000-000000000001';zs uuid:='c4000000-0000-0000-0000-000000000001';so uuid:='c3000000-0000-0000-0000-000000000002';ss uuid:='c4000000-0000-0000-0000-000000000002';v jsonb;e uuid:=gen_random_uuid();begin
  begin perform public.grillad_partner_zipple(e,o,s,zo,zs,repeat('c',64),now()+interval '1 day');raise exception 'missing consent accepted';exception when insufficient_privilege then null;end;
  perform public.grillad_partner_approval('zipple',o,s,zo,zs,op,repeat('a',64),repeat('b',64));
- if not public.grillad_partner_zipple(e,o,s,zo,zs,repeat('c',64),now()+interval '1 day') or public.grillad_connect_catalog(repeat('c',64))->>'merchant'<>'GRILLAD' then raise exception 'zipple bridge';end if;
+ if not public.grillad_partner_zipple(e,o,s,zo,zs,repeat('c',64),now()+interval '1 day') then raise exception 'zipple link';end if;
+ if public.grillad_connect_catalog(repeat('c',64))->>'merchant'<>'GRILLAD' then raise exception 'zipple catalog';end if;
  perform public.grillad_partner_approval('security',o,s,so,ss,op,repeat('d',64),repeat('e',64));
  if not public.grillad_security_bind(o,s,so,ss,so,ss) then raise exception 'security bind';end if;
  v:=public.grillad_security_project(o,s,so,ss);if (v->>'cameras')::int<>1 or (v->>'incidents')::int<>0 or (v->>'live_available')::boolean then raise exception 'security projection';end if;
