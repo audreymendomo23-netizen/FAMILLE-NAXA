@@ -94,4 +94,32 @@ begin
  select coalesce(jsonb_agg(to_jsonb(x) order by x.observed_at desc),'[]'::jsonb) into incidents from (select id,camera,category,observed_at from grillad_private.security_incidents where org=p_org and site=p_site order by observed_at desc limit 50)x;
  return jsonb_build_object('available',true,'live_available',false,'reason','VIDEO_GATEWAY_NOT_QUALIFIED','cameras',cams,'incidents',incidents);
 end $$;
+create or replace function grillad_private.payment_prepare(p_request uuid,p_channel text) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare q grillad_private.central_requests%rowtype;sub uuid;i uuid;amount bigint;intent famille_core.payment_intents%rowtype;
+begin
+ if p_channel is null or p_channel not in ('mtn_momo','orange_money','bank') then raise exception 'GRILLAD_CHANNEL' using errcode='22023';end if;
+ select * into q from grillad_private.central_requests where id=p_request and kind='renewal' and status='pending' for update;
+ if not found then raise exception 'GRILLAD_REQUEST' using errcode='22023';end if;
+ select intent_id into i from grillad_private.renewal_payment_links where request_id=q.id;
+ if found then select * into intent from famille_core.payment_intents where id=i;return jsonb_build_object('intent',i,'amount',intent.expected_amount_fcfa,'channel',intent.channel,'status',case when intent.status='pending' and intent.expires_at<=now() then 'expired' else intent.status end,'expires_at',intent.expires_at);end if;
+ select id into strict sub from famille_core.subscriptions s where s.organization_id=q.org and s.app_id=(select id from famille_core.applications where code='grillad') and s.status in ('active','expired','past_due','pending');
+ amount:=(q.details->>'amount')::bigint;
+ insert into famille_core.payment_intents(subscription_id,expected_amount_fcfa,channel,expires_at) values(sub,amount,p_channel,now()+interval '2 days') returning * into intent;
+ i:=intent.id;
+ insert into grillad_private.renewal_payment_links(request_id,intent_id) values(q.id,i);
+ return jsonb_build_object('intent',i,'amount',amount,'channel',intent.channel,'status','pending','expires_at',intent.expires_at);
+end $fn$;
+create or replace function grillad_private.payment_quote(p_org uuid,p_site uuid,p_request uuid,p_channel text) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v jsonb;
+begin
+ begin
+  if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ exception when insufficient_privilege then perform grillad_private.renewal_guard(p_org,p_site);
+ end;
+ if not exists(select 1 from grillad_private.central_requests where id=p_request and org=p_org and kind='renewal' and status='pending') then raise exception 'GRILLAD_REQUEST_DENIED' using errcode='42501';end if;
+ v:=grillad_private.payment_prepare(p_request,p_channel);
+ return v||jsonb_build_object('currency','FCFA','provider_connected',false,'instruction','CENTRAL_VERIFICATION_REQUIRED');
+end $fn$;
 commit;

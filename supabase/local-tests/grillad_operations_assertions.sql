@@ -95,8 +95,10 @@ reset role;
 update famille_core.payment_intents set expires_at=now()-interval '1 second' where id=(select intent_id from grillad_private.renewal_payment_links where request_id='c2000000-0000-0000-0000-000000000009');
 set role service_role;
 do $test$ declare v jsonb;e uuid:=gen_random_uuid();q uuid:='c2000000-0000-0000-0000-000000000009';op uuid:='c1000000-0000-0000-0000-000000000002';begin
+ if public.grillad_payment_prepare(q,'bank')->>'status'<>'expired' or public.grillad_payment_prepare(q,'bank')->>'channel'<>'mtn_momo' then raise exception 'expired payment status';end if;
  v:=public.grillad_payment_reissue(e,q,op,'orange_money',repeat('f',64));
  if v->>'status'<>'reissued' or v->>'intent'=v->>'previous' or public.grillad_payment_reissue(e,q,op,'orange_money',repeat('f',64))<>v then raise exception 'payment reissue';end if;
+ if public.grillad_payment_prepare(q,'bank')->>'channel'<>'orange_money' or public.grillad_payment_prepare(q,'bank')->>'status'<>'pending' then raise exception 'reissued payment status';end if;
  begin perform public.grillad_payment_reissue(gen_random_uuid(),q,op,'bank',repeat('e',64));raise exception 'unexpired intent reissued';exception when invalid_parameter_value then null;end;
  v:=public.grillad_security_tick(10);if (v->>'processed')::int<>1 or (v->>'failed')::int<>0 then raise exception 'security tick';end if;
 end $test$;

@@ -9,6 +9,6 @@ import org.json.JSONObject
  Text("Référence de paiement",style=MaterialTheme.typography.titleMedium);Text("Aucun débit automatique. Attendre les instructions du centre.")
  listOf("mtn_momo" to "MTN MoMo","orange_money" to "Orange Money","bank" to "Banque").forEach{(k,v)->TextButton({channel=k;result=null},enabled=enabled&&!busy){Text((if(channel==k)"✓ " else "")+v)}}
  Button({busy=true;msg="";scope.launch{try{result=request(obj("action" to "payment_quote","request" to pending.optString("id"),"channel" to channel))}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){msg="Référence indisponible. Contactez le centre."}finally{busy=false}}},enabled=enabled&&!busy){Text("Créer la référence de paiement")}
- result?.let{Text("Aucun débit effectué");Text("Référence : "+it.optString("intent")+" · "+it.optString("amount")+" F")}
+ result?.let{Text("Aucun débit effectué");Text("Référence : "+it.optString("intent")+" · "+it.optString("amount")+" F");Text("Canal enregistré : "+when(it.optString("channel")){"orange_money"->"Orange Money";"bank"->"Banque";else->"MTN MoMo"});if(it.optString("status")=="expired")Text("Référence expirée. Ne versez rien ; contactez le centre.")}
  if(msg.isNotBlank())Text(msg)
 }
