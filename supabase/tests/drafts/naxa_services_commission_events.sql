@@ -147,7 +147,9 @@ do $qa$ begin if public.ns_process_next_commission_event()->>'state'<>'waiting' 
 reset role;
 update public.ns_pressing_orders set status='ready' where id='89000000-0000-4000-8000-000000000249';
 insert into public.ns_pressing_status_events(org_id,site_id,order_id,to_status,actor_member_id,occurred_at) values('20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','89000000-0000-4000-8000-000000000249','ready','60000000-0000-4000-8000-000000000242','2026-11-27 11:00+01');
-insert into public.ns_payments(id,org_id,site_id,pressing_order_id,payment_method,amount_xaf,status,confirmed_at,idempotency_key) values('87000000-0000-4000-8000-000000000249','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','89000000-0000-4000-8000-000000000249','cash',6000,'confirmed','2026-11-27 12:00+01',gen_random_uuid());
+insert into public.ns_cash_registers(id,org_id,site_id,code,name) values('8a000000-0000-4000-8000-000000000249','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','QA-SOURCE-249','QA cash register');
+insert into public.ns_cash_sessions(id,org_id,site_id,register_id,opened_by,opening_float_xaf,opened_at) values('8b000000-0000-4000-8000-000000000249','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','8a000000-0000-4000-8000-000000000249','60000000-0000-4000-8000-000000000241',1000,'2026-11-27 08:00+01');
+insert into public.ns_payments(id,org_id,site_id,pressing_order_id,cash_session_id,payment_method,amount_xaf,status,confirmed_at,idempotency_key) values('87000000-0000-4000-8000-000000000249','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','89000000-0000-4000-8000-000000000249','8b000000-0000-4000-8000-000000000249','cash',6000,'confirmed','2026-11-27 12:00+01',gen_random_uuid());
 set local role service_role;
 do $qa$ declare r jsonb;i integer;done boolean:=false;begin for i in 1..10 loop r:=public.ns_process_next_commission_event();if r->>'state'='processed' then done:=true;end if;exit when r->>'state'='empty';end loop;if not done or r->>'state'<>'empty' then raise exception 'QA_SOURCE_DRAIN';end if;end $qa$;
 reset role;
@@ -158,3 +160,30 @@ do $qa$ declare e uuid;begin
 end $qa$;
 reset role;
 select 'PASS: pressing completion and direct confirmed payment, automatic ledger without fictitious sale or appointment' as result;
+
+-- Existing service order and one matching sale, no appointment. Completion event and payment are independent.
+insert into public.ns_management_records(id,org_id,site_id,record_type,reference,title,amount_xaf,status,created_by) values('89000000-0000-4000-8000-000000000250','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','service_order','QA-SOURCE-WORK','QA completed service',8000,'received','60000000-0000-4000-8000-000000000241');
+insert into public.ns_sales(id,org_id,site_id,customer_id,sale_number,subtotal_xaf,total_xaf,created_by) values('83000000-0000-4000-8000-000000000250','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','80000000-0000-4000-8000-000000000241','QA-SOURCE-WORK',8000,8000,'60000000-0000-4000-8000-000000000241');
+insert into public.ns_sale_lines(id,org_id,site_id,sale_id,item_type,description,quantity,unit_price_xaf,idempotency_key) values('85000000-0000-4000-8000-000000000250','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','83000000-0000-4000-8000-000000000250','service','QA service',1,8000,gen_random_uuid());
+set local role authenticated;
+do $qa$ declare o uuid:='20000000-0000-4000-8000-000000000241';s uuid:='30000000-0000-4000-8000-000000000241';p uuid:='86000000-0000-4000-8000-000000000250';r jsonb;begin
+ r:=public.ns_register_source_commission_plan(o,s,p,'work','89000000-0000-4000-8000-000000000250','83000000-0000-4000-8000-000000000250','81000000-0000-4000-8000-000000000241','60000000-0000-4000-8000-000000000242',null);
+ if r->>'state'<>'waiting' then raise exception 'QA_WORK_REGISTER';end if;
+end $qa$;
+reset role;
+set local role service_role;
+do $qa$ begin if public.ns_process_next_commission_event()->>'state'<>'waiting' then raise exception 'QA_WORK_EARLY';end if;end $qa$;
+reset role;
+update public.ns_management_records set status='delivered',revision=2 where id='89000000-0000-4000-8000-000000000250';
+insert into public.ns_management_record_events(id,org_id,site_id,record_id,from_status,to_status,actor_member_id,revision,occurred_at) values(gen_random_uuid(),'20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','89000000-0000-4000-8000-000000000250','received','delivered','60000000-0000-4000-8000-000000000242',2,'2026-11-27 11:00+01');
+insert into public.ns_payments(org_id,site_id,sale_id,payment_method,amount_xaf,status,confirmed_at,idempotency_key) values('20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','83000000-0000-4000-8000-000000000250','mobile_money',8000,'confirmed','2026-11-27 12:00+01',gen_random_uuid());
+set local role service_role;
+do $qa$ declare r jsonb;i integer;done boolean:=false;begin for i in 1..10 loop r:=public.ns_process_next_commission_event();if r->>'state'='processed' then done:=true;end if;exit when r->>'state'='empty';end loop;if not done or r->>'state'<>'empty' then raise exception 'QA_WORK_DRAIN';end if;end $qa$;
+reset role;
+set local role authenticated;
+do $qa$ declare e uuid;begin
+ select id into e from public.ns_commission_entries where source_event_id='86000000-0000-4000-8000-000000000250' and sale_id='83000000-0000-4000-8000-000000000250' and appointment_id is null and status='pending_approval';
+ if e is null or public.ns_review_settled_commission('20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241',e,gen_random_uuid(),'approve','QA work completed')->>'status'<>'approved' then raise exception 'QA_WORK_APPROVE';end if;
+end $qa$;
+reset role;
+select 'PASS: completed work order linked to actual sale, confirmed payment and ledger approval' as result;
