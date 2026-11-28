@@ -836,6 +836,9 @@ try{
  await waveInbox.getByLabel("Filtrer les notifications").selectOption("all");
  pass("WAVE03 notification filter and authorized inbox view");
   await hp.getByRole("button",{name:"Annuaire professionnel ›",exact:true}).click();
+  await hp.getByLabel("Rechercher un collaborateur").fill("aucun-resultat-synthetique-xyz");
+  await hp.getByRole("status").filter({hasText:"Aucun collaborateur trouvé"}).waitFor();
+  assert.equal(await hp.locator(".wm-v2-contact-name").count(),0);
   await hp.getByLabel("Rechercher un collaborateur").fill("Comptable");
   const professionalRow=hp.locator(".wm-v2-contact-name").filter({hasText:"Comptable"});
   await professionalRow.waitFor();assert.equal(await professionalRow.count(),1);
@@ -843,6 +846,15 @@ try{
   await hp.getByLabel("Poste professionnel",{exact:true}).fill("Responsable comptable");
   await hp.getByRole("button",{name:"Enregistrer le poste",exact:true}).click();
   await hp.locator(".wm-v2-professional").getByText("Responsable comptable",{exact:true}).waitFor();
+  await hp.getByRole("button",{name:"Fermer",exact:true}).click();
+  await hp.getByLabel("Rechercher un collaborateur").fill("responsable comptable");
+  await hp.locator(".wm-v2-contact-name").filter({hasText:"Responsable comptable"}).waitFor();
+  await gp.getByRole("navigation").getByRole("button",{name:"Accueil",exact:true}).click();
+  await gp.getByRole("button",{name:"Annuaire professionnel ›",exact:true}).click();
+  await gp.getByLabel("Rechercher un collaborateur").fill("Replay promoteur");
+  await gp.locator(".wm-v2-contact-name").filter({hasText:"Replay promoteur"}).click();
+  await gp.locator(".wm-v2-professional").waitFor();
+  assert.equal(await gp.getByRole("button",{name:"Enregistrer le poste",exact:true}).count(),0);
   await hp.getByRole("navigation").getByRole("button",{name:"Accueil",exact:true}).click();
   await hp.locator(".wm-v2-primary").waitFor();
   assert.ok((await hp.locator(".wm-v2-primary").innerText()).includes("Nouvelle réunion"));

@@ -34,6 +34,23 @@ jobs:
           name: widemeet-integrated-registry-${{ github.sha }}
           path: ${{ runner.temp }}/wm-integration-registry.json
           if-no-files-found: error
+  v2-coverage:
+    strategy:
+      fail-fast: false
+      matrix:
+        bulk: ["01", "02", "03", "04"]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node scripts/widemeet/v2-qualification-audit.mjs "${{ matrix.bulk }}" "$RUNNER_TEMP/wm-v2-${{ matrix.bulk }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: widemeet-v2-coverage-${{ matrix.bulk }}-${{ github.sha }}
+          path: ${{ runner.temp }}/wm-v2-${{ matrix.bulk }}.json
+          if-no-files-found: error
   gate:
     uses: ./.github/workflows/widemeet-gate.yml
   replay:
@@ -56,7 +73,7 @@ jobs:
       run_full_regression: false
   summary:
     if: always()
-    needs: [registry, gate, replay, sfu, audio, b4, b5-recovery, b5-media, b6, central]
+    needs: [registry, v2-coverage, gate, replay, sfu, audio, b4, b5-recovery, b5-media, b6, central]
     runs-on: ubuntu-24.04
     env:
       RESULTS: ${{ toJSON(needs) }}
