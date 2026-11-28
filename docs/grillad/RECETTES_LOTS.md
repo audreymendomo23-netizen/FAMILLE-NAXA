@@ -46,3 +46,5 @@ Complément profil : un test API et un parcours Chromium métier (profil individ
 Complément opérations : 1 test API nommé + 1 suite SQL intégrée lifecycle (provisionnement, paiement, lot et invitation). Total 186 unités (181 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/39 ; qualification en cours.
 
 Complément invitation : 1 test API supplémentaire, assertions partenaires ZIPPLE/SECURITY ajoutées à la suite SQL opérations. Total 187 unités (182 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/40.
+
+Complément : 1 test API paiement et 2 parcours Chromium (référence sans débit et lot de préparations). Total 190 unités (185 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/43.

@@ -141,6 +141,7 @@ begin
   action_name:=line->>'operation';eid:=(line->>'event')::uuid;
   if eid is null or eid=p_event or action_name is null or action_name not in ('prepare','sell','sell_basket') or jsonb_typeof(line->'payload') is distinct from 'object' then raise exception 'GRILLAD_BATCH_ACTION' using errcode='22023';end if;
   if action_name<>'prepare' and (p_cash is null or not exists(select 1 from grillad_private.cash where org=p_org and site=p_site and id=p_cash and closed_at is null)) then raise exception 'GRILLAD_BATCH_CASH_CONFLICT' using errcode='22023';end if;
+  if exists(select 1 from grillad_private.events where org=p_org and site=p_site and id=eid) then raise exception 'GRILLAD_BATCH_EVENT_ALREADY_USED' using errcode='22023';end if;
   v:=grillad_private.run(p_org,p_site,eid,action_name,line->'payload');results:=results||jsonb_build_array(v);
  end loop;
  v:=jsonb_build_object('id',p_event,'results',results,'count',jsonb_array_length(results));
@@ -228,4 +229,32 @@ grant execute on function grillad_private.employee_accept(uuid,text),public.gril
 create function public.grillad_partner_approval(p_kind text,p_org uuid,p_site uuid,p_partner_org uuid,p_partner_site uuid,p_operator uuid,p_grillad_proof text,p_partner_proof text) returns boolean language sql security invoker set search_path=pg_catalog as $fn$select grillad_private.partner_approval(p_kind,p_org,p_site,p_partner_org,p_partner_site,p_operator,p_grillad_proof,p_partner_proof)$fn$;
 revoke all on function grillad_private.partner_approval(text,uuid,uuid,uuid,uuid,uuid,text,text),public.grillad_partner_approval(text,uuid,uuid,uuid,uuid,uuid,text,text) from public,anon,authenticated;
 grant execute on function grillad_private.partner_approval(text,uuid,uuid,uuid,uuid,uuid,text,text),public.grillad_partner_approval(text,uuid,uuid,uuid,uuid,uuid,text,text) to service_role;
+-- Owner can prepare a reference but cannot attest receipt or debit a wallet.
+create function grillad_private.payment_quote(p_org uuid,p_site uuid,p_request uuid,p_channel text) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v jsonb;
+begin
+ begin
+  if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ exception when insufficient_privilege then perform grillad_private.renewal_guard(p_org,p_site);
+ end;
+ if not exists(select 1 from grillad_private.central_requests where id=p_request and org=p_org and kind='renewal' and status='pending') then raise exception 'GRILLAD_REQUEST_DENIED' using errcode='42501';end if;
+ v:=grillad_private.payment_prepare(p_request,p_channel);
+ return v||jsonb_build_object('channel',p_channel,'currency','FCFA','provider_connected',false,'instruction','CENTRAL_VERIFICATION_REQUIRED');
+end $fn$;
+create function public.grillad_payment_quote(p_org uuid,p_site uuid,p_request uuid,p_channel text) returns jsonb language sql security invoker set search_path=pg_catalog as $fn$select grillad_private.payment_quote(p_org,p_site,p_request,p_channel)$fn$;
+revoke all on function grillad_private.payment_quote(uuid,uuid,uuid,text),public.grillad_payment_quote(uuid,uuid,uuid,text) from public,anon,authenticated;
+grant execute on function grillad_private.payment_quote(uuid,uuid,uuid,text),public.grillad_payment_quote(uuid,uuid,uuid,text) to authenticated;
+-- Explicit common-schema partner mapping; both source and family IDs must be approved.
+create function grillad_private.security_bind(p_org uuid,p_site uuid,p_security_org uuid,p_security_site uuid,p_source_org uuid,p_source_site uuid) returns boolean
+language plpgsql security definer set search_path=pg_catalog as $fn$
+begin
+ if not exists(select 1 from grillad_private.partner_approvals where kind='security' and org=p_org and site=p_site and partner_org=p_source_org and partner_site=p_source_site) or not exists(select 1 from grillad_private.partner_approvals where kind='security' and org=p_org and site=p_site and partner_org=p_security_org and partner_site=p_security_site) then raise exception 'GRILLAD_PARTNER_PROOF' using errcode='42501';end if;
+ insert into grillad_private.security_links(org,site,security_org,security_site,enabled) values(p_org,p_site,p_security_org,p_security_site,true) on conflict(org,site) do nothing;
+ if not exists(select 1 from grillad_private.security_links where org=p_org and site=p_site and security_org=p_security_org and security_site=p_security_site and enabled) then raise exception 'GRILLAD_SECURITY_MAPPING' using errcode='22023';end if;
+ perform grillad_private.security_project(p_org,p_site,p_source_org,p_source_site);return true;
+end $fn$;
+create function public.grillad_security_bind(p_org uuid,p_site uuid,p_security_org uuid,p_security_site uuid,p_source_org uuid,p_source_site uuid) returns boolean language sql security invoker set search_path=pg_catalog as $fn$select grillad_private.security_bind(p_org,p_site,p_security_org,p_security_site,p_source_org,p_source_site)$fn$;
+revoke all on function grillad_private.security_bind(uuid,uuid,uuid,uuid,uuid,uuid),public.grillad_security_bind(uuid,uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function grillad_private.security_bind(uuid,uuid,uuid,uuid,uuid,uuid),public.grillad_security_bind(uuid,uuid,uuid,uuid,uuid,uuid) to service_role;
 commit;

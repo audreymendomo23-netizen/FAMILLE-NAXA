@@ -13,11 +13,12 @@ do $test$ declare e uuid:='c2000000-0000-0000-0000-000000000001';u uuid:='c10000
  v:=public.grillad_central_provision(e,op,u,'+237699000011','Test grillad','Point test','grillad_premium_month');
  if v->>'status'<>'billing_only' or public.grillad_central_provision(e,op,u,'+237699000011','Test grillad','Point test','grillad_premium_month')<>v then raise exception 'provision replay';end if;
  perform set_config('grillad.test.org',v->>'org',true);perform set_config('grillad.test.site',v->>'site',true);
+ if not public.grillad_auth_begin(repeat('c',64),false) or not public.grillad_auth_finish(repeat('c',64),u,'c1000000-0000-0000-0000-000000000011',gen_random_uuid(),'web') then raise exception 'billing login';end if;
  perform public.grillad_payment_prepare(e,'mtn_momo');
  begin perform public.grillad_payment_confirm(e,op,'TEST-GRILLAD-1',5999,now(),repeat('a',64));raise exception 'wrong payment';exception when invalid_parameter_value then null;end;
  if public.grillad_payment_confirm(e,op,'TEST-GRILLAD-1',6000,now(),repeat('a',64))->>'status'<>'processed' then raise exception 'payment activation';end if;
  if public.grillad_payment_confirm(e,op,'TEST-GRILLAD-1',6000,now(),repeat('a',64))->>'status'<>'processed' then raise exception 'payment replay';end if;
- if not public.grillad_auth_begin(repeat('c',64),false) or not public.grillad_auth_finish(repeat('c',64),u,'c1000000-0000-0000-0000-000000000011',gen_random_uuid(),'web') then raise exception 'provisioned login';end if;
+
 end $test$;
 reset role;
 set role authenticated;
@@ -32,6 +33,7 @@ begin
  v:=public.grillad_offline_batch(o,s,e,d,null,l);
  if (v->>'count')::int<>2 or public.grillad_offline_batch(o,s,e,d,null,l)<>v then raise exception 'offline replay';end if;
  begin perform public.grillad_offline_batch(o,s,gen_random_uuid(),d-1,null,l);raise exception 'old batch accepted';exception when invalid_parameter_value then null;end;
+ begin perform public.grillad_offline_batch(o,s,gen_random_uuid(),d,null,l);raise exception 'same line IDs accepted in different batch';exception when invalid_parameter_value then null;end;
  perform public.grillad_action(o,s,'c2000000-0000-0000-0000-000000000002','employee_request','{"phone":"+237699000013","name":"Test vendeur","role":"seller"}');
 end $test$;
 reset role;
@@ -63,7 +65,7 @@ insert into famille_core.organization_apps(organization_id,app_id,status) select
 insert into famille_core.locations(id,organization_id,name) values('c4000000-0000-0000-0000-000000000001','c3000000-0000-0000-0000-000000000001','Snack test'),('c4000000-0000-0000-0000-000000000002','c3000000-0000-0000-0000-000000000002','Cam test');
 insert into famille_core.plans(app_id,code,name,amount_fcfa,billing_period) select id,'fixture-plan','Fixture',1,'monthly' from famille_core.applications where code in ('zipple','naxa_security');
 insert into famille_core.subscriptions(organization_id,app_id,plan_id,status,starts_at,ends_at) select o.organization_id,p.app_id,p.id,'active',now(),now()+interval '1 day' from famille_core.plans p join famille_core.organization_apps o on o.app_id=p.app_id where p.code='fixture-plan';
-insert into grillad_private.security_links(org,site,security_org,security_site,enabled) values(current_setting('grillad.test.org')::uuid,current_setting('grillad.test.site')::uuid,'c3000000-0000-0000-0000-000000000002','c4000000-0000-0000-0000-000000000002',true);
+
 insert into public.sec_organizations values('c3000000-0000-0000-0000-000000000002',true);
 insert into public.sec_sites values('c4000000-0000-0000-0000-000000000002','c3000000-0000-0000-0000-000000000002',true);
 insert into public.sec_devices values('c5000000-0000-0000-0000-000000000001','c3000000-0000-0000-0000-000000000002','c4000000-0000-0000-0000-000000000002','Caméra test','camera',now());
@@ -74,7 +76,8 @@ do $test$ declare o uuid:=current_setting('grillad.test.org')::uuid;s uuid:=curr
  perform public.grillad_partner_approval('zipple',o,s,zo,zs,op,repeat('a',64),repeat('b',64));
  if not public.grillad_partner_zipple(e,o,s,zo,zs,repeat('c',64),now()+interval '1 day') or public.grillad_connect_catalog(repeat('c',64))->>'merchant'<>'GRILLAD' then raise exception 'zipple bridge';end if;
  perform public.grillad_partner_approval('security',o,s,so,ss,op,repeat('d',64),repeat('e',64));
- v:=public.grillad_security_project(o,s,so,ss);if (v->>'cameras')::int<>1 or (v->>'incidents')::int<>1 or (v->>'live_available')::boolean then raise exception 'security projection';end if;
+ if not public.grillad_security_bind(o,s,so,ss,so,ss) then raise exception 'security bind';end if;
+ v:=public.grillad_security_project(o,s,so,ss);if (v->>'cameras')::int<>1 or (v->>'incidents')::int<>0 or (v->>'live_available')::boolean then raise exception 'security projection';end if;
  v:=public.grillad_security_project(o,s,so,ss);if (v->>'incidents')::int<>0 then raise exception 'security duplicate';end if;
 end $test$;
 reset role;
