@@ -27,7 +27,8 @@ export PGHOST=127.0.0.1 PGPORT=54322 PGUSER=postgres PGPASSWORD=postgres PGDATAB
 export GRILLAD_LOCAL_API="$API_URL" GRILLAD_LOCAL_ANON="$ANON_KEY" GRILLAD_LOCAL_SERVICE="$SERVICE_ROLE_KEY"
 cd "$GITHUB_WORKSPACE"
 # GoTrue's actual auth schema is retained; never load the mock auth bootstrap.
-psql -X -v ON_ERROR_STOP=1 -c 'create extension if not exists pgcrypto; alter table auth.sessions add column if not exists tag text;'
+docker exec supabase_db_grillad-local-stack psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -c 'alter table auth.sessions add column if not exists tag text; grant select, update on auth.sessions to postgres; grant select on auth.users to postgres;'
+psql -X -v ON_ERROR_STOP=1 -c 'create extension if not exists pgcrypto;'
 psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
 psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/0002_famille_core_rls.sql
 psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0003_prompt_0_3_contextual_rls.sql
