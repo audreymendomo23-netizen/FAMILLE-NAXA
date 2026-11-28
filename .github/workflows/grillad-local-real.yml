@@ -15,6 +15,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   local-real:
+    name: real (${{ matrix.suite }})
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [journey, identity, catalogue, cash, read-models, resilience]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -37,7 +42,7 @@ jobs:
         run: |
           export VITE_GRILLAD_PUBLIC_KEY="$GRILLAD_LOCAL_ANON"
           node scripts/grillad/cloudflare-pages-build.mjs
-          npm exec --workspace @famille/grillad-web -- playwright test --config playwright.local-real.config.ts
+          npm exec --workspace @famille/grillad-web -- playwright test --config playwright.local-real.config.ts --grep '@${{ matrix.suite }}'
       - name: Destroy isolated stack and credentials
         if: always()
         run: |

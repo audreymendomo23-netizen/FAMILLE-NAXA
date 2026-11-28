@@ -6,7 +6,7 @@ const key=process.env.GRILLAD_LOCAL_ANON!;
 const accounts=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/grillad-real-accounts.json','utf8'));
 const org='d2000000-0000-0000-0000-000000000001',site='d3000000-0000-0000-0000-000000000001',other='d3000000-0000-0000-0000-000000000002';
 const day=new Date(Date.now()+3600000).toISOString().slice(0,10);
-test('real local Auth + Chromium + handler + PostgREST: sale, replay, persistence, roles and logout',async({browser})=>{
+test('@journey real local Auth + Chromium + handler + PostgREST: sale, replay, persistence, roles and logout',async({browser})=>{
  const contexts=[];const sessions=[];
  try{
   for(const role of ['owner','seller']){
