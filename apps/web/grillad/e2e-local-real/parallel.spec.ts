@@ -326,6 +326,10 @@ test('@transverse shared support registry, private ticket, exact replay and cent
   await s({...body,subject:'Autre demande'},403);
   expect((await s({action:'support_list'})).map(x=>x.id)).toEqual([event]);
   expect(await o({action:'support_list'})).toEqual([]);
+  await o({action:'support_thread',ticket:event},403);
+  const m={action:'support_thread',ticket:event,event:randomUUID(),message:'Précision pour mon dossier'};
+  const thread=await s(m);expect(thread.messages).toHaveLength(1);expect(await s(m)).toEqual(thread);
+  await s({...m,message:'Contenu différent'},403);
   expect(Number(localSql("select count(*) from famille_core.support_tickets t join famille_core.applications a on a.id=t.app_id where a.code='grillad' and t.id='"+event+"'"))).toBe(1);
   await invoke(request,{action:'central_overview'},owner,403);
   await invoke(request,{action:'central_overview'},seller,403);

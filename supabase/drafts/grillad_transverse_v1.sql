@@ -106,4 +106,85 @@ end $fn$;
 revoke all on function public.grillad_central_clients(),public.grillad_central_client_state(uuid,text,text,text),public.grillad_referral(uuid,uuid,text,text) from public,anon,authenticated;
 grant execute on function public.grillad_central_clients(),public.grillad_central_client_state(uuid,text,text,text),public.grillad_referral(uuid,uuid,text,text) to authenticated;
 
+-- Extend the existing shared ticket registry, not a second customer identity.
+create table grillad_private.support_messages(
+ id uuid primary key,ticket uuid not null references famille_core.support_tickets(id),
+ author uuid not null references auth.users(id),author_kind text not null check(author_kind in ('customer','agent')),
+ body text not null check(length(body) between 1 and 2000),created_at timestamptz not null default now());
+create index grillad_support_messages_ticket on grillad_private.support_messages(ticket,created_at,id);
+create table grillad_private.support_assignments(ticket uuid primary key references famille_core.support_tickets(id),agent uuid not null references auth.users(id),assigned_at timestamptz not null default now());
+create table grillad_private.support_agent_access(agent uuid primary key references auth.users(id),enabled boolean not null default false);
+alter table grillad_private.support_messages enable row level security;
+alter table grillad_private.support_assignments enable row level security;
+alter table grillad_private.support_agent_access enable row level security;
+revoke all on grillad_private.support_messages,grillad_private.support_assignments,grillad_private.support_agent_access from public,anon,authenticated;
+-- Existing NAXA agents only, explicit GRILLAD opt-in, live session, no new agent identity.
+create function grillad_private.agent_allowed(p_permission text) returns boolean
+language plpgsql stable security definer set search_path=pg_catalog as $fn$
+declare u uuid:=auth.uid();sid uuid;ok boolean:=false;
+begin
+ if u is null or coalesce(auth.jwt()->>'is_anonymous','false')='true' or to_regclass('public.support_agents') is null or to_regclass('public.support_agent_permissions') is null then return false;end if;
+ begin sid:=(auth.jwt()->>'session_id')::uuid;exception when invalid_text_representation then return false;end;
+ if sid is null or not exists(select 1 from auth.sessions where id=sid and user_id=u) or not exists(select 1 from grillad_private.support_agent_access where agent=u and enabled) then return false;end if;
+ execute 'select exists(select 1 from public.support_agents a join public.support_agent_permissions p on p.agent_user_id=a.user_id where a.user_id=$1 and a.status=''active'' and p.permission_code=$2 and p.revoked_at is null)' into ok using u,p_permission;
+ return ok;
+end $fn$;
+create function public.grillad_support_thread(p_org uuid,p_site uuid,p_ticket uuid,p_event uuid default null,p_body text default null) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare a uuid;t famille_core.support_tickets%rowtype;m grillad_private.support_messages%rowtype;v jsonb;msg text:=btrim(p_body);
+begin
+ perform grillad_private.scope(p_org,p_site);
+ select id into a from famille_core.applications where code='grillad';
+ select * into t from famille_core.support_tickets where id=p_ticket and app_id=a and organization_id=p_org and user_id=auth.uid() and deleted_at is null for update;
+ if not found then raise exception 'GRILLAD_SUPPORT_DENIED' using errcode='42501';end if;
+ if p_event is not null then
+  if msg is null or length(msg) not between 1 and 2000 or t.status in ('resolved','closed') then raise exception 'GRILLAD_SUPPORT_INPUT' using errcode='22023';end if;
+  select * into m from grillad_private.support_messages where id=p_event;
+  if found then if m.ticket<>p_ticket or m.author<>auth.uid() or m.body<>msg or m.author_kind<>'customer' then raise exception 'GRILLAD_SUPPORT_REPLAY' using errcode='42501';end if;
+  else
+   if (select count(*) from grillad_private.support_messages where author=auth.uid() and created_at>now()-interval '1 minute')>=12 then raise exception 'GRILLAD_SUPPORT_LIMIT' using errcode='22023';end if;
+   insert into grillad_private.support_messages(id,ticket,author,author_kind,body) values(p_event,p_ticket,auth.uid(),'customer',msg);
+   update famille_core.support_tickets set updated_at=now(),status=case when status='waiting_user' then 'in_progress' else status end where id=p_ticket;
+  end if;
+ end if;
+ select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at,q.id),'[]'::jsonb) into v from (select id,author_kind,body,created_at from grillad_private.support_messages where ticket=p_ticket order by created_at desc,id desc limit 100)q;
+ return jsonb_build_object('ticket',p_ticket,'description',t.description,'messages',v);
+end $fn$;
+create function public.grillad_agent_queue() returns jsonb
+language plpgsql stable security definer set search_path=pg_catalog as $fn$
+declare a uuid;v jsonb;
+begin
+ if not grillad_private.agent_allowed('queue_view') or not grillad_private.agent_allowed('ticket_view_assigned') then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ select id into a from famille_core.applications where code='grillad';
+ select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at),'[]'::jsonb) into v from
+ (select t.id,t.subject,t.status,t.created_at,(s.agent=auth.uid()) as mine from famille_core.support_tickets t left join grillad_private.support_assignments s on s.ticket=t.id where t.app_id=a and t.deleted_at is null and t.status not in ('resolved','closed') and (s.agent is null or s.agent=auth.uid()) order by t.created_at limit 50)q;
+ return v;
+end $fn$;
+create function public.grillad_agent_thread(p_ticket uuid,p_action text,p_event uuid default null,p_body text default null) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare a uuid;t famille_core.support_tickets%rowtype;m grillad_private.support_messages%rowtype;v jsonb;msg text:=btrim(p_body);
+begin
+ if not grillad_private.agent_allowed('ticket_view_assigned') or p_action is null or p_action not in ('claim','read','reply') then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ select id into a from famille_core.applications where code='grillad';
+ select * into t from famille_core.support_tickets where id=p_ticket and app_id=a and deleted_at is null and status not in ('resolved','closed') for update;
+ if not found then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ if p_action='claim' then
+  if not grillad_private.agent_allowed('queue_view') then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+  insert into grillad_private.support_assignments(ticket,agent) values(p_ticket,auth.uid()) on conflict(ticket) do nothing;
+ end if;
+ if not exists(select 1 from grillad_private.support_assignments where ticket=p_ticket and agent=auth.uid()) then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ if p_action='reply' then
+  if not grillad_private.agent_allowed('ticket_reply') or p_event is null or msg is null or length(msg) not between 1 and 2000 then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+  select * into m from grillad_private.support_messages where id=p_event;
+  if found then if m.ticket<>p_ticket or m.author<>auth.uid() or m.body<>msg or m.author_kind<>'agent' then raise exception 'GRILLAD_SUPPORT_REPLAY' using errcode='42501';end if;
+  else insert into grillad_private.support_messages(id,ticket,author,author_kind,body) values(p_event,p_ticket,auth.uid(),'agent',msg);
+   update famille_core.support_tickets set status='waiting_user',updated_at=now() where id=p_ticket;
+  end if;
+ elsif p_action='claim' and t.status='open' then update famille_core.support_tickets set status='in_progress',updated_at=now() where id=p_ticket;end if;
+ select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at,q.id),'[]'::jsonb) into v from (select id,author_kind,body,created_at from grillad_private.support_messages where ticket=p_ticket order by created_at desc,id desc limit 100)q;
+ return jsonb_build_object('ticket',p_ticket,'description',t.description,'messages',v);
+end $fn$;
+revoke all on function grillad_private.agent_allowed(text),public.grillad_support_thread(uuid,uuid,uuid,uuid,text),public.grillad_agent_queue(),public.grillad_agent_thread(uuid,text,uuid,text) from public,anon,authenticated;
+grant execute on function public.grillad_support_thread(uuid,uuid,uuid,uuid,text),public.grillad_agent_queue(),public.grillad_agent_thread(uuid,text,uuid,text) to authenticated;
+
 commit;
