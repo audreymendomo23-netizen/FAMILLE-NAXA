@@ -43,8 +43,6 @@ jobs:
         with:
           version: '2.122.1'
       - name: Local Supabase and real isolated test identities
-        env:
-          GRILLAD_SIGNUP_RECIPE: ${{ matrix.suite == 'signup' && '1' || '0' }}
         run: bash scripts/grillad/local-real-setup.sh
       - run: npm install --workspace @famille/grillad-web --include-workspace-root=false --ignore-scripts
       - run: npx --workspace @famille/grillad-web playwright install --with-deps chromium

@@ -8,7 +8,7 @@ async function login(page:Page,role:'OWNER'|'SELLER'):Promise<Session>{
  const phone=process.env['NAXA_REPLAY_GRILLAD_'+role+'_PHONE'],password=process.env['NAXA_REPLAY_GRILLAD_'+role+'_PASSWORD'];
  if(!phone||!password)throw Error('BLOCKED: authorized Replay accounts missing');
  await page.goto('/');
- await page.getByLabel('Téléphone (+237…)').fill(phone);
+ await page.getByLabel('Identifiant ou téléphone').fill(phone);
  await page.getByLabel('Mot de passe',{exact:true}).fill(password);
  const response=page.waitForResponse(r=>r.url()===endpoint&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='login');
  await page.getByRole('button',{name:'Se connecter'}).click();

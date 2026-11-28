@@ -3,35 +3,23 @@ import {randomUUID,randomBytes} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 const browserEndpoint='https://grillad-local-ci.supabase.co/functions/v1/grillad',local='http://127.0.0.1:4182/functions/v1/grillad';
 const key=process.env.GRILLAD_LOCAL_ANON!,service=process.env.GRILLAD_LOCAL_SERVICE!,url=process.env.GRILLAD_LOCAL_API!;
-test('@signup actual local Auth email signup, 72h trial, no payment, tenant isolation and expiry',async({browser,request})=>{
+test('@signup actual local internal Auth signup, 72h trial, no payment, tenant isolation and expiry',async({browser,request})=>{
  expect(process.env.GRILLAD_CI_LOCAL).toBe('1');expect(['http://127.0.0.1:54321','http://localhost:54321']).toContain(url);
- const email='grillad-'+randomUUID()+'@example.test',password=randomBytes(20).toString('base64url')+'Aa9!';
+ const username='ci_'+randomBytes(10).toString('hex'),password=randomBytes(20).toString('base64url')+'Aa9!';
  const ctx=await browser.newContext({serviceWorkers:'block'});
  try{
  await ctx.route(browserEndpoint,async route=>route.fulfill({response:await route.fetch({url:local,maxRedirects:0})}));
  const page=await ctx.newPage();await page.goto('/');
  await page.getByRole('button',{name:'Créer mon compte',exact:true}).click();
  await page.getByLabel('Nom et prénom').fill('Promoteur CI');
- await page.getByLabel('Adresse e-mail').fill(email);
+ await page.getByLabel('Nom d’utilisateur').fill(username);
  await page.getByLabel('Téléphone (+237…)').fill('+237699000099');
  await page.getByLabel('Nom de l’entreprise').fill('GRILLAD CI ESSAI');
  await page.getByLabel('Premier point de vente').fill('Site essai');
  await page.getByLabel('Mot de passe',{exact:true}).fill(password);
  await page.getByLabel('Confirmer le mot de passe').fill(password);
  await page.getByRole('checkbox').check();
- const starting=page.waitForResponse(r=>r.url()===browserEndpoint&&r.request().postDataJSON()?.action==='signup_start');
- await page.getByRole('button',{name:'Continuer',exact:true}).click();expect((await starting).status()).toBe(200);
- await expect(page.getByRole('heading',{name:'Vérifier mon adresse e-mail'})).toBeVisible();
- let proof='';
- await expect.poll(async()=>{
-  const r=await request.get('http://127.0.0.1:54324/api/v1/messages');if(!r.ok())return false;
-  const m=(await r.json()).messages?.find((x:any)=>x.To?.some((to:any)=>to.Address===email));if(!m)return false;
-  const msg=await (await request.get('http://127.0.0.1:54324/api/v1/message/'+m.ID)).json();
-  const content=String(msg.Text||'')+' '+String(msg.HTML||'');const raw=content.replace(/&amp;/g,'&').match(/https?:\/\/[^\s"'<>]+\/auth\/v1\/verify\?[^\s"'<>]+/);
-  if(!raw)return false;const token=new URL(raw[0]).searchParams.get('token');if(!token)return false;proof=url+'/auth/v1/verify?token='+encodeURIComponent(token);return true;
- },{timeout:30000}).toBe(true);
- await page.getByLabel('Code ou lien de vérification').fill(proof);
- const completed=page.waitForResponse(r=>r.url()===browserEndpoint&&r.request().postDataJSON()?.action==='signup_complete');
+ const completed=page.waitForResponse(r=>r.url()===browserEndpoint&&r.request().postDataJSON()?.action==='signup_internal');
  await page.getByRole('button',{name:'Démarrer mon essai gratuit'}).click();const response=await completed;expect(response.status()).toBe(200);
  const s=(await response.json()).result;const first=s.sites[0];expect(first.role).toBe('owner');expect(s.renewal_only).toBe(false);expect(Date.parse(s.trial_ends_at)-Date.now()).toBeGreaterThan(71.9*3600000);
  await expect(page.getByRole('button',{name:'Déconnexion'})).toBeVisible();
@@ -43,10 +31,12 @@ test('@signup actual local Auth email signup, 72h trial, no payment, tenant isol
  const q=(sql:string)=>execFileSync('psql',['-X','-A','-t','-v','ON_ERROR_STOP=1','-c',sql],{env:{...process.env,PGHOST:'127.0.0.1',PGPORT:'54322',PGUSER:'postgres',PGPASSWORD:'postgres',PGDATABASE:'postgres'}}).toString().trim();
  expect(q("select extract(epoch from ends_at-starts_at)::bigint from grillad_private.signup_trials where user_id='"+s.user_id+"'")).toBe('259200');
  expect(q("select count(*) from famille_core.payment_intents p join grillad_private.signup_trials t on t.subscription=p.subscription_id where t.user_id='"+s.user_id+"'")).toBe('0');
- const direct=await request.post(url+'/rest/v1/rpc/grillad_self_trial',{headers:{apikey:key,Authorization:'Bearer '+s.access},data:{p_user:s.user_id,p_session:randomUUID(),p_email:email,p_name:'CI',p_phone:'+237699000099',p_org:'Forbidden',p_site:'Forbidden',p_terms:'grillad-2026-11-28-v1'}});expect(direct.ok()).toBe(false);
+ const direct=await request.post(url+'/rest/v1/rpc/grillad_self_trial',{headers:{apikey:key,Authorization:'Bearer '+s.access},data:{p_user:s.user_id,p_session:randomUUID(),p_email:'forbidden@accounts.grillad.invalid',p_name:'CI',p_phone:'+237699000099',p_org:'Forbidden',p_site:'Forbidden',p_terms:'grillad-2026-11-28-v1'}});expect(direct.ok()).toBe(false);
  q("update famille_core.subscriptions set ends_at=now()-interval '1 second' where id=(select subscription from grillad_private.signup_trials where user_id='"+s.user_id+"')");
  await gateway({action:'mutate',org:first.org,site:first.site,event:randomUUID(),operation:'target',payload:{day,amount:1000}},403);
  const refreshed=await gateway({action:'refresh',refresh:s.refresh});expect(refreshed.renewal_only).toBe(true);
  expect(q("select count(*) from grillad_private.signup_trials where user_id='"+s.user_id+"'")).toBe('1');
+ const repeated=await gateway({action:'signup_internal',username,password,name:'Promoteur CI',phone:'+237699000099',organization:'GRILLAD CI ESSAI',site_name:'Site essai',terms:'grillad-2026-11-28-v1',installation:randomUUID(),platform:'web'});expect(repeated.renewal_only).toBe(true);expect(repeated.trial_ends_at).toBe(s.trial_ends_at);
+ const denied=await gateway({action:'signup_internal',username:'other_'+randomBytes(8).toString('hex'),password,name:'Other CI',phone:'+237699000099',organization:'Duplicate',site_name:'Duplicate',terms:'grillad-2026-11-28-v1',installation:randomUUID(),platform:'web'},403);
  }finally{await ctx.close()}
 });

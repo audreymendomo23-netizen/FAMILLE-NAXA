@@ -15,7 +15,7 @@ test('@device virtual camera/GPS, private evidence, PWA shell and network cut',a
   const item=randomUUID();await mutate('add_item',{name:'Poulet hors ligne CI',family:'Poulet',price:1000,cost:400},item);await mutate('prepare',{item,qty:3});await mutate('open_cash',{opening:0});
   await ctx.route(target,async route=>{if(cut){await route.abort('internetdisconnected');return}await route.fulfill({response:await route.fetch({url:local,maxRedirects:0})})});
   const page=await ctx.newPage();await page.goto('/');
-  await page.getByLabel('Téléphone (+237…)').fill(accounts.seller.phone);await page.getByLabel('Mot de passe',{exact:true}).fill(accounts.seller.password);
+  await page.getByLabel('Identifiant ou téléphone').fill(accounts.seller.phone);await page.getByLabel('Mot de passe',{exact:true}).fill(accounts.seller.password);
   let response=page.waitForResponse(r=>r.url()===target&&r.request().postDataJSON()?.action==='login');await page.getByRole('button',{name:'Se connecter'}).click();seller=(await (await response).json()).result;
   await expect(page.getByRole('button',{name:'Déconnexion'})).toBeVisible();
   await page.getByRole('button',{name:'Plus',exact:true}).click();

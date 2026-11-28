@@ -18,15 +18,10 @@ s=p.read_text()
 s=re.sub(r'(?ms)^\[auth\.sms\.twilio\]\s*\n.*?(?=^\[|\Z)', '',s)
 s += '\n[auth.sms.twilio]\nenabled = true\naccount_sid = "placeholder"\nmessage_service_sid = "placeholder"\nauth_token = "placeholder"\n'
 s=re.sub(r'(?ms)(^\[auth.sms\]\s*\n)(.*?)(?=^\[|\Z)', lambda m:m[1]+re.sub(r'(?m)^enable_signup\s*=.*$', 'enable_signup = true',m[2]),s)
-import os
-if os.environ.get('GRILLAD_SIGNUP_RECIPE') == '1':
-    s=re.sub(r'(?ms)(^\[auth.email\]\s*\n)(.*?)(?=^\[|\Z)',lambda m:m[1]+re.sub(r'(?m)^enable_confirmations\s*=.*$', 'enable_confirmations = true',m[2]),s)
 p.write_text(s)
 PY
 supabase start --help >/dev/null
-exclude=studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,storage-api,postgres-meta
-if [[ "${GRILLAD_SIGNUP_RECIPE:-0}" != 1 ]]; then exclude="$exclude,mailpit"; fi
-supabase start -x "$exclude"
+supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,storage-api,postgres-meta,mailpit
 supabase status -o env > "$RUNNER_TEMP/grillad-local.env"
 chmod 600 "$RUNNER_TEMP/grillad-local.env"
 source "$RUNNER_TEMP/grillad-local.env"

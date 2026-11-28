@@ -856,3 +856,6 @@ Le socle candidat serveur remplace les endpoints e-mail par inscription interne,
 
 ### 91.5. Interfaces internes
 Inscription Web et Android remplacées par un formulaire interne identifiant/mot de passe, téléphone déclaré, entreprise et point de vente, consentement ; suppression des écrans de vérification/récupération e-mail, connexion et demande de récupération par identifiant ou téléphone, invitation téléphone conservée. Traductions candidates. Les tests doivent être adaptés puis relancés ; aucun déploiement ni migration hébergée.
+
+### 91.6. Recettes internes
+Recette @signup remplacée par inscription navigateur via véritable Auth local et alias interne, ouverture caisse, durée serveur, isolation inter-tenant, absence paiement, contrôle RPC direct, expiration, rejeu sans prolongation et doublon téléphone déclaré. Suppression dépendance Mailpit dans la recette. Adaptation des sélecteurs login de non-régression FR/EN. Résultats à constater sur le nouveau SHA ; pas de vert anticipé.

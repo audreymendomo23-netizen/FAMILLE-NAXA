@@ -18,7 +18,7 @@ test('@journey real local Auth + Chromium + handler + PostgREST: sale, replay, p
     await route.fulfill({response});
    });
    const page=await ctx.newPage();await page.goto('/');
-   await page.getByLabel('Téléphone (+237…)').fill(accounts[role].phone);
+   await page.getByLabel('Identifiant ou téléphone').fill(accounts[role].phone);
    await page.getByLabel('Mot de passe',{exact:true}).fill(accounts[role].password);
    const waiting=page.waitForResponse(r=>r.url()===browserEndpoint&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='login');
    await page.getByRole('button',{name:'Se connecter'}).click();
@@ -43,7 +43,7 @@ test('@journey real local Auth + Chromium + handler + PostgREST: sale, replay, p
   // Reconnect in the same browser installation to reload actual persisted catalogue.
   await rpc(seller,{action:'logout'});
   await seller.page.reload();
-  await seller.page.getByLabel('Téléphone (+237…)').fill(accounts.seller.phone);
+  await seller.page.getByLabel('Identifiant ou téléphone').fill(accounts.seller.phone);
   await seller.page.getByLabel('Mot de passe',{exact:true}).fill(accounts.seller.password);
   const login2=seller.page.waitForResponse(r=>r.url()===browserEndpoint&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='login');
   await seller.page.getByRole('button',{name:'Se connecter'}).click();
