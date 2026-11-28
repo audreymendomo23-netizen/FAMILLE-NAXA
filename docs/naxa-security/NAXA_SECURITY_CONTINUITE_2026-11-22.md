@@ -502,3 +502,6 @@ Relance des cinq workflows SECURITY sur 33b17b5. Le précédent 95a51f1 est vert
 
 ### Codes de contrôle visiteurs/véhicules
 Code aléatoire à usage unique, empreinte privée, émission par responsable après examen, validité plafonnée par le dossier, révocation, reçu idempotent, contrôle intersite. Web sous TRUST. Contrôle manuel uniquement : ni QR graphique, ni ouverture, ni enregistrement automatique d'entrée/sortie ; le journal de passages existant est distinct. Assertions SQL de rejeu et révocation. Aucun matériel ou migration hébergée.
+
+### Recettes ERP et codes temporaires sur base réelle de recette
+Extension du replay Chromium/PostgreSQL aux vacations (création, conflit, acceptation), maintenance (affectation, démarrage, coût et diagnostic, revue distincte), code visite (émission, consommation et refus de rejeu). Fixtures synthétiques, aucun équipement ni donnée réelle. Nouveaux tests à qualifier. Vague de relance initiale 33b17b5 : cinq workflows SUCCESS (46089794631, 46089794646, 46089794649, 46089794655, 46089794616). SQL ERP sur 0ee94a9 : étape psql SUCCESS.

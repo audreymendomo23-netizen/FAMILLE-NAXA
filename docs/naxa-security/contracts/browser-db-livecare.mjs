@@ -8,7 +8,7 @@ const literal=v=>v===null?"null":"convert_from(decode('"+Buffer.from(String(v),"
 const uuid=v=>literal(v)+"::uuid",json=v=>literal(JSON.stringify(v))+"::jsonb";
 function query(user,sql){assert.ok(Object.values(users).includes(user));const command="begin;set local role authenticated;select set_config('request.jwt.claim.sub',"+literal(user)+",true);"+sql+";commit;";
  const out=execFileSync("psql",["-X","-qAt","-v","ON_ERROR_STOP=1"],{input:command,encoding:"utf8",timeout:10000,stdio:["pipe","pipe","pipe"]}).trim().split("\n");return JSON.parse(out.at(-1))}
-const reads=new Set(["sec_sites","sec_support_cases","sec_support_messages","sec_module_requests","sec_incidents","sec_work_orders","sec_preferences","sec_inbox","sec_incident_notes"]);
+const reads=new Set(["sec_sites","sec_support_cases","sec_support_messages","sec_module_requests","sec_incidents","sec_work_orders","sec_preferences","sec_inbox","sec_incident_notes","sec_shifts","sec_maintenance_details","sec_visit_passes","sec_service_register"]);
 const browser=await chromium.launch({headless:true});const ctx=await browser.newContext({viewport:{width:420,height:900},serviceWorkers:"block"});
 let lastCase=null,lastIncident=null,dbWrites=0,denials=0;
 await ctx.route("**/*",async route=>{const req=route.request(),u=new URL(req.url());if(u.origin===origin)return route.continue();if(u.origin!==api)return route.abort();
@@ -24,6 +24,7 @@ await ctx.route("**/*",async route=>{const req=route.request(),u=new URL(req.url
   const order=u.searchParams.get("order");assert.ok(!order||["created_at.desc","occurred_at.desc"].includes(order));const sql="select coalesce(jsonb_agg(to_jsonb(x)),'[]') from (select * from public."+table+(filters.length?" where "+filters.join(" and "):"")+(order?" order by "+order.split(".")[0]+" desc":"")+" limit 100)x";return respond(query(user,sql))
  }
  if(req.method()==="POST"&&table==="sec_incidents"){const cols=["organization_id","site_id","reporter_id","request_id","subject","priority","state"];const vals=cols.map(k=>["subject","priority","state"].includes(k)?literal(body[k]):uuid(body[k]));const rows=query(user,"with x as(insert into public.sec_incidents("+cols.join(",")+") values("+vals.join(",")+") returning *) select jsonb_agg(to_jsonb(x)) from x");lastIncident=rows[0].id;dbWrites++;return respond(rows)}
+ if(req.method()==="POST"&&["/rest/v1/rpc/sec_erp_action","/rest/v1/rpc/sec_visit_pass"].includes(u.pathname)){const row=query(user,"select public."+table+"("+[uuid(body.p_org),uuid(body.p_site),uuid(body.p_event),literal(body.p_op),uuid(body.p_target),json(body.p_detail)].join(",")+")");dbWrites++;return respond(row)}
  if(req.method()==="POST"&&u.pathname==="/rest/v1/rpc/sec_case_action"){const row=query(user,"select public.sec_case_action("+[uuid(body.p_org),uuid(body.p_site),uuid(body.p_case),uuid(body.p_event),literal(body.p_op),json(body.p_detail)].join(",")+")");dbWrites++;return respond(row)}
  if(req.method()==="POST"&&table==="sec_module_requests"){const cols=["organization_id","site_id","reporter_id","request_id","kind","payload"];assert.ok(cols.every(k=>Object.hasOwn(body,k)));const vals=cols.map(k=>k==="kind"?literal(body[k]):k==="payload"?json(body[k]):uuid(body[k]));const rows=query(user,"with x as(insert into public.sec_module_requests("+cols.join(",")+") values("+vals.join(",")+") returning *) select jsonb_agg(to_jsonb(x)) from x");lastCase=body.request_id;dbWrites++;return respond(rows)}
  if(req.method()==="POST"&&["/rest/v1/rpc/sec_site_report","/rest/v1/rpc/sec_org_report"].includes(u.pathname)){const args=[uuid(body.p_org),...(table==="sec_site_report"?[uuid(body.p_site)]:[]),literal(body.p_start)+"::timestamptz",literal(body.p_end)+"::timestamptz"];return respond(query(user,"select public."+table+"("+args.join(",")+")"))}
@@ -57,4 +58,35 @@ try{
  await login("manager");await caseLoad();await caseAct("Transition : review","review","QA triage");await caseLoad();await caseAct("Transition : confirmed","confirmed","QA confirmed");await caseLoad();await page.getByLabel("Identifiant responsable",{exact:true}).fill(users.customer);await caseAct("Affecter le responsable","assigned","QA assignment");await logout();
  await login("customer");await caseLoad();await caseAct("Transition : in_progress","in_progress","QA start");await caseLoad();await caseAct("Transition : waiting_information","waiting_information","QA waiting");await caseLoad();await caseAct("Transition : in_progress","in_progress","QA received");await caseLoad();await caseAct("Transition : resolved","resolved","QA resolved");await logout();
  await login("manager");await caseLoad();await caseAct("Transition : closed","closed","QA closure");const closed=query(users.manager,"select to_jsonb(i) from public.sec_incidents i where id="+uuid(lastIncident));assert.equal(closed.state,"closed");assert.equal(closed.closure_reason,"QA closure");assert.equal(closed.assignee_id,users.customer);assert.equal(query(users.manager,"select to_jsonb(count(*)) from public.sec_incident_notes where incident_id="+uuid(lastIncident)),8);console.log("PASS Chromium + PostgreSQL: end-to-end incident lifecycle and 8 audit notes");
+ const shiftPanel=page.getByRole("region",{name:"Exécution ERP"});
+ const localDate=ms=>new Date(ms).toISOString().slice(0,16);
+ await page.goto(origin+"/#/B5.07");
+ await shiftPanel.getByLabel("Agent ERP").fill(users.customer);
+ await shiftPanel.getByLabel("Libellé",{exact:true}).fill("Synthetic shift");
+ await shiftPanel.getByLabel("Début",{exact:true}).fill(localDate(Date.now()+3600000));
+ await shiftPanel.getByLabel("Fin",{exact:true}).fill(localDate(Date.now()+7200000));
+ await shiftPanel.getByRole("button",{name:"Planifier la vacation"}).click();
+ await shiftPanel.getByText("Opération ERP enregistrée : planned — actualisez.").waitFor();
+ const shift=query(users.manager,"select to_jsonb(s) from public.sec_shifts s where label='Synthetic shift'");
+ await shiftPanel.getByRole("button",{name:"Planifier la vacation"}).click();
+ await shiftPanel.getByText("Opération refusée ou non confirmée.").waitFor();
+ await logout();await login("customer");await page.goto(origin+"/#/B5.07");
+ await shiftPanel.getByRole("button",{name:"Actualiser le registre ERP"}).click();
+ await shiftPanel.getByRole("button",{name:"Sélectionner "+shift.id.slice(0,8),exact:true}).click();
+ await shiftPanel.getByRole("button",{name:"Accepter la vacation"}).click();
+ await shiftPanel.getByText("Opération ERP enregistrée : accepted — actualisez.").waitFor();
+ await logout();await login("manager");await page.goto(origin+"/#/B5.12");
+ async function maintenanceLoad(){await shiftPanel.getByRole("button",{name:"Actualiser le registre ERP"}).click();await shiftPanel.getByRole("button",{name:"Sélectionner 40000000",exact:true}).click()}
+ await maintenanceLoad();await shiftPanel.getByLabel("Technicien ERP").fill(users.customer);await shiftPanel.getByLabel("Appareil",{exact:true}).fill("40000000-0000-0000-0000-000000000191");await shiftPanel.getByLabel("Date prévue",{exact:true}).fill(localDate(Date.now()+600000));await shiftPanel.getByRole("button",{name:"Affecter le technicien"}).click();await shiftPanel.getByText("Opération ERP enregistrée : assigned — actualisez.").waitFor();
+ await logout();await login("customer");await page.goto(origin+"/#/B5.12");await maintenanceLoad();await shiftPanel.getByRole("button",{name:"Démarrer l’intervention"}).click();await shiftPanel.getByText("Opération ERP enregistrée : in_progress — actualisez.").waitFor();await maintenanceLoad();await shiftPanel.getByLabel("Diagnostic",{exact:true}).fill("QA inspection");await shiftPanel.getByLabel("Coût FCFA",{exact:true}).fill("2500");await shiftPanel.getByRole("button",{name:"Soumettre le compte rendu"}).click();await shiftPanel.getByText("Opération ERP enregistrée : pending_review — actualisez.").waitFor();
+ await logout();await login("manager");await page.goto(origin+"/#/B5.12");await maintenanceLoad();await shiftPanel.getByRole("button",{name:"Examiner et clôturer"}).click();await shiftPanel.getByText("Opération ERP enregistrée : completed — actualisez.").waitFor();
+ assert.equal(query(users.manager,"select to_jsonb(w) from public.sec_work_orders w where id='40000000-0000-0000-0000-000000000192'").state,"completed");assert.equal(query(users.manager,"select to_jsonb(d) from public.sec_maintenance_details d where order_id='40000000-0000-0000-0000-000000000192'").cost_fcfa,2500);
+ console.log("PASS Chromium + PostgreSQL: shift overlap denial, acceptance, maintenance assignment, execution and distinct review");
+ const reg=query(users.manager,"select to_jsonb(r) from public.sec_service_register r where request_id='30000000-0000-0000-0000-000000000191'");
+ await page.goto(origin+"/#/B4.26");const pass=page.getByRole("region",{name:"Passage temporaire"});await pass.getByLabel("Identifiant du registre examiné",{exact:true}).fill(reg.id);await pass.getByRole("button",{name:"Créer un code temporaire"}).click();await pass.getByText("Contrôle de passage : issued — aucune ouverture physique.").waitFor();
+ const code=await pass.getByLabel("Code à transmettre",{exact:true}).inputValue();assert.match(code,/^[a-f0-9-]{36}\.[a-f0-9]{64}$/);
+ await logout();await login("customer");await page.goto(origin+"/#/B4.26");await pass.getByLabel("Code de passage",{exact:true}).fill(code);await pass.getByRole("button",{name:"Vérifier et consommer le code"}).click();await pass.getByText("Contrôle de passage : checked — aucune ouverture physique.").waitFor();
+ await pass.getByLabel("Code de passage",{exact:true}).fill(code);await pass.getByRole("button",{name:"Vérifier et consommer le code"}).click();await pass.getByText("Passage refusé ou non confirmé.").waitFor();
+ assert.ok(query(users.manager,"select to_jsonb(p) from public.sec_visit_passes p where id="+uuid(code.split(".")[0])).used_at);
+ console.log("PASS Chromium + PostgreSQL: single-use visitor control and replay denial");
 }finally{await ctx.close();await browser.close()}
