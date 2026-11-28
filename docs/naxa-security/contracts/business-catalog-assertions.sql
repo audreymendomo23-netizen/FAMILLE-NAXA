@@ -1,0 +1,31 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000281'),('00000000-0000-0000-0000-000000000282');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000281','QA catalog');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000281','00000000-0000-0000-0000-000000000281','manager',true),('10000000-0000-0000-0000-000000000281','00000000-0000-0000-0000-000000000282','operator',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000281','10000000-0000-0000-0000-000000000281','QA');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000281','20000000-0000-0000-0000-000000000281','00000000-0000-0000-0000-000000000281',true),('10000000-0000-0000-0000-000000000281','20000000-0000-0000-0000-000000000281','00000000-0000-0000-0000-000000000282',true);
+insert into public.sec_devices(id,organization_id,site_id,label,kind) values ('40000000-0000-0000-0000-000000000281','10000000-0000-0000-0000-000000000281','20000000-0000-0000-0000-000000000281','QA camera','camera');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000281',true);
+do $q$declare o uuid:='10000000-0000-0000-0000-000000000281';s uuid:='20000000-0000-0000-0000-000000000281';c uuid:=gen_random_uuid();p uuid:=gen_random_uuid();e uuid:=gen_random_uuid();v jsonb;begin
+ perform public.sec_catalog_action(o,s,c,'create',null,'{"kind":"customer","label":"QA customer","reference":"C1"}');
+ perform public.sec_catalog_action(o,s,gen_random_uuid(),'create',null,jsonb_build_object('kind','contract','label','QA contract','reference','CO1','parent_id',c,'valid_from','2026-01-01','valid_until','2027-01-01','amount_fcfa',50000));
+ perform public.sec_catalog_action(o,s,gen_random_uuid(),'create',null,'{"kind":"team","label":"QA team","reference":"T1","member_id":"00000000-0000-0000-0000-000000000282"}');
+ perform public.sec_catalog_action(o,s,gen_random_uuid(),'create',null,'{"kind":"asset","label":"QA asset","reference":"A1","device_id":"40000000-0000-0000-0000-000000000281","valid_from":"2026-01-01","valid_until":"2027-01-01"}');
+ perform public.sec_catalog_action(o,s,gen_random_uuid(),'create',null,'{"kind":"partner","label":"QA partner","reference":"P1","valid_from":"2026-01-01","valid_until":"2027-01-01"}');
+ perform public.sec_catalog_action(o,s,gen_random_uuid(),'create',null,'{"kind":"access_profile","label":"QA profile","reference":"AP1"}');
+ perform public.sec_catalog_action(o,s,p,'create',null,'{"kind":"part","label":"QA parts","reference":"PT1","minimum":3}');
+ v:=public.sec_catalog_action(o,s,e,'stock_move',p,'{"delta":10,"reason":"receipt"}');
+ if v->>'quantity'<>'10' or v<>public.sec_catalog_action(o,s,e,'stock_move',p,'{"delta":10,"reason":"receipt"}') then raise exception 'idempotency';end if;
+ v:=public.sec_catalog_action(o,s,gen_random_uuid(),'stock_move',p,'{"delta":-8,"reason":"usage"}');
+ if v->>'quantity'<>'2' or v->>'below_minimum'<>'true' then raise exception 'stock count';end if;
+ begin perform public.sec_catalog_action(o,s,gen_random_uuid(),'stock_move',p,'{"delta":-3,"reason":"usage"}');raise exception 'negative stock';exception when invalid_parameter_value then null;end;
+ begin perform public.sec_catalog_action(o,s,gen_random_uuid(),'archive',c,'{}');raise exception 'active contract dependency';exception when invalid_parameter_value then null;end;
+ if (select count(*) from public.sec_business_catalog)<>7 or has_table_privilege(current_user,'public.sec_business_catalog','INSERT') then raise exception 'catalog coverage or privileges';end if;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000282',true);
+do $q$begin
+ if exists(select 1 from public.sec_business_catalog) then raise exception 'operator catalog leak';end if;
+ begin perform public.sec_catalog_action('10000000-0000-0000-0000-000000000281','20000000-0000-0000-0000-000000000281',gen_random_uuid(),'create',null,'{"kind":"customer","label":"Denied","reference":"X"}');raise exception 'operator write';exception when insufficient_privilege then null;end;
+end $q$;
+reset role;rollback;
