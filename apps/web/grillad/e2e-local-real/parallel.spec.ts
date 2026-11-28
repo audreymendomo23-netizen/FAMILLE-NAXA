@@ -1,3 +1,4 @@
+import {execute as centralIdentity,phoneHash} from '../../../../scripts/grillad/central-identity.mjs';
 import {run as runPushWorker} from '../../../../supabase/functions/grillad-push/worker.mjs';
 import {test,expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
@@ -293,5 +294,23 @@ test('@zipple-mobile manual tender and no double imputation or external debit',a
   await o(handed);await o(handed);
   const x=await o({action:'snapshot',from:day,to:day});expect(x.finance.ca).toBe(1000);expect(x.finance.connect_ca).toBe(1000);expect(x.finance.mtn_declared).toBe(1000);expect(x.finance.encaissements).toBe(0);
   expect((await m('close_cash',{counted:0})).difference).toBe(0);
+ }finally{await close(request,owner)}
+});
+
+test('@central-review verified identity, actual recovery request and unchanged shared Auth password',async({request})=>{
+ const owner=await login(request,'owner'),operator=accounts.manager.id,user=accounts.owner.id,phone=accounts.owner.phone;
+ try{
+  expect((await invoke(request,{action:'recovery',phone})).received).toBe(true);
+  const hash=phoneHash(phone);
+  const recovery=localSql("select id from famille_private.recovery_requests where app_code='grillad' and login_hash='"+hash+"' order by created_at desc limit 1");
+  expect(recovery).toMatch(/^[0-9a-f-]{36}$/);
+  const env={GRILLAD_CENTRAL_URL:'https://idupfjbkwjcavyisxteo.supabase.co',GRILLAD_CENTRAL_TARGET:'idupfjbkwjcavyisxteo',GRILLAD_CENTRAL_SERVICE_KEY:process.env.GRILLAD_LOCAL_SERVICE};
+  const methods=[];
+  const fetcher=async(url,init)=>{const u=new URL(String(url));if(u.origin!=='https://idupfjbkwjcavyisxteo.supabase.co'||!(u.pathname==='/auth/v1/admin/users/'+user||u.pathname==='/rest/v1/rpc/grillad_identity_review'))throw Error('LOCAL_CENTRAL_BOUNDARY');methods.push(init.method);return fetch('http://127.0.0.1:54321'+u.pathname,init)};
+  const input={kind:'recovery',event:randomUUID(),operator,user,phone,proof:'f'.repeat(64),identityVerified:true,request:recovery};
+  await expect(centralIdentity({...input,identityVerified:false},env,fetcher)).rejects.toThrow('IDENTITY_PROOF_REQUIRED');
+  const result=await centralIdentity(input,env,fetcher);expect(result.status).toBe('identity_checked');expect(methods).toEqual(['GET','POST']);
+  expect(localSql("select status from famille_private.recovery_requests where id='"+recovery+"'")).toBe('identity_check');
+  const again=await login(request,'owner');await close(request,again);
  }finally{await close(request,owner)}
 });
