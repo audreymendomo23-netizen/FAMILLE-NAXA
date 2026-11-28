@@ -59,3 +59,5 @@ Complément modèle NAXA : 1 test API nommé d'extraction SMS volontaire sans co
 Complément : 2 tests nommés de la passerelle vidéo (refus non configuré, ticket HTTPS et périmètre). Total 196 unités (191 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/49. Assertions SQL registre de références global enrichies.
 
 Complément : 1 parcours Chromium vente Orange Money déclarée manuellement, ajustement libellés et PDF Android. Total 197 unités (192 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/50.
+
+Requalification : cinq campagnes complètes de cette passe vertes (70/70 jobs). Les campagnes 46087767668 et 46087851364 sont nouvelles et non certifiées au relevé ; voir section 30 de GRILLAD_CONTINUITE.md. Ne pas confondre les 197 unités du registre et les 14 jobs d'une campagne.
