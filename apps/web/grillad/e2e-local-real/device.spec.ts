@@ -23,7 +23,7 @@ test('@device virtual camera/GPS, private evidence, PWA shell and network cut',a
   await page.getByRole('button',{name:'Ouvrir la caméra'}).click();
   await expect.poll(()=>page.locator('video').evaluate((v:HTMLVideoElement)=>v.videoWidth)).toBeGreaterThan(0);
   response=page.waitForResponse(r=>r.url()===target&&r.request().postDataJSON()?.action==='attendance_capture');await page.getByRole('button',{name:'Capturer et envoyer'}).click();expect((await response).status()).toBe(200);
-  await expect(page.getByText('Opération confirmée par le serveur')).toBeVisible();
+  await expect(page.getByText('Opération confirmée',{exact:true})).toBeVisible();
   const history=await call({action:'attendance_status',org,site},seller.access);const proof=history.history.find(x=>x.kind==='arrival');expect(proof.photo_available).toBe(true);expect(proof).not.toHaveProperty('latitude');
   expect((await call({action:'attendance_photo',org,site,id:proof.id},owner.access)).jpeg.length).toBeGreaterThan(16);
   await call({action:'attendance_photo',org,site:other,id:proof.id},seller.access,403);
