@@ -409,7 +409,7 @@ jobs:
         run: gradle --no-daemon --stacktrace --info :naxa-services:testDebugUnitTest :naxa-services-beneficiary:testDebugUnitTest
       - name: Compile and package NAXA SERVICES
         id: assemble_debug_apk
-        run: gradle --no-daemon :naxa-services:assembleDebug :naxa-services-beneficiary:assembleDebug
+        run: gradle --no-daemon -PNS_ENABLE_ATTENDANCE=true :naxa-services:assembleDebug :naxa-services-beneficiary:assembleDebug
       - name: Run Android Keystore and local PIN integration tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -424,7 +424,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-linux-hw-accel: false
           disable-animations: true
-          script: gradle --no-daemon -PNS_ENABLE_BILLING_V23=true :naxa-services:connectedDebugAndroidTest
+          script: gradle --no-daemon -PNS_ENABLE_BILLING_V23=true -PNS_ENABLE_ATTENDANCE=true :naxa-services:connectedDebugAndroidTest
       - name: Upload debug APK for technical review
         if: ${{ always() && steps.assemble_debug_apk.outcome == 'success' }}
         uses: actions/upload-artifact@v6
