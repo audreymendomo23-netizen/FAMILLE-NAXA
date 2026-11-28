@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
  SecurityNativeSupportRoster(screen.id)
  SecurityNativeEvidenceInventory(screen.id)
  SecurityNativePresenceQr(screen.id)
+ SecurityNativePresenceExceptions(screen.id)
  if(screen.id in listOf("B4.08","B4.10"))SecurityAttendanceCapture(screen.id)
  Text("Les champs non raccordés restent préparatoires. Les opérations ci-dessus requièrent un reçu serveur ; aucune commande physique.",style=MaterialTheme.typography.bodySmall)
  }}
