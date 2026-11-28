@@ -28,7 +28,7 @@ begin
   token:=p_detail->>'token';
   if token is null or token !~ '^[a-f0-9]{64}$' or (p_detail->>'minutes')::integer not between 1 and 120 then raise exception 'invalid pass' using errcode='22023';end if;
   select * into reg from public.sec_service_register where id=p_target and organization_id=p_org and site_id=p_site and kind in ('visitor','vehicle') for update;
-  if not found then raise exception 'register denied' using errcode='42501';end if;
+  if not found or reg.cancelled_at is not null then raise exception 'register denied' using errcode='42501';end if;
   expiry:=least(now()+make_interval(mins=>(p_detail->>'minutes')::integer),reg.recorded_at+make_interval(mins=>(reg.details->>'duration_minutes')::integer));
   if expiry<=now() then raise exception 'expired visit' using errcode='22023';end if;
   if exists(select 1 from public.sec_visit_passes where register_id=reg.id and used_at is null and revoked_at is null and expires_at>now()) then raise exception 'active pass exists' using errcode='23505';end if;
@@ -42,7 +42,7 @@ begin
   select register_id into reg_id from public.sec_visit_passes where id=p_target and organization_id=p_org and site_id=p_site;
   if not found then raise exception 'pass not available' using errcode='42501';end if;
   select * into reg from public.sec_service_register where id=reg_id and organization_id=p_org and site_id=p_site for update;
-  if not found then raise exception 'pass not available' using errcode='42501';end if;
+  if not found or reg.cancelled_at is not null then raise exception 'pass not available' using errcode='42501';end if;
   select * into v from public.sec_visit_passes where id=p_target and organization_id=p_org and site_id=p_site for update;
   if not found or v.revoked_at is not null or v.used_at is not null or v.expires_at<=now() or not exists(select 1 from sec_private.visit_pass_hashes where pass_id=v.id and digest=encode(sha256(convert_to(token,'UTF8')),'hex')) then raise exception 'pass not available' using errcode='42501';end if;
   if p_op='consume_entry' then

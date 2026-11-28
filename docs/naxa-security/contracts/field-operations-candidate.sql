@@ -26,6 +26,7 @@ create table public.sec_patrol_checks(
  created_at timestamptz not null default now(),unique(patrol_id,checkpoint_index),
  foreign key(organization_id,site_id) references public.sec_sites(organization_id,id)
 );
+alter table public.sec_service_register add column cancelled_at timestamptz,add column cancelled_by uuid references auth.users(id),add constraint sec_register_cancel_pair check((cancelled_at is null)=(cancelled_by is null));
 create table public.sec_passage_logs(
  id uuid primary key default gen_random_uuid(),organization_id uuid not null,site_id uuid not null,
  register_id uuid not null references public.sec_service_register(id),actor_id uuid not null references auth.users(id),
@@ -151,7 +152,7 @@ begin
   next_state:=p_detail->>'direction';
   select direction into last_direction from public.sec_passage_logs where register_id=reg.id order by sequence desc limit 1;
   if next_state is null or next_state not in ('entry','exit') or (next_state='entry' and last_direction is not distinct from 'entry') or (next_state='exit' and last_direction is distinct from 'entry') then raise exception 'invalid passage sequence' using errcode='22023';end if;
-  if next_state='entry' and now()>reg.recorded_at+make_interval(mins=>(reg.details->>'duration_minutes')::integer) then raise exception 'visit period expired' using errcode='22023';end if;
+  if next_state='entry' and (reg.cancelled_at is not null or now()>reg.recorded_at+make_interval(mins=>(reg.details->>'duration_minutes')::integer)) then raise exception 'visit period expired' using errcode='22023';end if;
   insert into public.sec_passage_logs(organization_id,site_id,register_id,actor_id,direction) values(p_org,p_site,reg.id,auth.uid(),next_state) returning id into record_id;
   receipt:=jsonb_build_object('target_id',reg.id,'state',next_state,'record_id',record_id,'physical_access',false);
  elsif p_operation='safety_report' then
