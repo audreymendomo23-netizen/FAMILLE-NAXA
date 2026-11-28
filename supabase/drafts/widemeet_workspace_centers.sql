@@ -401,7 +401,7 @@ create table public.wm_chat_media(
  id uuid primary key, workspace_id uuid not null references public.wm_workspaces(id),
  sender_id uuid not null references public.wm_accounts(id),
  peer_id uuid references public.wm_accounts(id), group_id uuid references public.wm_chat_groups(id),
- room_id uuid references public.wm_rooms(id), channel text check(channel in ('agenda','room-chat')),
+ room_id uuid references public.wm_rooms(id), channel text check(channel in ('agenda','room-chat')), post_id uuid,
  kind text not null check(kind in ('file','voice')),
  mime text not null check(mime in ('application/pdf','image/jpeg','image/png','audio/ogg','audio/webm','audio/mp4')),
  name text not null check(length(name) between 1 and 120),
@@ -409,27 +409,31 @@ create table public.wm_chat_media(
  sha256 text not null check(length(sha256)=64 and translate(sha256,'0123456789abcdef','')=''),
  state text not null default 'staged' check(state in ('staged','ready','revoked')),
  created_at timestamptz not null default clock_timestamp(), published_at timestamptz, revoked_at timestamptz, purged_at timestamptz,
- check(num_nonnulls(peer_id,group_id,room_id)=1), check(peer_id is null or peer_id<>sender_id),
- check((room_id is null)=(channel is null)),check(channel is distinct from 'agenda' or kind='file'),
+ check(num_nonnulls(peer_id,group_id,room_id,post_id)=1), check(peer_id is null or peer_id<>sender_id),
+ check((room_id is null)=(channel is null)),check(channel is distinct from 'agenda' or kind='file'),check(post_id is null or kind='file'),
  check((kind='voice')=(mime in ('audio/ogg','audio/webm','audio/mp4')))
 );
 create index wm_chat_media_direct on public.wm_chat_media(workspace_id,sender_id,peer_id,published_at desc,id);
 create index wm_chat_media_group on public.wm_chat_media(group_id,published_at desc,id);
 create index wm_chat_media_room on public.wm_chat_media(room_id,channel,published_at desc,id);
+create index wm_chat_media_post on public.wm_chat_media(post_id,published_at desc,id);
 alter table public.wm_chat_media enable row level security;
 revoke all on public.wm_chat_media from public,anon,authenticated;
 grant select,insert,update on public.wm_chat_media to service_role;
 create function public.wm_chat_media_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; gid uuid; peer uuid; rid uuid; channel_name text; room_row public.wm_rooms%rowtype; participant jsonb; room_status text; mid uuid; m public.wm_chat_media%rowtype; joined timestamptz; v jsonb; k text; mime_type text; filename text; size_bytes integer; sha text;
+declare a record; gid uuid; peer uuid; rid uuid; pid uuid; post_author uuid; channel_name text; room_row public.wm_rooms%rowtype; participant jsonb; room_status text; mid uuid; m public.wm_chat_media%rowtype; joined timestamptz; v jsonb; k text; mime_type text; filename text; size_bytes integer; sha text;
 begin
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
- gid:=(p_data->>'group_id')::uuid;peer:=(p_data->>'peer_id')::uuid;rid:=(p_data->>'room_id')::uuid;channel_name:=p_data->>'channel';
- if num_nonnulls(gid,peer,rid)<>1 or (rid is null)<>(channel_name is null) then return null;end if;
+ gid:=(p_data->>'group_id')::uuid;peer:=(p_data->>'peer_id')::uuid;rid:=(p_data->>'room_id')::uuid;pid:=(p_data->>'post_id')::uuid;channel_name:=p_data->>'channel';
+ if num_nonnulls(gid,peer,rid,pid)<>1 or (rid is null)<>(channel_name is null) then return null;end if;
  select * into a from public.wm_lock_room_actor_for(p_hash,rid);
  if not found then return null;end if;
  if not exists(select 1 from public.wm_workspaces w where w.id=a.workspace_id and w.enabled and w.kind='enterprise') or peer=a.account_id then return null;end if;
- if rid is not null then
+ if pid is not null then
+  select p.author_id into post_author from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=p.author_id and ac.enabled where p.id=pid and p.workspace_id=a.workspace_id and p.removed_at is null;
+  if not found or (p_action in ('reserve','publish') and post_author<>a.account_id) then return null;end if;
+ elsif rid is not null then
   -- Internal enterprise, standard confidentiality, current attendance rights only.
   if channel_name not in ('agenda','room-chat') or a.workspace_id is distinct from (select x.workspace_id from public.wm_session_context(p_hash) x) then return null;end if;
   select * into room_row from public.wm_rooms where id=rid and workspace_id=a.workspace_id for share;
@@ -451,9 +455,10 @@ begin
   select coalesce(jsonb_agg(to_jsonb(c) order by c.published_at,c.id),'[]'::jsonb) into v from (
    select x.id,x.sender_id,x.kind,x.mime,x.name,x.bytes,x.sha256,x.published_at from public.wm_chat_media x
    where x.workspace_id=a.workspace_id and x.state='ready' and
-   ((rid is not null and x.room_id=rid and x.channel=channel_name)
+   ((pid is not null and x.post_id=pid)
+    or (rid is not null and x.room_id=rid and x.channel=channel_name)
     or (gid is not null and x.group_id=gid and x.created_at>=joined and x.published_at>=joined)
-    or (peer is not null and x.group_id is null and x.room_id is null and ((x.sender_id=a.account_id and x.peer_id=peer) or (x.sender_id=peer and x.peer_id=a.account_id))))
+    or (peer is not null and x.group_id is null and x.room_id is null and x.post_id is null and ((x.sender_id=a.account_id and x.peer_id=peer) or (x.sender_id=peer and x.peer_id=a.account_id))))
    order by x.published_at desc,x.id desc limit 100
   ) c;return jsonb_build_object('items',v);
  end if;
@@ -461,24 +466,26 @@ begin
  select * into m from public.wm_chat_media x where x.id=mid;
  if p_action='reserve' then
   k:=p_data->>'kind';mime_type:=p_data->>'mime';filename:=p_data->>'name';size_bytes:=(p_data->>'bytes')::integer;sha:=p_data->>'sha256';
-  if k is null or mime_type is null or filename is null or size_bytes is null or sha is null or (channel_name='agenda' and k<>'file') then return null;end if;
+  if k is null or mime_type is null or filename is null or size_bytes is null or sha is null or ((channel_name='agenda' or pid is not null) and k<>'file') then return null;end if;
   if k not in ('file','voice') or mime_type not in ('application/pdf','image/jpeg','image/png','audio/ogg','audio/webm','audio/mp4') or (k='voice')<>(mime_type in ('audio/ogg','audio/webm','audio/mp4')) or length(filename) not between 1 and 120 or size_bytes not between 1 and 1048576 or length(sha)<>64 or translate(sha,'0123456789abcdef','')<>'' then return null;end if;
   if found then
-   if m.workspace_id<>a.workspace_id or m.sender_id<>a.account_id or m.peer_id is distinct from peer or m.group_id is distinct from gid or m.room_id is distinct from rid or m.channel is distinct from channel_name or m.kind<>k or m.mime<>mime_type or m.name<>filename or m.bytes<>size_bytes or m.sha256<>sha or m.state='revoked' or (gid is not null and m.created_at<joined) then return null;end if;
+   if m.workspace_id<>a.workspace_id or m.sender_id<>a.account_id or m.peer_id is distinct from peer or m.group_id is distinct from gid or m.room_id is distinct from rid or m.post_id is distinct from pid or m.channel is distinct from channel_name or m.kind<>k or m.mime<>mime_type or m.name<>filename or m.bytes<>size_bytes or m.sha256<>sha or m.state='revoked' or (gid is not null and m.created_at<joined) then return null;end if;
    if m.state='staged' and m.created_at<=clock_timestamp()-interval '15 minutes' then return null;end if;
   else
    if (select count(*) from public.wm_chat_media x where x.sender_id=a.account_id and x.created_at>clock_timestamp()-interval '1 minute')>=5 then return null;end if;
-   insert into public.wm_chat_media(id,workspace_id,sender_id,peer_id,group_id,room_id,channel,kind,mime,name,bytes,sha256) values(mid,a.workspace_id,a.account_id,peer,gid,rid,channel_name,k,mime_type,filename,size_bytes,sha) returning * into m;
+   insert into public.wm_chat_media(id,workspace_id,sender_id,peer_id,group_id,room_id,channel,post_id,kind,mime,name,bytes,sha256) values(mid,a.workspace_id,a.account_id,peer,gid,rid,channel_name,pid,k,mime_type,filename,size_bytes,sha) returning * into m;
   end if;
   return jsonb_build_object('id',m.id,'key',m.workspace_id::text||'/'||m.id::text,'state',m.state,'bytes',m.bytes,'sha256',m.sha256,'mime',m.mime,'name',m.name,'kind',m.kind);
  end if;
  if not found or m.workspace_id<>a.workspace_id then return null;end if;
- if rid is not null then
+ if pid is not null then
+  if m.post_id is distinct from pid then return null;end if;
+ elsif rid is not null then
   if m.room_id is distinct from rid or m.channel is distinct from channel_name then return null;end if;
  elsif gid is not null then
   if m.group_id is distinct from gid or m.created_at<joined then return null;end if;
  else
-  if m.group_id is not null or m.room_id is not null or not ((m.sender_id=a.account_id and m.peer_id=peer) or (m.sender_id=peer and m.peer_id=a.account_id)) then return null;end if;
+  if m.group_id is not null or m.room_id is not null or m.post_id is not null or not ((m.sender_id=a.account_id and m.peer_id=peer) or (m.sender_id=peer and m.peer_id=a.account_id)) then return null;end if;
  end if;
  if p_action='publish' then
   if m.sender_id<>a.account_id or m.state='revoked' or (m.state='staged' and m.created_at<=clock_timestamp()-interval '15 minutes') then return null;end if;
@@ -527,6 +534,7 @@ create table public.wm_company_posts(
  created_at timestamptz not null default clock_timestamp(), removed_at timestamptz,
  foreign key(author_id,workspace_id) references public.wm_memberships(account_id,workspace_id)
 );
+alter table public.wm_chat_media add constraint wm_chat_media_company_post_fk foreign key(post_id) references public.wm_company_posts(id);
 create index wm_company_posts_feed on public.wm_company_posts(workspace_id,kind,created_at desc,id desc) where removed_at is null;
 create table public.wm_company_reads(
  post_id uuid not null references public.wm_company_posts(id),account_id uuid not null references public.wm_accounts(id),
@@ -685,6 +693,7 @@ begin
  if p_action='center-company-remove' then
   if item.author_id<>a.account_id and a.role<>'promoteur' then return null;end if;
   update public.wm_company_posts set removed_at=coalesce(removed_at,clock_timestamp()) where id=pid and workspace_id=a.workspace_id;
+  update public.wm_chat_media set state='revoked',revoked_at=coalesce(revoked_at,clock_timestamp()) where post_id=pid and workspace_id=a.workspace_id and state<>'revoked';
   return jsonb_build_object('removed',true);
  elsif p_action='center-company-confirm' then
   if item.removed_at is not null or item.kind<>'announcement' or item.author_id=a.account_id then return null;end if;

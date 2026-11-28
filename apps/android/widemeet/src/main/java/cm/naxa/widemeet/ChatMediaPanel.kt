@@ -44,13 +44,13 @@ private class ChatAudio{
  fun clearRecorder(){val r=recorder;recorder=null;runCatching{r?.stop()};runCatching{r?.release()};capture?.delete();capture=null}
  fun clear(){clearRecorder();clearPlayer()}
 }
-@Composable fun ChatMediaPanel(english:Boolean,gateway:AuthGateway,session:Session,peerId:String?=null,groupId:String?=null,roomId:String?=null,channel:String?=null,allowUpload:Boolean=true,voiceAllowed:Boolean=true,transport:(suspend (String,JSONObject)->JSONObject)?=null){
+@Composable fun ChatMediaPanel(english:Boolean,gateway:AuthGateway,session:Session,peerId:String?=null,groupId:String?=null,roomId:String?=null,channel:String?=null,allowUpload:Boolean=true,voiceAllowed:Boolean=true,transport:(suspend (String,JSONObject)->JSONObject)?=null,postId:String?=null){
  fun tr(fr:String,en:String)=if(english)en else fr
  val context=LocalContext.current;val scope=rememberCoroutineScope();val resources=remember{ChatAudio()}
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var pending by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
  var recording by remember{mutableStateOf(false)};var playing by remember{mutableStateOf<String?>(null)};var saveBytes by remember{mutableStateOf<ByteArray?>(null)}
- fun scoped(d:JSONObject)=d.apply{if(roomId!=null){put("room_id",roomId);put("channel",channel)}else if(peerId!=null)put("peer_id",peerId)else put("group_id",groupId)}
+ fun scoped(d:JSONObject)=d.apply{if(postId!=null)put("post_id",postId)else if(roomId!=null){put("room_id",roomId);put("channel",channel)}else if(peerId!=null)put("peer_id",peerId)else put("group_id",groupId)}
  suspend fun req(action:String,d:JSONObject=JSONObject())=transport?.invoke(action,scoped(d))?:gateway.chatMedia(session,action,scoped(d))
  fun stopPlayer(){resources.clearPlayer();playing=null}
  suspend fun refresh(){try{val next=mediaItems(req("list"));items=next;if(playing!=null&&next.none{it.optString("id")==playing})stopPlayer()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();stopPlayer();pending=null;saveBytes=null;resources.clearRecorder();recording=false;throw e}}
@@ -89,8 +89,8 @@ private class ChatAudio{
  }
  val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){allowed->if(allowed)startRecording()else error=true}
  LaunchedEffect(allowUpload){if(!allowUpload){resources.clearRecorder();recording=false;pending=null}}
- DisposableEffect(session.deviceId,peerId,groupId,roomId,channel){onDispose{resources.clear();saveBytes=null}}
- LaunchedEffect(session.accessToken,peerId,groupId,roomId,channel,busy){
+ DisposableEffect(session.deviceId,peerId,groupId,roomId,channel,postId){onDispose{resources.clear();saveBytes=null}}
+ LaunchedEffect(session.accessToken,peerId,groupId,roomId,channel,postId,busy){
   if(busy)return@LaunchedEffect
   while(true){try{refresh()}catch(e:CancellationException){throw e}catch(e:Exception){error=true};delay(5000)}
  }
@@ -100,9 +100,9 @@ private class ChatAudio{
   require(b.size in 1..MediaLimit&&b.size==m.getInt("bytes")&&v.getInt("bytes")==m.getInt("bytes")&&v.getString("id")==m.getString("id")&&chatMediaDigest(b)==m.getString("sha256")&&v.getString("sha256")==m.getString("sha256"))
   return b
  }
- Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-  Text(when(channel){"agenda"->tr("Documents de l’ordre du jour","Agenda documents");"room-chat"->tr("Fichiers et vocaux de la salle","Room files and voice messages");else->tr("Fichiers et messages vocaux","Files and voice messages")},style=MaterialTheme.typography.titleMedium)
-  Text(tr("PDF, JPEG, PNG. Taille maximale : 1 Mio ; message vocal : 60 s.","PDF, JPEG, PNG. Maximum size: 1 MiB; voice message: 60 s."))
+ val content:@Composable ()->Unit={Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+  Text(if(postId!=null)tr("Pièces jointes","Attachments")else when(channel){"agenda"->tr("Documents de l’ordre du jour","Agenda documents");"room-chat"->tr("Fichiers et vocaux de la salle","Room files and voice messages");else->tr("Fichiers et messages vocaux","Files and voice messages")},style=MaterialTheme.typography.titleMedium)
+  if(allowUpload)Text(if(postId!=null)tr("PDF, JPEG, PNG. Taille maximale : 1 Mio.","PDF, JPEG, PNG. Maximum size: 1 MiB.")else tr("PDF, JPEG, PNG. Taille maximale : 1 Mio ; message vocal : 60 s.","PDF, JPEG, PNG. Maximum size: 1 MiB; voice message: 60 s."))
   if(error)Text(tr("Accès, format ou transfert non confirmé.","Access, format or transfer unconfirmed."),color=MaterialTheme.colorScheme.error)
   if(allowUpload)TextButton(enabled=!busy&&pending==null&&!recording,onClick={picker.launch(arrayOf("application/pdf","image/jpeg","image/png"))}){Text(tr("Choisir une pièce jointe","Choose attachment"))}
   if(voiceAllowed&&allowUpload&&recording)Button(onClick={finishRecording()}){Text(tr("Terminer l’enregistrement","Stop recording"))}
@@ -123,4 +123,5 @@ private class ChatAudio{
    if(m.optString("sender_id")==session.memberId)TextButton(enabled=!busy,onClick={work{req("revoke",JSONObject().put("id",m.getString("id")));refresh()}}){Text(tr("Révoquer le fichier","Revoke file"))}
   }
  }}
+ if(postId!=null)content()else Card(Modifier.fillMaxWidth()){content()}
 }

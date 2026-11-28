@@ -446,6 +446,23 @@ try{
   assert.ok(!(await identity(hs.access_token,"contacts")).contacts.some(x=>x.member_id===o.id));
   console.log("PASS V2 professional position: persisted, scoped, staff and foreign writes denied");
  const newsId=randomUUID(),announcementId=randomUUID();
+ const companyMediaPost=randomUUID(),companyMediaId=randomUUID(),companyMediaBytes=Buffer.from("%PDF-1.4\nActualités fixture\n%%EOF");
+ assert.equal((await identity(hs.access_token,"center-company-publish",{id:companyMediaPost,kind:"news",body:"Pièce jointe synthétique"})).published,true);
+ const companyAttachment={post_id:companyMediaPost,id:companyMediaId,kind:"file",mime:"application/pdf",name:"actualites.pdf",content:companyMediaBytes.toString("base64")};
+ const cmReq=(token,action,data)=>request(auth+"/chat-media",{action,data},token),cmOk=(token,action,data)=>ok(auth+"/chat-media",{action,data},token);
+ assert.equal((await cmReq(gs.access_token,"upload",companyAttachment)).status,403);
+ assert.equal((await cmReq(os.access_token,"upload",companyAttachment)).status,403);
+ assert.equal((await cmOk(hs.access_token,"upload",companyAttachment)).state,"ready");
+ assert.equal((await cmOk(hs.access_token,"upload",companyAttachment)).state,"ready");
+ assert.deepEqual(Buffer.from((await cmOk(gs.access_token,"download",{post_id:companyMediaPost,id:companyMediaId})).content,"base64"),companyMediaBytes);
+ assert.equal((await cmOk(gs.access_token,"list",{post_id:companyMediaPost})).items.length,1);
+ assert.equal((await cmReq(os.access_token,"download",{post_id:companyMediaPost,id:companyMediaId})).status,403);
+ assert.equal((await cmReq(gs.access_token,"revoke",{post_id:companyMediaPost,id:companyMediaId})).status,403);
+ assert.equal((await cmReq(gs.access_token,"download",{peer_id:h.id,id:companyMediaId})).status,403);
+ assert.equal((await identity(hs.access_token,"center-company-remove",{id:companyMediaPost})).removed,true);
+ assert.equal((await cmReq(gs.access_token,"download",{post_id:companyMediaPost,id:companyMediaId})).status,403);
+ console.log("PASS V2 private company post attachment: actual Storage bytes, author only, foreign denial and withdrawal");
+
  const companyNews={id:newsId,kind:"news",body:"Actualité staff synthétique"};
  const companyAnnouncement={id:announcementId,kind:"announcement",body:"Annonce officielle synthétique"};
  assert.equal((await identity(gs.access_token,"center-company-publish",companyNews)).published,true);

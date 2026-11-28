@@ -14,6 +14,7 @@ import java.util.UUID
  fun tr(fr:String,en:String)=if(english)en else fr
  var kind by remember{mutableStateOf("news")};var body by remember{mutableStateOf("")};var data by remember{mutableStateOf<JSONObject?>(null)}
  var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<JSONObject?>(null)};var remove by remember{mutableStateOf<String?>(null)}
+ var mediaOpen by remember{mutableStateOf<String?>(null)}
  var pollEnabled by remember{mutableStateOf(false)};var options by remember{mutableStateOf(listOf("",""))};var voteConfirm by remember{mutableStateOf<Pair<String,Int>?>(null)};var closeConfirm by remember{mutableStateOf<String?>(null)}
  var favorites by remember{mutableStateOf(false)};var opened by remember{mutableStateOf<String?>(null)};var comments by remember{mutableStateOf<org.json.JSONArray?>(null)};var commentBody by remember{mutableStateOf("")};var commentPending by remember{mutableStateOf<JSONObject?>(null)}
  val scope=rememberCoroutineScope()
@@ -41,6 +42,7 @@ import java.util.UUID
    if(!p.isNull("job_title"))Text(p.optString("job_title"),style=MaterialTheme.typography.bodySmall)
    val date=runCatching{java.time.OffsetDateTime.parse(p.getString("created_at")).atZoneSameInstant(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.SHORT).withLocale(if(english)java.util.Locale.ENGLISH else java.util.Locale.FRENCH))}.getOrDefault(p.optString("created_at"))
    Text(date,style=MaterialTheme.typography.bodySmall);Text(p.getString("body"))
+   if(BuildConfig.WIDEMEET_CHAT_MEDIA_ENABLED){TextButton(onClick={mediaOpen=if(mediaOpen==id)null else id}){Text(tr("Pièces jointes","Attachments"))};if(mediaOpen==id)key(id){ChatMediaPanel(english,gateway,session,allowUpload=p.optString("author_id")==session.memberId,voiceAllowed=false,postId=id)}}
    p.optJSONObject("poll")?.let{poll->Text(if(poll.optBoolean("closed"))tr("Sondage clôturé","Poll closed")else tr("Sondage en cours","Open poll"),style=MaterialTheme.typography.titleSmall);val choices=poll.getJSONArray("options");val counts=poll.optJSONArray("counts");for(j in 0 until choices.length()){val label=choices.getString(j);if(poll.isNull("my_vote")&&!poll.optBoolean("closed"))TextButton(enabled=!busy&&commentPending==null,onClick={voteConfirm=id to j}){Text(label)}else Text(label+(if(poll.optInt("my_vote",-1)==j)" ✓" else "")+(counts?.let{" — "+it.optInt(j)+" "+tr("vote(s)","vote(s)")}?: ""))};if(p.optBoolean("can_remove")&&!poll.optBoolean("closed"))TextButton(enabled=!busy,onClick={closeConfirm=id}){Text(tr("Clôturer le sondage","Close poll"))}}
    if(kind=="news"){
     val reactions=listOf(Triple("like","👍",tr("J’aime","Like")),Triple("celebrate","👏",tr("Bravo","Celebrate")),Triple("love","❤️",tr("J’adore","Love")),Triple("insightful","💡",tr("Instructif","Insightful")),Triple("support","🤝",tr("Soutien","Support")),Triple("funny","😂",tr("Amusant","Funny")))

@@ -1,12 +1,12 @@
 import React,{useEffect,useRef,useState}from"react";
 import{authorizedRequest}from"./session.mjs";
 import{MAX_CHAT_MEDIA_BYTES,decodeMedia,encodeMedia,mediaDigest,safeMediaName,validMediaBytes}from"../../../../packages/widemeet-domain/chat-media.mjs";
-export function ChatMedia({base,session,locale,peerId,groupId,roomId,channel,allowUpload=true,voiceAllowed=true}){
+export function ChatMedia({base,session,locale,peerId,groupId,roomId,postId,channel,allowUpload=true,voiceAllowed=true}){
  const tr=(fr,en)=>locale==="en"?en:fr;
- const title=channel==="agenda"?tr("Documents de l’ordre du jour","Agenda documents"):channel==="room-chat"?tr("Fichiers et vocaux de la salle","Room files and voice messages"):tr("Fichiers et messages vocaux","Files and voice messages");
+ const title=postId?tr("Pièces jointes","Attachments"):channel==="agenda"?tr("Documents de l’ordre du jour","Agenda documents"):channel==="room-chat"?tr("Fichiers et vocaux de la salle","Room files and voice messages"):tr("Fichiers et messages vocaux","Files and voice messages");
  const [items,L]=useState([]),[pending,P]=useState(null),[busy,B]=useState(false),[error,E]=useState(false),[recording,R]=useState(false),[audio,A]=useState(null);
  const rec=useRef(null),stream=useRef(null),live=useRef(true),run=useRef(false),audioUrl=useRef(null),timer=useRef(null),generation=useRef(0);
- const scope=roomId?{room_id:roomId,channel}:peerId?{peer_id:peerId}:{group_id:groupId};
+ const scope=postId?{post_id:postId}:roomId?{room_id:roomId,channel}:peerId?{peer_id:peerId}:{group_id:groupId};
  const req=(action,data={})=>authorizedRequest(base,"chat-media",{action,data:{...scope,...data}},session.access_token);
  function clearAudio(){if(audioUrl.current)URL.revokeObjectURL(audioUrl.current);audioUrl.current=null;A(null)}
  function stopMic(){if(timer.current)clearTimeout(timer.current);timer.current=null;stream.current?.getTracks().forEach(t=>t.stop());stream.current=null}
@@ -22,7 +22,7 @@ export function ChatMedia({base,session,locale,peerId,groupId,roomId,channel,all
   try{const r=new MediaRecorder(st,{mimeType:type,audioBitsPerSecond:32000});rec.current=r;let size=0;const parts=[];r.ondataavailable=e=>{size+=e.data.size;if(size<=MAX_CHAT_MEDIA_BYTES)parts.push(e.data);else if(r.state!=="inactive")r.stop()};r.onerror=()=>{stopMic();if(live.current){R(false);E(true)}};r.onstop=()=>{stopMic();rec.current=null;if(live.current){R(false);if(size>MAX_CHAT_MEDIA_BYTES)E(true);else void prepare(new Blob(parts,{type:r.mimeType}),"message-vocal","voice").catch(()=>E(true))}};r.start(500);R(true);timer.current=setTimeout(()=>{if(r.state!=="inactive")r.stop()},60000)}catch(e){stopMic();throw e}
  })}
  async function download(m){const v=await req("download",{id:m.id});const b=decodeMedia(v.content);if(v.id!==m.id||v.bytes!==m.bytes||v.sha256!==m.sha256||b.length!==m.bytes||await mediaDigest(b)!==m.sha256||!validMediaBytes(m.kind,m.mime,b))throw Error("integrity");if(!live.current)return;const u=URL.createObjectURL(new Blob([b],{type:m.mime}));if(m.kind==="voice"){clearAudio();audioUrl.current=u;A({id:m.id,url:u})}else{const a=document.createElement("a");a.href=u;a.download=safeMediaName(m.name,m.mime);a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}}
- return <section className="card" aria-label={title}><h3>{title}</h3><p>{tr("PDF, JPEG, PNG ou message vocal. Taille maximale : 1 Mio, enregistrement 60 s.","PDF, JPEG, PNG or voice message. Maximum size: 1 MiB, recording 60 s.")}</p>
+ return <section className={postId?undefined:"card"} aria-label={title}><h3>{title}</h3>{allowUpload&&<p>{postId?tr("PDF, JPEG, PNG. Taille maximale : 1 Mio.","PDF, JPEG, PNG. Maximum size: 1 MiB."):tr("PDF, JPEG, PNG ou message vocal. Taille maximale : 1 Mio, enregistrement 60 s.","PDF, JPEG, PNG or voice message. Maximum size: 1 MiB, recording 60 s.")}</p>}
  {error&&<p role="alert">{tr("Accès, format ou transfert non confirmé.","Access, format or transfer unconfirmed.")}</p>}
  {allowUpload&&<><label>{tr("Choisir une pièce jointe","Choose attachment")}<input type="file" aria-label={tr("Choisir une pièce jointe","Choose attachment")} accept="application/pdf,image/jpeg,image/png" disabled={busy||!!pending||recording} onChange={e=>{const f=e.target.files?.[0];e.target.value="";if(f)void work(()=>prepare(f,f.name,"file"))}}/></label>
  {voiceAllowed&&(recording?<button onClick={()=>rec.current?.stop()}>{tr("Terminer l’enregistrement","Stop recording")}</button>:<button disabled={busy||!!pending} onClick={start}>{tr("Enregistrer un message vocal","Record voice message")}</button>)}
