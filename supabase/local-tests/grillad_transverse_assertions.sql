@@ -117,4 +117,39 @@ do $test$ declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b30000
  if counts->>'sales' is distinct from '1' or after_restore->'tables' is distinct from archive->'tables' then raise exception 'restore data differs';end if;
 end $test$;
 
+
+-- Positive support call lifecycle with the existing canonical identity, agent contract and independent customer.
+create table if not exists public.support_agents(user_id uuid primary key references auth.users(id),status text not null);
+create table if not exists public.support_agent_permissions(agent_user_id uuid references auth.users(id),permission_code text,revoked_at timestamptz,primary key(agent_user_id,permission_code));
+insert into public.support_agents values('b1000000-0000-0000-0000-000000000003','active');
+insert into public.support_agent_permissions(agent_user_id,permission_code) select 'b1000000-0000-0000-0000-000000000003',x from unnest(array['queue_view','ticket_view_assigned','ticket_reply']) x;
+set role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000004',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000014","aal":"aal2","app_metadata":{}}',true);
+select public.grillad_central_agent_access('b1000000-0000-0000-0000-000000000003',true,'Synthetic support qualification');
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+select public.grillad_support_open('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','b7000000-0000-0000-0000-000000000001','Test appel','Test assistance audio et écran');
+do $test$ begin if public.grillad_customer_call('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','b7000000-0000-0000-0000-000000000001','request',null,true)->>'status' is distinct from 'queued' then raise exception 'call request';end if;end $test$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000003',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000013","aal":"aal2","app_metadata":{}}',true);
+do $test$ declare t uuid:='b7000000-0000-0000-0000-000000000001';begin
+ begin perform public.grillad_agent_call(t,'accept');raise exception 'unassigned agent accepted';exception when insufficient_privilege then null;end;
+ perform public.grillad_agent_thread(t,'claim');
+ if public.grillad_agent_call(t,'accept')->>'status' is distinct from 'accepted' then raise exception 'call accept';end if;
+end $test$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+select public.grillad_customer_call('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','b7000000-0000-0000-0000-000000000001','offer','v=0 fixture');
+select public.grillad_customer_call('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','b7000000-0000-0000-0000-000000000001','stop_screen');
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000003',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000013","aal":"aal2","app_metadata":{}}',true);
+do $test$ declare t uuid:='b7000000-0000-0000-0000-000000000001';v jsonb;begin
+ v:=public.grillad_agent_call(t,'read');if v->>'offer' is distinct from 'v=0 fixture' or v->>'screen_stopped' is distinct from 'true' then raise exception 'offer or consent';end if;
+ perform public.grillad_agent_call(t,'answer','v=0 answer');
+ perform public.grillad_agent_call(t,'end');
+ if public.grillad_agent_call(t,'read')->>'status' is distinct from 'idle' then raise exception 'call close';end if;
+end $test$;
+reset role;
+
 rollback;

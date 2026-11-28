@@ -365,4 +365,67 @@ grant execute on function public.grillad_drive_consume(text),public.grillad_driv
 revoke all on function public.grillad_backup_preferences(uuid,uuid,text,integer,integer,integer),public.grillad_backup_export(uuid,uuid) from public,anon,authenticated;
 grant execute on function public.grillad_backup_preferences(uuid,uuid,text,integer,integer,integer),public.grillad_backup_export(uuid,uuid) to authenticated;
 
+
+-- NAXA support call lifecycle adapted to the Famille registry; no remote control or recording.
+create table grillad_private.support_calls(
+ id uuid primary key default gen_random_uuid(),ticket uuid not null references famille_core.support_tickets(id),customer uuid not null references auth.users(id),agent uuid references auth.users(id),
+ status text not null check(status in ('queued','accepted','ended')),screen_consent boolean not null default false,screen_stopped boolean not null default false,
+ offer text,answer text,created_at timestamptz not null default now(),expires_at timestamptz not null default now()+interval '5 minutes',
+ check(offer is null or length(offer) between 1 and 65536),check(answer is null or length(answer) between 1 and 65536));
+create unique index grillad_support_one_call on grillad_private.support_calls(ticket) where status in ('queued','accepted');
+alter table grillad_private.support_calls enable row level security;
+revoke all on grillad_private.support_calls from public,anon,authenticated;
+create function grillad_private.support_call(p_ticket uuid,p_action text,p_sdp text,p_screen boolean,p_org uuid,p_site uuid,p_agent boolean) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $call$
+declare a uuid;u uuid:=auth.uid();t famille_core.support_tickets%rowtype;c grillad_private.support_calls%rowtype;
+begin
+ if u is null or p_action is null or p_action not in ('read','request','accept','offer','answer','stop_screen','end') then raise exception 'GRILLAD_CALL_INPUT' using errcode='22023';end if;
+ if p_agent then
+  perform pg_advisory_xact_lock(hashtextextended('grillad-agent:'||u::text,0));
+  if not grillad_private.agent_allowed('ticket_view_assigned') or not grillad_private.agent_allowed('ticket_reply') or not exists(select 1 from grillad_private.support_assignments where ticket=p_ticket and agent=u) then raise exception 'GRILLAD_CALL_DENIED' using errcode='42501';end if;
+ else perform grillad_private.scope(p_org,p_site);end if;
+ select id into a from famille_core.applications where code='grillad';
+ select * into t from famille_core.support_tickets where id=p_ticket and app_id=a and deleted_at is null and status not in ('resolved','closed') and (p_agent or (organization_id=p_org and user_id=u)) for update;
+ if not found then raise exception 'GRILLAD_CALL_DENIED' using errcode='42501';end if;
+ update grillad_private.support_calls set status='ended',offer=null,answer=null,screen_stopped=true where ticket=p_ticket and status<>'ended' and (expires_at<=now() or (agent is not null and not exists(select 1 from grillad_private.support_assignments x where x.ticket=p_ticket and x.agent=grillad_private.support_calls.agent)));
+ select * into c from grillad_private.support_calls where ticket=p_ticket and status<>'ended' for update;
+ if p_action='request' then
+  if p_agent then raise exception 'GRILLAD_CALL_DENIED' using errcode='42501';end if;
+  if c.id is null then
+   if (select count(*) from grillad_private.support_calls where customer=u and created_at>now()-interval '1 hour')>=10 then raise exception 'GRILLAD_CALL_LIMIT' using errcode='22023';end if;
+   insert into grillad_private.support_calls(ticket,customer,status,screen_consent) values(p_ticket,u,'queued',coalesce(p_screen,false)) returning * into c;
+  elsif c.screen_consent is distinct from coalesce(p_screen,false) then raise exception 'GRILLAD_CALL_STATE' using errcode='22023';end if;
+ elsif c.id is null then
+  if p_action in ('read','end','stop_screen') then return jsonb_build_object('status','idle');end if;
+  raise exception 'GRILLAD_CALL_STATE' using errcode='22023';
+ elsif p_agent and c.agent is not null and c.agent<>u then raise exception 'GRILLAD_CALL_DENIED' using errcode='42501';
+ elsif p_action='accept' then
+  if not p_agent or c.status<>'queued' then raise exception 'GRILLAD_CALL_DENIED' using errcode='42501';end if;
+  update grillad_private.support_calls set status='accepted',agent=u,expires_at=now()+interval '20 minutes' where id=c.id returning * into c;
+ elsif p_action in ('offer','answer') then
+  if c.status<>'accepted' or (p_action='offer' and p_agent) or (p_action='answer' and (not p_agent or c.offer is null)) or p_sdp is null or length(p_sdp) not between 1 and 65536 or left(p_sdp,3)<>'v=0' then raise exception 'GRILLAD_CALL_DENIED' using errcode='42501';end if;
+  if p_action='offer' then
+   if c.offer is not null and c.offer<>p_sdp then raise exception 'GRILLAD_CALL_STATE' using errcode='22023';end if;
+   update grillad_private.support_calls set offer=p_sdp where id=c.id returning * into c;
+  else
+   if c.answer is not null and c.answer<>p_sdp then raise exception 'GRILLAD_CALL_STATE' using errcode='22023';end if;
+   update grillad_private.support_calls set answer=p_sdp where id=c.id returning * into c;
+  end if;
+ elsif p_action='stop_screen' then
+  if p_agent then raise exception 'GRILLAD_CALL_DENIED' using errcode='42501';end if;
+  update grillad_private.support_calls set screen_stopped=true where id=c.id returning * into c;
+ elsif p_action='end' then
+  update grillad_private.support_calls set status='ended',offer=null,answer=null,screen_stopped=true where id=c.id returning * into c;
+ end if;
+ return jsonb_build_object('id',c.id,'status',c.status,'screen_consent',c.screen_consent,'screen_stopped',c.screen_stopped,'offer',case when p_agent then c.offer end,'answer',case when not p_agent then c.answer end,'expires_at',c.expires_at);
+end $call$;
+create function public.grillad_customer_call(p_org uuid,p_site uuid,p_ticket uuid,p_action text,p_sdp text default null,p_screen boolean default false) returns jsonb language sql security definer set search_path=pg_catalog as $call$
+ select grillad_private.support_call(p_ticket,p_action,p_sdp,p_screen,p_org,p_site,false)
+$call$;
+create function public.grillad_agent_call(p_ticket uuid,p_action text,p_sdp text default null) returns jsonb language sql security definer set search_path=pg_catalog as $call$
+ select grillad_private.support_call(p_ticket,p_action,p_sdp,false,null,null,true)
+$call$;
+revoke all on function grillad_private.support_call(uuid,text,text,boolean,uuid,uuid,boolean),public.grillad_customer_call(uuid,uuid,uuid,text,text,boolean),public.grillad_agent_call(uuid,text,text) from public,anon,authenticated;
+grant execute on function public.grillad_customer_call(uuid,uuid,uuid,text,text,boolean),public.grillad_agent_call(uuid,text,text) to authenticated;
+
 commit;
