@@ -52,3 +52,5 @@ Complément : 1 test API paiement et 2 parcours Chromium (référence sans débi
 Complément conflits hors ligne : 1 test API d’annulation vérifiée et assertions SQL tombstone/rejeu ; total 191 unités (186 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/44.
 
 Complément démarrage Android : 1 test unitaire nommé (validité cache), assertions lifecycle invitation/renouvellement/projection enrichies. Total 192 unités (187 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/45.
+
+Complément réorientation métier : assertions SQL vente MTN/réconciliation/caisse, 1 test nommé de pagination caméra (total 193 unités : 188 tests nommés + 4 suites SQL + 1 drill ; lots 50/50/47/46).

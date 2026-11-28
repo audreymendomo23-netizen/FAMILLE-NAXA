@@ -1,0 +1,1 @@
+export function cameraPage(cameras,page=0){const list=Array.isArray(cameras)?cameras:[];const pages=Math.max(1,Math.ceil(list.length/4));const index=Math.max(0,Math.min(pages-1,Number.isInteger(page)?page:0));const slots=list.slice(index*4,index*4+4);while(slots.length<4)slots.push(null);return{pages,index,slots}}
