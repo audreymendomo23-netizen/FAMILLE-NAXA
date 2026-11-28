@@ -1,6 +1,14 @@
 package cm.naxa.grillad
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -24,7 +32,31 @@ import androidx.compose.ui.unit.dp
   Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
    Text("GrillaD",style=MaterialTheme.typography.displaySmall,fontWeight=FontWeight.ExtraBold)
    Text(subtitle,style=MaterialTheme.typography.titleMedium)
-   Image(painter=painterResource(R.drawable.grillad_auth_braise),contentDescription=null,modifier=Modifier.fillMaxWidth().aspectRatio(4f/3f).clip(RoundedCornerShape(14.dp)),contentScale=ContentScale.Fit)
+   Box(Modifier.fillMaxWidth().aspectRatio(4f/3f).clip(RoundedCornerShape(14.dp))){
+    Image(painter=painterResource(R.drawable.grillad_auth_braise),contentDescription=null,modifier=Modifier.matchParentSize(),contentScale=ContentScale.Fit)
+    val context=LocalContext.current
+    val motion=android.provider.Settings.Global.getFloat(context.contentResolver,android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,1f)>0f
+    if(motion&&LocalWindowInfo.current.isWindowFocused)GrilladAuthSteam(Modifier.matchParentSize())
+   }
+  }
+ }
+}
+
+// Three low-opacity wisps drawn independently of the original bitmap.
+@Composable private fun GrilladAuthSteam(modifier:Modifier){
+ val transition=rememberInfiniteTransition(label="atelier-steam")
+ val phase by transition.animateFloat(initialValue=0f,targetValue=1f,animationSpec=infiniteRepeatable(animation=tween(5800,easing=LinearEasing)),label="steam-phase")
+ Canvas(modifier){
+  val sx=size.width/516f;val sy=size.height/387f
+  for(i in 0..2){
+   val t=(phase+i/3f)%1f
+   val opacity=(kotlin.math.sin(t*Math.PI).toFloat().coerceAtLeast(0f))*0.14f
+   val x=(239f+i*17f+8f*kotlin.math.sin(t*6.28318f))*sx
+   val y=(171f-39f*t-i*4f)*sy
+   val path=Path().apply{moveTo(x,y);cubicTo(x-15*sx,y-22*sy,x+17*sx,y-33*sy,x+5*sx,y-53*sy);cubicTo(x-9*sx,y-73*sy,x-15*sx,y-88*sy,x+6*sx,y-109*sy)}
+   drawPath(path,Color(0xFFFFF8ED).copy(alpha=opacity*.22f),style=Stroke(width=15*sx,cap=StrokeCap.Round))
+   drawPath(path,Color(0xFFFFF8ED).copy(alpha=opacity*.45f),style=Stroke(width=9*sx,cap=StrokeCap.Round))
+   drawPath(path,Color(0xFFFFF8ED).copy(alpha=opacity*.55f),style=Stroke(width=4*sx,cap=StrokeCap.Round))
   }
  }
 }

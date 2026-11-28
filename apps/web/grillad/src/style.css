@@ -91,3 +91,10 @@ article button{margin:4px 4px 4px 0;max-width:100%;white-space:normal}
 .atelier-photo-control{align-self:flex-end;min-height:44px;background:transparent;color:#f7f5ef;border:1px solid #75665c;font-size:12px;padding:8px 12px}
 @media(max-width:799px){.auth-shell>main{gap:16px;padding-top:6px}.atelier-auth .atelier-photo-frame{max-width:360px}.atelier-auth{padding:18px}.atelier-auth .auth-brand{font-size:30px}}
 @media(prefers-reduced-motion:reduce){.atelier-photo{transition:none}}
+
+/* Steam is a separate decorative layer; no filter or resampling on the photo. */
+.atelier-steam{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden}
+.atelier-steam-wisp{opacity:0;transform-box:fill-box;transform-origin:50% 100%;animation:atelier-steam-rise 5.8s ease-in-out infinite}
+.atelier-steam-wisp.wisp-1{animation-delay:-1.9s;animation-duration:6.5s}.atelier-steam-wisp.wisp-2{animation-delay:-3.8s;animation-duration:7.1s}
+@keyframes atelier-steam-rise{0%{opacity:0;transform:translate(0,12px) scale(.82,.70)}22%{opacity:.26}58%{opacity:.15;transform:translate(6px,-14px) scale(1.12,1.08)}100%{opacity:0;transform:translate(-8px,-36px) scale(1.3,1.23)}}
+@media(prefers-reduced-motion:reduce){.atelier-steam{display:none}.atelier-steam-wisp{animation:none}}

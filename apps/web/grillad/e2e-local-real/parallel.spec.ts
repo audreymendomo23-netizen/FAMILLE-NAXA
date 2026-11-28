@@ -430,6 +430,6 @@ test('@transverse Atelier original photos load and reduced motion disables rotat
  await expect.poll(async()=>photos.evaluateAll(nodes=>nodes.every(n=>n instanceof HTMLImageElement&&n.complete&&n.naturalWidth>0))).toBe(true);
  expect(await photos.evaluateAll(nodes=>nodes.map(n=>[n.naturalWidth,n.naturalHeight]))).toEqual([[516,387],[597,452],[495,495]]);
  await expect(page.locator('.atelier-photo.active')).toHaveCount(1);
- await expect(page.locator('.atelier-photo-control')).toHaveCount(0);
- await page.emulateMedia({reducedMotion:'no-preference'});await expect(page.locator('.atelier-photo-control')).toBeVisible();await page.locator('.atelier-photo-control').click();await expect(page.locator('.atelier-photo-control')).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('.atelier-photo-control')).toHaveCount(0);await expect(page.locator('.atelier-steam')).toHaveCount(0);
+ await page.emulateMedia({reducedMotion:'no-preference'});await expect(page.locator('.atelier-photo-control')).toBeVisible();await expect(page.locator('.atelier-steam')).toBeVisible();await expect(page.locator('.atelier-steam')).toHaveAttribute('aria-hidden','true');await page.locator('.atelier-photo-control').click();await expect(page.locator('.atelier-photo-control')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.atelier-steam')).toHaveCount(0);
 });
