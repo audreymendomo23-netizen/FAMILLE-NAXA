@@ -1271,3 +1271,35 @@ test("Bulk C: a new submission during an in-flight pull drains immediately witho
   await expect(page.locator(".record").filter({hasText:"Client drain concurrent"}).getByText("Confirmé",{exact:true}).first()).toBeVisible();
  }finally{release();}
 });
+
+
+test("Commercial FAQ: answers expand, search filters and FR EN FF switch",async({context})=>{
+  await installBackend(context);
+  const page=await context.newPage();await signIn(page);
+  await page.locator(".side-nav").getByRole("button",{name:/Assistance/}).click();
+  const cases=[
+    ["Questions fréquentes","Rechercher une question","Comment ouvrir et clôturer une caisse ?","Dans Caisse, choisissez","caisse"],
+    ["Frequently asked questions","Search questions","How do I open and close a register?","In Cash register, choose","register"],
+    ["Naamne ɓurɗe naamneede","Yiylo naamnal","No udditirtee e uddirtee keesu?","E Keesu, suɓo","keesu"]
+  ];
+  const langs=["fr","en","ff-CM"],labels=["Langue","Language","Ɗemngal"];
+  for(let i=0;i<cases.length;i++){
+    if(i>0){await page.locator("header").getByRole("combobox",{name:labels[i-1],exact:true}).selectOption(langs[i]);await expect(page.locator("html")).toHaveAttribute("lang",langs[i]);}
+    const [title,search,question,answer,term]=cases[i];
+    const faq=page.getByRole("region",{name:title,exact:true});
+    await expect(faq.locator("details")).toHaveCount(5);
+    const row=faq.locator("details").filter({hasText:question});
+    await expect(row).not.toHaveAttribute("open","");
+    await row.locator("summary").click();
+    await expect(row.locator("p")).toContainText(answer);
+    await expect(row.locator("p")).toBeVisible();
+    await row.locator("summary").click();
+    await expect(row.locator("p")).toBeHidden();
+    await faq.getByLabel(search).fill("zzzzzz-no-match");
+    await expect(faq.locator("details")).toHaveCount(0);
+    await faq.getByLabel(search).fill(term);
+    await expect(row).toBeVisible();
+    await faq.getByLabel(search).fill("");
+    await expect(faq.locator("details")).toHaveCount(5);
+  }
+});
