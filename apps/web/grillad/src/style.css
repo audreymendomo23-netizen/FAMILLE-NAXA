@@ -101,3 +101,39 @@ article button{margin:4px 4px 4px 0;max-width:100%;white-space:normal}
 
 /* Authentication artwork is fixed; only the independent steam layer animates. */
 .atelier-auth .atelier-photo{opacity:1;transition:none}
+
+/* Validated Atelier authentication journey. Responsive, photograph only on sign-in. */
+.atelier-auth-pages{min-height:100dvh;background:var(--bg)}
+.atelier-auth-pages header{max-width:1140px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 24px}
+.atelier-wordmark{font-size:27px;font-weight:850;letter-spacing:-1.5px;color:var(--text);line-height:1}
+.atelier-wordmark span{color:var(--accent)}
+.atelier-auth-pages .atelier-language{margin-left:auto;display:flex;align-items:center;gap:6px}
+.atelier-language select{border-radius:20px;padding:6px 10px;min-height:40px;font-size:13px}
+.atelier-form-panel{background:var(--surface);border-radius:22px;padding:clamp(20px,4vw,40px);box-shadow:0 8px 36px #1f1f1f0b}
+.atelier-form-panel h1{margin:0 0 6px;font-weight:850;letter-spacing:-1.1px}
+.atelier-auth-description{margin:0 0 22px;color:var(--muted);font-size:15px;max-width:44ch}
+.atelier-form-panel form{border:0;box-shadow:none;background:transparent;padding:0;gap:15px;margin:0;display:grid}
+.atelier-field{display:grid;gap:6px;font-size:13px;font-weight:650;min-width:0}
+.atelier-field input{width:100%;height:52px;border-radius:11px;background:var(--bg);font-size:16px}
+.atelier-password{position:relative;min-width:0}
+.atelier-password input{padding-right:49px}
+.atelier-form-panel form .atelier-eye{position:absolute;right:4px;top:3px;width:44px;min-height:44px;height:44px;display:grid;place-items:center;padding:10px;background:transparent;color:var(--muted);border:0}
+.atelier-eye svg{width:21px;height:21px}
+.atelier-form-panel form .atelier-submit{min-height:54px;border-radius:11px;background:var(--accent);color:var(--onaccent);font-size:15px;margin-top:5px}
+.atelier-auth-links{display:flex;flex-direction:column;align-items:center;margin-top:10px;gap:0}
+.atelier-auth-links button,.atelier-return,.atelier-back{color:var(--accent);background:transparent;border:0;box-shadow:none;min-height:44px;padding:8px 4px;text-decoration:underline;text-underline-offset:3px;font-size:14px}
+.atelier-back{text-decoration:none;font-size:24px;width:44px}
+.atelier-return{display:block;margin:12px auto 0}
+.atelier-offline article{margin-top:10px;padding:0;border:0;background:transparent;box-shadow:none}
+.atelier-offline article>button{background:transparent;color:var(--muted);font-size:12px;border:1px solid var(--line);width:100%;margin:0}
+.atelier-offline article>p:empty{display:none}
+.atelier-auth-message{font-size:14px}
+.atelier-secondary>main{display:block;max-width:480px;padding:32px 20px}
+.atelier-secondary .atelier-form-panel{width:100%}
+.atelier-renewal>main{max-width:620px;margin:auto;padding:28px 20px;text-align:left}
+.atelier-renewal h1{text-align:center}.atelier-renewal h1+p{text-align:center;color:var(--muted)}
+.atelier-auth-symbol{display:grid;place-items:center;width:76px;height:76px;border-radius:50%;background:var(--tint);color:var(--accent);margin:12px auto 22px}
+.atelier-auth-symbol svg{width:38px;height:38px}
+@media(min-width:800px){.atelier-login>main{align-items:center;min-height:calc(100dvh - 100px);padding-top:16px;padding-bottom:40px;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}.atelier-login .atelier-auth{align-self:center}.atelier-secondary>main{display:block;max-width:520px;padding-top:45px}}
+@media(max-width:799px){.atelier-auth-pages header{padding:12px 16px}.atelier-login>main{display:flex;flex-direction:column;gap:0;padding:0 0 28px}.atelier-login .atelier-auth{width:100%;border-radius:0;padding:16px;gap:6px}.atelier-login .atelier-auth .auth-brand,.atelier-login .atelier-auth>p{display:none}.atelier-login .atelier-photo-frame{max-width:360px;max-height:245px;margin:0 auto}.atelier-login .atelier-form-panel{width:100%;margin-top:-8px;position:relative;border-radius:22px 22px 0 0;padding:22px 20px;box-shadow:none}.atelier-secondary>main{padding:18px 16px}.atelier-language>span{display:none}}
+@media(prefers-reduced-motion:no-preference){.atelier-form-panel{animation:atelier-auth-enter .35s ease-out both}@keyframes atelier-auth-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}}

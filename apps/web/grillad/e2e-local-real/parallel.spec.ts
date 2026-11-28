@@ -416,10 +416,9 @@ test('@transverse responsive professional sign-in and keyboard access',async({pa
    await expect(page.locator('.auth-panel h1')).toBeVisible();
    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);
    const loginPhone=page.locator('.auth-panel form').first().locator('input[name=phone]');
-   const recoveryPhone=page.locator('.auth-panel form').nth(1).locator('input[name=phone]');
-   await expect(loginPhone).toHaveCount(1);await expect(recoveryPhone).toHaveCount(1);
-   await loginPhone.focus();await expect(loginPhone).toBeFocused();
-   await recoveryPhone.focus();await expect(recoveryPhone).toBeFocused();
+   await expect(loginPhone).toHaveCount(1);await loginPhone.focus();await expect(loginPhone).toBeFocused();
+   await page.locator('.atelier-auth-links button').first().click();const recoveryPhone=page.locator('form[data-auth-stage=recovery] input[name=phone]');await expect(recoveryPhone).toHaveCount(1);await recoveryPhone.focus();await expect(recoveryPhone).toBeFocused();await expect(page.locator('.atelier-photo')).toHaveCount(0);await page.locator('.atelier-return').click();
+   await page.locator('.atelier-auth-links button').nth(1).click();await expect(page.locator('form[data-auth-stage=invite] input[name=confirm]')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);await page.locator('.atelier-return').click();
   }
  }
 });
@@ -433,3 +432,5 @@ test('@transverse Atelier fixed original photo, steam pause and reduced motion',
  await expect(page.locator('.atelier-photo-control')).toHaveCount(0);await expect(page.locator('.atelier-steam')).toHaveCount(0);
  await page.emulateMedia({reducedMotion:'no-preference'});await expect(page.locator('.atelier-photo-control')).toBeVisible();await expect(page.locator('.atelier-steam')).toBeVisible();await expect(page.locator('.atelier-steam')).toHaveAttribute('aria-hidden','true');await expect(photos).toHaveAttribute('src','/photos/atelier-braise.jpg');await page.waitForTimeout(5200);await expect(photos).toHaveCount(1);await expect(photos).toHaveAttribute('src','/photos/atelier-braise.jpg');await page.locator('.atelier-photo-control').click();await expect(page.locator('.atelier-photo-control')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.atelier-steam')).toHaveCount(0);await expect(photos).toHaveAttribute('src','/photos/atelier-braise.jpg');
 });
+
+test('@transverse Atelier invitation mismatch and recovery use distinct screens',async({page})=>{await page.goto('/');await page.locator('header select').selectOption('fr');await page.locator('.atelier-auth-links button').nth(1).click();const f=page.locator('form[data-auth-stage=invite]');await f.locator('[name=invite_request]').fill('test');await f.locator('[name=invite_token]').fill('test');await f.locator('[name=phone]').fill(accounts.owner.phone);await f.locator('[name=password]').fill('abc123');await f.locator('[name=confirm]').fill('different');await f.getByRole('button',{name:'Activer mon compte'}).click();await expect(page.getByRole('status')).toHaveText('Les mots de passe ne correspondent pas.');await page.locator('.atelier-return').click();await expect(page.locator('form[data-auth-stage=login] input[name=password]')).toHaveValue('');});

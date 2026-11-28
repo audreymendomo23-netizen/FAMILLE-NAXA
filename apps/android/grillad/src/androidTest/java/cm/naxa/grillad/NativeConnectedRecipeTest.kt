@@ -31,7 +31,7 @@ class NativeConnectedRecipeTest {
   val seller=accounts.getJSONObject("seller")
   ui.onAllNodes(hasSetTextAction())[0].performTextInput(seller.getString("phone"))
   ui.onAllNodes(hasSetTextAction())[1].performTextInput(seller.getString("password"))
-  ui.onNodeWithText("Se connecter").performClick()
+  ui.onNodeWithText("Se connecter").performScrollTo().performClick()
   ui.waitUntil(60000){ui.onAllNodesWithText("Créer votre code local").fetchSemanticsNodes().isNotEmpty()}
   ui.onAllNodes(hasSetTextAction())[0].performTextInput("1357");ui.onAllNodes(hasSetTextAction())[1].performTextInput("1357")
   ui.onNodeWithText("Enregistrer et ouvrir").performClick()

@@ -891,6 +891,90 @@ export const labels={
   "Navigation": [
     "Navigation",
     "Doggol"
+  ],
+  "Première connexion": [
+    "First sign-in",
+    "Naatugol aranol"
+  ],
+  "Activer mon compte": [
+    "Activate my account",
+    "Hurmin konte am"
+  ],
+  "Retour à la connexion": [
+    "Back to sign in",
+    "Rutto to naatugol"
+  ],
+  "Confirmer le mot de passe": [
+    "Confirm password",
+    "Tabbitin finnde"
+  ],
+  "Les mots de passe ne correspondent pas.": [
+    "Passwords do not match.",
+    "Finndeeji nanndaani."
+  ],
+  "Afficher le mot de passe": [
+    "Show password",
+    "Hollu finnde"
+  ],
+  "Masquer le mot de passe": [
+    "Hide password",
+    "Suuɗu finnde"
+  ],
+  "Accédez à votre espace de gestion.": [
+    "Access your business workspace.",
+    "Naatu e nokkuure golle maa."
+  ],
+  "Activez votre compte avec les informations reçues de votre administrateur.": [
+    "Activate your account using the information from your administrator.",
+    "Hurmin konte maa huutoraade humpito iwɗo e jiiloowo maa."
+  ],
+  "Saisissez votre numéro de téléphone. Votre demande sera examinée par l’administrateur.": [
+    "Enter your phone number. Your request will be reviewed by the administrator.",
+    "Naatnu limoore telefon maa. Jiiloowo ƴeewtoto ɗaɓɓitannde maa."
+  ],
+  "Créer votre code local": [
+    "Create your local PIN",
+    "Sos kod maa nokkuure"
+  ],
+  "Déverrouiller GRILLAD": [
+    "Unlock GRILLAD",
+    "Uddit GRILLAD"
+  ],
+  "Code individuel à quatre chiffres. La connexion serveur reste obligatoire.": [
+    "Personal four-digit PIN. Server sign-in is still required.",
+    "Kod keeriiɗo limoore nay. Naatugol sarworde ena foti."
+  ],
+  "Code local": [
+    "Local PIN",
+    "Kod nokkuure"
+  ],
+  "Confirmer le code": [
+    "Confirm PIN",
+    "Tabbitin kod"
+  ],
+  "Enregistrer et ouvrir": [
+    "Save and open",
+    "Danndu tee uddit"
+  ],
+  "Déverrouiller": [
+    "Unlock",
+    "Uddit"
+  ],
+  "Déverrouiller par biométrie": [
+    "Unlock with biometrics",
+    "Uddit huutoraade biometrie"
+  ],
+  "Se déconnecter": [
+    "Sign out",
+    "Yaltu"
+  ],
+  "Abonnement expiré": [
+    "Subscription expired",
+    "Abonman timmii"
+  ],
+  "Options de sécurité": [
+    "Security options",
+    "Cuɓe kisal"
   ]
 };
 export function localeOf(x){return x==='en'||x==='ff-CM'?x:'fr'}

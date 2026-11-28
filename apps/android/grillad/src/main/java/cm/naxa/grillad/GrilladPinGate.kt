@@ -1,6 +1,13 @@
 package cm.naxa.grillad
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -9,20 +16,27 @@ import androidx.fragment.app.FragmentActivity
 import cm.naxa.core.security.BiometricGate
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-@Composable internal fun GrilladPinGate(user:String,manager:LocalAccessPinManager,onUnlocked:()->Unit,onSignOut:()->Unit){
+@Composable internal fun GrilladPinGate(user:String,manager:LocalAccessPinManager,locale:String="fr",onUnlocked:()->Unit,onSignOut:()->Unit){
+ fun tr(k:String)=grilladLabel(k,locale)
  val setup=!manager.isConfigured(user);val activity=LocalContext.current as? FragmentActivity;var alive by remember{mutableStateOf(true)};DisposableEffect(user){onDispose{alive=false}}
  var pin by remember{mutableStateOf("")};var repeat by remember{mutableStateOf("")};var message by remember{mutableStateOf("")}
  BackHandler(true){}
- Column(Modifier.fillMaxSize().padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
- Text(if(setup)"Créer votre code local" else "Déverrouiller GRILLAD",style=MaterialTheme.typography.headlineSmall)
- Text("Code individuel à quatre chiffres. La connexion serveur reste obligatoire.")
- OutlinedTextField(pin,{pin=it.filter{c->c in '0'..'9'}.take(4)},label={Text("Code local")},visualTransformation=PasswordVisualTransformation())
- if(setup)OutlinedTextField(repeat,{repeat=it.filter{c->c in '0'..'9'}.take(4)},label={Text("Confirmer le code")},visualTransformation=PasswordVisualTransformation())
- Button({val r=if(setup)manager.enroll(user,pin)else manager.verify(user,pin);pin="";repeat="";if(r.code==LocalAccessPinCode.SUCCESS)onUnlocked() else message=when(r.code){LocalAccessPinCode.LOCKED->"Code verrouillé temporairement. Réessayez après le délai.";LocalAccessPinCode.INVALID->"Code incorrect. Tentatives restantes : "+r.attemptsRemaining;else->"Code indisponible ou invalide. Reconnectez-vous si nécessaire."}},enabled=LocalAccessPinPolicy.isValid(pin)&&(!setup||pin==repeat)){Text(if(setup)"Enregistrer et ouvrir" else "Déverrouiller")}
- if(!setup&&activity!=null&&manager.biometricEnabled(user)&&BiometricGate.available(activity))TextButton({if(manager.isLocked(user)){message="Code verrouillé temporairement."}else BiometricGate.prompt(activity,{if(alive&&!manager.isLocked(user))onUnlocked()},{if(alive)message="Biométrie indisponible. Utilisez votre code local."})}){Text("Déverrouiller par biométrie")}
+ Box(Modifier.fillMaxSize().safeDrawingPadding().imePadding(),contentAlignment=Alignment.TopCenter){Column(Modifier.widthIn(max=440.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
+ Text("GrillaD",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.ExtraBold)
+ Spacer(Modifier.height(20.dp))
+ Text(tr(if(setup)"Créer votre code local" else "Déverrouiller GRILLAD"),style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
+ Text(tr("Code individuel à quatre chiffres. La connexion serveur reste obligatoire."),color=MaterialTheme.colorScheme.onSurfaceVariant)
+ GrilladPinField(pin,{pin=it},tr("Code local"))
+ if(setup)GrilladPinField(repeat,{repeat=it},tr("Confirmer le code"))
+ Button({val r=if(setup)manager.enroll(user,pin)else manager.verify(user,pin);pin="";repeat="";if(r.code==LocalAccessPinCode.SUCCESS)onUnlocked() else message=when(r.code){LocalAccessPinCode.LOCKED->"Code verrouillé temporairement. Réessayez après le délai.";LocalAccessPinCode.INVALID->"Code incorrect. Tentatives restantes : "+r.attemptsRemaining;else->"Code indisponible ou invalide. Reconnectez-vous si nécessaire."}},enabled=LocalAccessPinPolicy.isValid(pin)&&(!setup||pin==repeat),modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text(tr(if(setup)"Enregistrer et ouvrir" else "Déverrouiller"))}
+ if(!setup&&activity!=null&&manager.biometricEnabled(user)&&BiometricGate.available(activity))TextButton({if(manager.isLocked(user)){message="Code verrouillé temporairement."}else BiometricGate.prompt(activity,{if(alive&&!manager.isLocked(user))onUnlocked()},{if(alive)message="Biométrie indisponible. Utilisez votre code local."})}){Text(tr("Déverrouiller par biométrie"))}
  if(message.isNotBlank())Text(message)
- TextButton(onSignOut){Text("Se déconnecter")}
- }
+ TextButton(onSignOut,modifier=Modifier.fillMaxWidth()){Text(tr("Se déconnecter"))}
+ }}
+}
+@Composable private fun GrilladPinField(value:String,onValue:(String)->Unit,label:String){
+ OutlinedTextField(value,{onValue(it.filter{c->c in '0'..'9'}.take(4))},label={Text(label)},visualTransformation=PasswordVisualTransformation(),keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.NumberPassword),singleLine=true,modifier=Modifier.fillMaxWidth())
+ Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){repeat(4){i->OutlinedCard(Modifier.weight(1f).height(50.dp),shape=RoundedCornerShape(10.dp)){Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text(if(i<value.length)"●" else "–",style=MaterialTheme.typography.titleMedium)}}}}
 }
 
 @Composable internal fun GrilladBiometricSettings(user:String,manager:LocalAccessPinManager,enabled:Boolean){
