@@ -361,3 +361,30 @@ test('@transverse shared support registry, private ticket, exact replay and cent
   expect(await o({action:'referral',operation:'list'})).toEqual(referral);
  }finally{await close(request,seller);await close(request,owner)}
 });
+
+test('@transverse WebRTC bidirectional synthetic audio and screen-like video actually flow in Chromium',async({page})=>{
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const a=new RTCPeerConnection({iceServers:[]}),b=new RTCPeerConnection({iceServers:[]});
+  const audioA=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+  let audioB:MediaStream|undefined,display:MediaStream|undefined,timer:any;
+  try{
+   audioB=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+   const canvas=document.createElement('canvas');canvas.width=160;canvas.height=90;
+   const ctx=canvas.getContext('2d')!;let frame=0;
+   const paint=()=>{ctx.fillStyle=frame++%2?'#ffffff':'#ff0000';ctx.fillRect(0,0,160,90)};paint();
+   display=canvas.captureStream(12);timer=setInterval(paint,85);
+   const receivedA:string[]=[],receivedB:string[]=[];
+   a.ontrack=e=>receivedA.push(e.track.kind);b.ontrack=e=>receivedB.push(e.track.kind);
+   audioA.getTracks().forEach(t=>a.addTrack(t,audioA));audioB.getTracks().forEach(t=>b.addTrack(t,audioB!));display.getTracks().forEach(t=>a.addTrack(t,display!));
+   const waitIce=async(p:RTCPeerConnection)=>{const end=Date.now()+10000;while(p.iceGatheringState!=='complete'&&Date.now()<end)await new Promise(r=>setTimeout(r,50));if(p.iceGatheringState!=='complete')throw Error('ICE timeout')};
+   await a.setLocalDescription(await a.createOffer());await waitIce(a);await b.setRemoteDescription(a.localDescription!);
+   await b.setLocalDescription(await b.createAnswer());await waitIce(b);await a.setRemoteDescription(b.localDescription!);
+   const bytes=async(p:RTCPeerConnection,kind:string)=>{let n=0;(await p.getStats()).forEach(s=>{if(s.type==='inbound-rtp'&&(s.kind===kind||s.mediaType===kind))n+=s.bytesReceived||0});return n};
+   const end=Date.now()+20000;let av=0,bv=0,video=0;
+   while(Date.now()<end){av=await bytes(a,'audio');bv=await bytes(b,'audio');video=await bytes(b,'video');if(av>0&&bv>0&&video>0)break;await new Promise(r=>setTimeout(r,200))}
+   return {av,bv,video,receivedA,receivedB};
+  }finally{clearInterval(timer);[audioA,audioB,display].forEach(s=>s?.getTracks().forEach(t=>t.stop()));a.close();b.close()}
+ });
+ expect(result.receivedA).toContain('audio');expect(result.receivedB).toContain('audio');expect(result.receivedB).toContain('video');expect(result.av).toBeGreaterThan(0);expect(result.bv).toBeGreaterThan(0);expect(result.video).toBeGreaterThan(0);
+});

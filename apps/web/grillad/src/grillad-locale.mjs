@@ -1,4 +1,4 @@
-// Shared family vocabulary recovered from NAXA SERVICES; GRILLAD-specific navigation additions are provisional for ff-CM.
+// Common vocabulary reused from NAXA SERVICES; GRILLAD-specific Fulfulde labels remain pending native review.
 export const labels={
   "Accueil": [
     "Home",
@@ -93,7 +93,7 @@ export const labels={
     "Ɗemngal"
   ],
   "Système": [
-    "Settings",
+    "System default",
     "Teelte"
   ],
   "Clair": [
@@ -171,7 +171,67 @@ export const labels={
   "Nouvelle vente": [
     "New sale",
     "Jaaygol kesol"
+  ],
+  "Points de vente": [
+    "Locations",
+    "Nokkuuji jaaygol"
+  ],
+  "Sécurité": [
+    "Security",
+    "Kisal"
+  ],
+  "Ouvrir la caisse": [
+    "Open register",
+    "Uddit keesu"
+  ],
+  "Espèces": [
+    "Cash",
+    "Ceede e juuɗe"
+  ],
+  "Choisir un article": [
+    "Choose item",
+    "Suɓo jawdi"
+  ],
+  "Motif": [
+    "Reason",
+    "Daliilu"
+  ],
+  "Actif": [
+    "Active",
+    "Nana golla"
+  ],
+  "Créer le point de vente": [
+    "Create location",
+    "Sos nokkuure"
+  ],
+  "Mot de passe oublié": [
+    "Forgot password?",
+    "A yejjitii finnde maa?"
+  ],
+  "Téléphone (+237…)": [
+    "Phone (+237…)",
+    "Telefon (+237…)"
+  ],
+  "Téléphone de récupération": [
+    "Recovery phone",
+    "Telefon"
+  ],
+  "Ajouter l’article": [
+    "Add item",
+    "Ɓeydu jawdi"
+  ],
+  "Fermer la session locale": [
+    "Sign out",
+    "Yaltu"
+  ],
+  "Connexion": [
+    "Sign in",
+    "Naatugol e kisal"
+  ],
+  "Connexion professionnelle": [
+    "Professional sign in",
+    "Naatugol e kisal"
   ]
 };
 export function localeOf(x){return x==='en'||x==='ff-CM'?x:'fr'}
-export function translate(key,locale){return locale==='fr'?key:labels[key]?.[locale==='en'?0:1]??key}
+export function translate(key,locale){return localeOf(locale)==='fr'?key:labels[key]?.[locale==='en'?0:1]??key}

@@ -1,6 +1,6 @@
 package cm.naxa.grillad
-// NAXA SERVICES shared labels, GRILLAD-specific Fulfulde labels pending language review.
-internal fun grilladLabel(key:String,locale:String):String=if(locale=="fr")key else when(key){
+// Same presentation vocabulary as Web; ff-CM review remains required.
+internal fun grilladLabel(key:String,locale:String):String=if(locale!="en"&&locale!="ff-CM")key else when(key){
  "Accueil" -> if(locale=="en")"Home" else "Jaɓɓorgo"
  "Vente" -> if(locale=="en")"Sale" else "Jaaygol"
  "Ventes" -> if(locale=="en")"Sales" else "Jaaygol"
@@ -24,7 +24,7 @@ internal fun grilladLabel(key:String,locale:String):String=if(locale=="fr")key e
  "Déconnexion" -> if(locale=="en")"Sign out" else "Yaltu"
  "Actualiser" -> if(locale=="en")"Refresh" else "Hesɗitin"
  "Langue" -> if(locale=="en")"Language" else "Ɗemngal"
- "Système" -> if(locale=="en")"Settings" else "Teelte"
+ "Système" -> if(locale=="en")"System default" else "Teelte"
  "Clair" -> if(locale=="en")"Light" else "Jayngol"
  "Sombre" -> if(locale=="en")"Dark" else "Niɓɓere"
  "Point de vente" -> if(locale=="en")"Location" else "Nokkuure jaaygol"
@@ -44,5 +44,20 @@ internal fun grilladLabel(key:String,locale:String):String=if(locale=="fr")key e
  "Envoyer la demande" -> if(locale=="en")"Submit request" else "Neldu ɗaɓɓitannde"
  "Retour" -> if(locale=="en")"Back" else "Retour"
  "Nouvelle vente" -> if(locale=="en")"New sale" else "Jaaygol kesol"
+ "Points de vente" -> if(locale=="en")"Locations" else "Nokkuuji jaaygol"
+ "Sécurité" -> if(locale=="en")"Security" else "Kisal"
+ "Ouvrir la caisse" -> if(locale=="en")"Open register" else "Uddit keesu"
+ "Espèces" -> if(locale=="en")"Cash" else "Ceede e juuɗe"
+ "Choisir un article" -> if(locale=="en")"Choose item" else "Suɓo jawdi"
+ "Motif" -> if(locale=="en")"Reason" else "Daliilu"
+ "Actif" -> if(locale=="en")"Active" else "Nana golla"
+ "Créer le point de vente" -> if(locale=="en")"Create location" else "Sos nokkuure"
+ "Mot de passe oublié" -> if(locale=="en")"Forgot password?" else "A yejjitii finnde maa?"
+ "Téléphone (+237…)" -> if(locale=="en")"Phone (+237…)" else "Telefon (+237…)"
+ "Téléphone de récupération" -> if(locale=="en")"Recovery phone" else "Telefon"
+ "Ajouter l’article" -> if(locale=="en")"Add item" else "Ɓeydu jawdi"
+ "Fermer la session locale" -> if(locale=="en")"Sign out" else "Yaltu"
+ "Connexion" -> if(locale=="en")"Sign in" else "Naatugol e kisal"
+ "Connexion professionnelle" -> if(locale=="en")"Professional sign in" else "Naatugol e kisal"
  else -> key
 }
