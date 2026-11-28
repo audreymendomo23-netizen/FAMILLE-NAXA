@@ -3,7 +3,6 @@ import android.view.WindowManager
 import android.graphics.Color
 import android.widget.FrameLayout
 import androidx.test.platform.app.InstrumentationRegistry
-import org.junit.Assert.assertFalse
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertTrue
@@ -31,8 +30,8 @@ class B6SecureWindowTest {
                 activity.setContentView(FrameLayout(activity).apply { setBackgroundColor(Color.MAGENTA) })
                 activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
             }
-            fun visible(): Boolean {
-                val bitmap=instrumentation.uiAutomation.takeScreenshot() ?: return false
+            fun matchingPixels(): Int {
+                val bitmap=instrumentation.uiAutomation.takeScreenshot() ?: return 0
                 try {
                     // A grid across the interior is resilient to transient status/navigation overlays.
                     var hits=0
@@ -40,19 +39,19 @@ class B6SecureWindowTest {
                         val pixel=bitmap.getPixel(bitmap.width*x/10,bitmap.height*y/10)
                         if(Color.red(pixel)>200 && Color.blue(pixel)>200 && Color.green(pixel)<60) hits++
                     }
-                    return hits>=3
+                    return hits
                 }
                 finally { bitmap.recycle() }
             }
             try {
                 instrumentation.waitForIdleSync()
                 var control=false
-                repeat(60) { if(!control){Thread.sleep(200);control=visible()} }
+                repeat(60) { if(!control){Thread.sleep(200);control=matchingPixels()>=3} }
                 assertTrue("Synthetic capture positive control must be visible",control)
             } finally { scenario.onActivity { it.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) } }
             instrumentation.waitForIdleSync();Thread.sleep(1000)
             repeat(5) {
-                assertFalse("Secure content must not be visible to system screenshot",visible())
+                assertTrue("Secure content must not be visible to system screenshot",matchingPixels()==0)
                 Thread.sleep(150)
             }
         }
