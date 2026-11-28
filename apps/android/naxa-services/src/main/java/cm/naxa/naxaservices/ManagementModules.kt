@@ -2003,6 +2003,7 @@ fun TeamPerformanceContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        if (BuildConfig.COMMISSION_RECONCILIATION_ENABLED && session.account.roleCode == "promoter") { item { CommissionReconciliationCard(session, siteId) } }
         item { Text(when (session.account.defaultLocale) { "en" -> "Commissions, advances and bonuses"; "ff-CM" -> "Komisiyoŋ, ceede adiiɗe e bonis"; else -> "Commissions, avances et primes" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(payroll.take(40)) { row ->
             var approvalReason by rememberSaveable(row.id) { mutableStateOf("") }

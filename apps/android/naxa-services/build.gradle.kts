@@ -45,6 +45,7 @@ android {
         buildConfigField("boolean", "SUPPLIER_SYNC_ENABLED", supplierSyncEnabled.toString())
         val rosterEnabled = (project.findProperty("NS_ENABLE_ROSTER") as? String ?: "false").equals("true", ignoreCase = true)
         buildConfigField("boolean", "ROSTER_ENABLED", rosterEnabled.toString())
+        buildConfigField("boolean", "COMMISSION_RECONCILIATION_ENABLED", ((project.findProperty("NS_ENABLE_COMMISSION_RECONCILIATION") as? String ?: "false").equals("true", ignoreCase = true)).toString())
         val briefingEnabled = (project.findProperty("NS_ENABLE_BRIEFING") as? String ?: "false").equals("true", ignoreCase = true)
         buildConfigField("boolean", "BRIEFING_ENABLED", briefingEnabled.toString())
         val meetingsEnabled = (project.findProperty("NS_ENABLE_MEETINGS") as? String ?: "false").equals("true", ignoreCase = true)
