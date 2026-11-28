@@ -3,7 +3,6 @@ import {SecurityScope} from "./SessionWorkspace";
 import {request,reviewRpc,type Resource} from "./security-api";
 const enabled=(import.meta.env as ImportMetaEnv & {VITE_SECURITY_FIELD_ENABLED?:string}).VITE_SECURITY_FIELD_ENABLED==="true";
 const groups:Record<string,{resource:Resource;mode:string}>={
- "B5.12":{resource:"sec_work_orders",mode:"work"},"B5.16":{resource:"sec_work_orders",mode:"work"},"B5.17":{resource:"sec_work_orders",mode:"work"},
  "B4.13":{resource:"sec_attendance_drafts",mode:"attendance"},
  "B4.14":{resource:"sec_patrols",mode:"patrol"},"B4.15":{resource:"sec_patrols",mode:"patrol"},"B4.17":{resource:"sec_patrols",mode:"patrol"},"B4.19":{resource:"sec_patrol_checks",mode:"checks"},
  "B4.23":{resource:"sec_passage_logs",mode:"logs"},"B4.24":{resource:"sec_service_register",mode:"visitor"},"B4.29":{resource:"sec_service_register",mode:"vehicle"},

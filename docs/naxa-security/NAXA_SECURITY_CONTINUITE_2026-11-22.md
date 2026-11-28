@@ -505,3 +505,6 @@ Code aléatoire à usage unique, empreinte privée, émission par responsable ap
 
 ### Recettes ERP et codes temporaires sur base réelle de recette
 Extension du replay Chromium/PostgreSQL aux vacations (création, conflit, acceptation), maintenance (affectation, démarrage, coût et diagnostic, revue distincte), code visite (émission, consommation et refus de rejeu). Fixtures synthétiques, aucun équipement ni donnée réelle. Nouveaux tests à qualifier. Vague de relance initiale 33b17b5 : cinq workflows SUCCESS (46089794631, 46089794646, 46089794649, 46089794655, 46089794616). SQL ERP sur 0ee94a9 : étape psql SUCCESS.
+
+### Durcissement du parcours maintenance
+Suppression des anciennes transitions Web de maintenance, garde SQL obligatoire sur affectation détaillée, démarrage par technicien et revue avant clôture, y compris via l’ancien RPC. Deux refus supplémentaires en assertions. Ne pas assimiler une clôture de dossier à une certification d’équipement.

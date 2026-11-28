@@ -91,8 +91,15 @@ revoke all on function public.sec_erp_action(uuid,uuid,uuid,text,uuid,jsonb) fro
 grant execute on function public.sec_erp_action(uuid,uuid,uuid,text,uuid,jsonb) to authenticated;
 -- Prevent the older transition path from bypassing the detailed technician workflow once attached.
 create function sec_private.guard_maintenance_review() returns trigger language plpgsql set search_path=pg_catalog as $g$
+declare d public.sec_maintenance_details%rowtype;
 begin
- if new.state='completed' and old.state is distinct from new.state and exists(select 1 from public.sec_maintenance_details d where d.order_id=new.id and (d.completed_at is null or d.reviewed_at is null)) then raise exception 'review required' using errcode='22023';end if;return new;
+ if new.state is distinct from old.state and new.state in ('assigned','in_progress','completed') then
+  select * into d from public.sec_maintenance_details where order_id=new.id and organization_id=new.organization_id and site_id=new.site_id;
+  if not found then raise exception 'detailed assignment required' using errcode='22023';end if;
+  if new.state='in_progress' and d.technician_id is distinct from auth.uid() then raise exception 'technician required' using errcode='42501';end if;
+  if new.state='completed' and (d.completed_at is null or d.reviewed_at is null or d.reviewer_id is distinct from auth.uid()) then raise exception 'review required' using errcode='22023';end if;
+ end if;
+ return new;
 end $g$;
 create trigger sec_maintenance_review_guard before update on public.sec_work_orders for each row execute function sec_private.guard_maintenance_review();
 commit;
