@@ -57,3 +57,5 @@ Complément réorientation métier : assertions SQL vente MTN/réconciliation/ca
 Complément modèle NAXA : 1 test API nommé d'extraction SMS volontaire sans confirmation et sans transmission du texte brut au RPC. Total 194 unités (189 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/47.
 
 Complément : 2 tests nommés de la passerelle vidéo (refus non configuré, ticket HTTPS et périmètre). Total 196 unités (191 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/49. Assertions SQL registre de références global enrichies.
+
+Complément : 1 parcours Chromium vente Orange Money déclarée manuellement, ajustement libellés et PDF Android. Total 197 unités (192 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/50.

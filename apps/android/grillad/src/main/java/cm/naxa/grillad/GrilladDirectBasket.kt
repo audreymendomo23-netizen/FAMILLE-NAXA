@@ -17,5 +17,5 @@ import org.json.JSONObject
  if(value.isNotBlank()&&(n==null||n<0||n>remaining||n>1_000_000))valid=false
  if(n!=null&&n>0&&n<=remaining&&n<=1_000_000){lines.put(obj("item" to id,"qty" to n,"price" to price));total+=n*price}}
  Text("Total indicatif : "+total+" F")
- GrilladTenderChoice(method){method=it};OutlinedTextField(received,{received=it},label={Text("Espèces nettes du panier")});Button({submit(lines,total,method);qty.clear();received="";open=false},enabled=enabled&&valid&&lines.length() in 1..20&&received.toLongOrNull()==total,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Valider le panier")}
+ GrilladTenderChoice(method){method=it};OutlinedTextField(received,{received=it},label={Text("Montant net déclaré du panier")});Button({submit(lines,total,method);qty.clear();received="";open=false},enabled=enabled&&valid&&lines.length() in 1..20&&received.toLongOrNull()==total,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Valider le panier")}
 }
