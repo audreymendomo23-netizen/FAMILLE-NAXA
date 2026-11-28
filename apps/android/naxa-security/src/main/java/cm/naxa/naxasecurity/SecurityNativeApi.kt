@@ -71,11 +71,12 @@ internal object SecurityNativeApi {
   (0 until a.length()).map{a.getJSONObject(it)}.filter{it.optString("organization_id")==site.organization&&it.optString("site_id")==site.id}
  }
  suspend fun action(s:SecurityNativeSession,site:SecurityNativeSite,rpc:String,body:JSONObject):JSONObject=withContext(Dispatchers.IO){
-  checkScope(s,site);require(rpc in setOf("sec_case_action","sec_support_action","sec_field_action","sec_read_inbox","sec_erp_action","sec_read_activity"))
+  checkScope(s,site);require(rpc in setOf("sec_case_action","sec_support_action","sec_field_action","sec_read_inbox","sec_erp_action","sec_read_activity","sec_set_activity_channel"))
   val p=JSONObject(body.toString()).put("p_org",site.organization).put("p_site",site.id)
   val v=JSONObject(call("/rest/v1/rpc/"+rpc,s.token,p))
   check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id)
   if(rpc in setOf("sec_read_inbox","sec_read_activity")){check(v.optString("id")==p.optString("p_id")&&v.optString("user_id")==s.user&&!v.isNull("read_at"))}
+  else if(rpc=="sec_set_activity_channel"){check(v.optString("user_id")==s.user&&v.optString("channel")==p.optString("p_channel")&&v.has("enabled")&&!v.isNull("enabled")&&v.getBoolean("enabled")==p.getBoolean("p_enabled"))}
   else {check(v.optString("event_id")==p.optString("p_event")&&v.optString("actor_id")==s.user)
    if(rpc=="sec_field_action"){check(v.optString("operation")==p.optString("p_operation")&&(p.isNull("p_target")||v.optString("target_id")==p.optString("p_target")))}
    else if(rpc=="sec_erp_action"){check(v.optString("operation")==p.optString("p_op")&&(p.isNull("p_target")||v.optString("target_id")==p.optString("p_target")))}
