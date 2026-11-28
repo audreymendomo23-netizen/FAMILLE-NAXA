@@ -1,0 +1,36 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000151'),('00000000-0000-0000-0000-000000000152'),('00000000-0000-0000-0000-000000000153');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000151','QA cases');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000151','00000000-0000-0000-0000-000000000151','manager',true),('10000000-0000-0000-0000-000000000151','00000000-0000-0000-0000-000000000152','operator',true),('10000000-0000-0000-0000-000000000151','00000000-0000-0000-0000-000000000153','manager',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000151','10000000-0000-0000-0000-000000000151','QA'),('20000000-0000-0000-0000-000000000152','10000000-0000-0000-0000-000000000151','Other');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','00000000-0000-0000-0000-000000000151',true),('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','00000000-0000-0000-0000-000000000152',true),('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000152','00000000-0000-0000-0000-000000000153',true);
+insert into public.sec_incidents(id,organization_id,site_id,subject,priority,state,occurred_at,reporter_id) values ('40000000-0000-0000-0000-000000000151','10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','QA case','P2','new',now()-interval '1 minute','00000000-0000-0000-0000-000000000152');
+insert into public.sec_incidents(organization_id,site_id,subject,priority,state,occurred_at) select '10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','QA bulk '||g,'P3','new',now()-interval '1 minute' from generate_series(1,110) g;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000151',true);
+select public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000151','transition','{"note":"triage","next":"review"}');
+select public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000152','transition','{"note":"confirmed","next":"confirmed"}');
+select public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000153','assignment','{"note":"assigned","assignee_id":"00000000-0000-0000-0000-000000000152"}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000152',true);
+select public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000154','transition','{"note":"started","next":"in_progress"}');
+select public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000155','transition','{"note":"waiting","next":"waiting_information"}');
+select public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000156','transition','{"note":"received","next":"in_progress"}');
+select public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000157','comment','{"note":"diagnosis"}');
+select public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000158','transition','{"note":"resolved","next":"resolved"}');
+do $q$begin
+ begin perform public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000159','transition','{"note":"close","next":"closed"}');raise exception 'operator closed';exception when insufficient_privilege then null;end;
+ begin perform public.sec_site_report('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151',now()-interval '1 day',now());raise exception 'operator report';exception when insufficient_privilege then null;end;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000151',true);
+do $q$declare j jsonb;begin
+ j:=public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000160','transition','{"note":"manager verified closure","next":"closed"}');
+ if j->>'state'<>'closed' or public.sec_case_action('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151','40000000-0000-0000-0000-000000000151','50000000-0000-0000-0000-000000000160','transition','{"note":"manager verified closure","next":"closed"}')<>j then raise exception 'closure retry';end if;
+ if (select closure_reason from public.sec_incidents where id='40000000-0000-0000-0000-000000000151')<>'manager verified closure' or (select count(*) from public.sec_incident_notes)<>9 then raise exception 'history incomplete';end if;
+ j:=public.sec_site_report('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151',now()-interval '1 day',now());
+ if (j->'incidents'->>'total')::int<>111 or (j->'incidents'->>'closed')::int<>1 then raise exception 'truncated report';end if;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000153',true);
+do $q$begin if (select count(*) from public.sec_incident_notes)<>0 then raise exception 'cross site notes';end if;
+ begin perform public.sec_site_report('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151',now()-interval '1 day',now());raise exception 'cross site report';exception when insufficient_privilege then null;end;
+end $q$;
+reset role;rollback;
