@@ -8,6 +8,9 @@ import androidx.compose.ui.layout.ContentScale
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
+import android.widget.VideoView
+import android.widget.MediaController
+import androidx.compose.ui.viewinterop.AndroidView
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
@@ -54,22 +57,23 @@ private class ChatAudio{
  val context=LocalContext.current;val scope=rememberCoroutineScope();val resources=remember{ChatAudio()}
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var pending by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
- var preview by remember{mutableStateOf<Pair<String,Bitmap>?>(null)}
+ var preview by remember{mutableStateOf<Pair<String,Bitmap>?>(null)};var video by remember{mutableStateOf<Pair<String,File>?>(null)}
  var recording by remember{mutableStateOf(false)};var playing by remember{mutableStateOf<String?>(null)};var saveBytes by remember{mutableStateOf<ByteArray?>(null)}
  fun scoped(d:JSONObject)=d.apply{if(postId!=null)put("post_id",postId)else if(roomId!=null){put("room_id",roomId);put("channel",channel)}else if(peerId!=null)put("peer_id",peerId)else put("group_id",groupId)}
  suspend fun req(action:String,d:JSONObject=JSONObject())=transport?.invoke(action,scoped(d))?:gateway.chatMedia(session,action,scoped(d))
  fun stopPlayer(){resources.clearPlayer();playing=null}
  fun clearPreview(){preview=null}
- suspend fun refresh(){try{val next=mediaItems(req("list"));items=next;if(playing!=null&&next.none{it.optString("id")==playing})stopPlayer();if(preview!=null&&next.none{it.optString("id")==preview?.first})clearPreview()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();stopPlayer();clearPreview();pending=null;saveBytes=null;resources.clearRecorder();recording=false;throw e}}
+ fun clearVideo(){val old=video;video=null;old?.second?.delete()}
+ suspend fun refresh(){try{val next=mediaItems(req("list"));items=next;if(playing!=null&&next.none{it.optString("id")==playing})stopPlayer();if(preview!=null&&next.none{it.optString("id")==preview?.first})clearPreview();if(video!=null&&next.none{it.optString("id")==video?.first})clearVideo()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();stopPlayer();clearPreview();clearVideo();pending=null;saveBytes=null;resources.clearRecorder();recording=false;throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  fun prepare(bytes:ByteArray,name:String,mime:String,kind:String){require(bytes.size in 8..MediaLimit);pending=JSONObject().put("id",UUID.randomUUID().toString()).put("kind",kind).put("mime",mime).put("name",name.take(120)).put("content",Base64.encodeToString(bytes,Base64.NO_WRAP))}
  val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri:Uri?->if(uri!=null)work{
   val (bytes,name,mime)=withContext(Dispatchers.IO){
-   val resolver=context.contentResolver;val mime=resolver.getType(uri).orEmpty();require(mime in setOf("application/pdf","image/jpeg","image/png"))
+   val resolver=context.contentResolver;val mime=resolver.getType(uri).orEmpty();require(mime in setOf("application/pdf","image/jpeg","image/png")||(postId!=null&&mime in setOf("video/mp4","video/webm")))
    val name=resolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{if(it.moveToFirst())it.getString(0) else null}?:"document"
    val bytes=resolver.openInputStream(uri)?.use{boundedRead(it)}?:throw IllegalStateException("unavailable")
    Triple(bytes,name,mime)
-  };prepare(bytes,name,mime,"file")
+  };prepare(bytes,name,mime,if(postId!=null&&mime.startsWith("video/"))"video" else "file")
  }}
  val saver=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")){uri:Uri?->
   val b=saveBytes;saveBytes=null
@@ -96,7 +100,7 @@ private class ChatAudio{
  }
  val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){allowed->if(allowed)startRecording()else error=true}
  LaunchedEffect(allowUpload){if(!allowUpload){resources.clearRecorder();recording=false;pending=null}}
- DisposableEffect(session.deviceId,peerId,groupId,roomId,channel,postId){onDispose{resources.clear();saveBytes=null;clearPreview()}}
+ DisposableEffect(session.deviceId,peerId,groupId,roomId,channel,postId){onDispose{resources.clear();saveBytes=null;clearPreview();clearVideo()}}
  LaunchedEffect(session.accessToken,peerId,groupId,roomId,channel,postId,busy){
   if(busy)return@LaunchedEffect
   while(true){try{refresh()}catch(e:CancellationException){throw e}catch(e:Exception){error=true};delay(5000)}
@@ -109,9 +113,9 @@ private class ChatAudio{
  }
  val content:@Composable ()->Unit={Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
   Text(if(postId!=null)tr("Pièces jointes","Attachments")else when(channel){"agenda"->tr("Documents de l’ordre du jour","Agenda documents");"room-chat"->tr("Fichiers et vocaux de la salle","Room files and voice messages");else->tr("Fichiers et messages vocaux","Files and voice messages")},style=MaterialTheme.typography.titleMedium)
-  if(allowUpload)Text(if(postId!=null)tr("PDF, JPEG, PNG. Taille maximale : 1 Mio.","PDF, JPEG, PNG. Maximum size: 1 MiB.")else tr("PDF, JPEG, PNG. Taille maximale : 1 Mio ; message vocal : 60 s.","PDF, JPEG, PNG. Maximum size: 1 MiB; voice message: 60 s."))
+  if(allowUpload)Text(if(postId!=null)tr("PDF, JPEG, PNG, vidéo MP4/WebM. Taille maximale : 1 Mio.","PDF, JPEG, PNG, MP4/WebM video. Maximum size: 1 MiB.")else tr("PDF, JPEG, PNG. Taille maximale : 1 Mio ; message vocal : 60 s.","PDF, JPEG, PNG. Maximum size: 1 MiB; voice message: 60 s."))
   if(error)Text(tr("Accès, format ou transfert non confirmé.","Access, format or transfer unconfirmed."),color=MaterialTheme.colorScheme.error)
-  if(allowUpload)TextButton(enabled=!busy&&pending==null&&!recording,onClick={picker.launch(arrayOf("application/pdf","image/jpeg","image/png"))}){Text(tr("Choisir une pièce jointe","Choose attachment"))}
+  if(allowUpload)TextButton(enabled=!busy&&pending==null&&!recording,onClick={picker.launch(if(postId!=null)arrayOf("application/pdf","image/jpeg","image/png","video/mp4","video/webm")else arrayOf("application/pdf","image/jpeg","image/png"))}){Text(tr("Choisir une pièce jointe","Choose attachment"))}
   if(voiceAllowed&&allowUpload&&recording)Button(onClick={finishRecording()}){Text(tr("Terminer l’enregistrement","Stop recording"))}
   else if(voiceAllowed&&allowUpload)TextButton(enabled=!busy&&pending==null,onClick={if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)startRecording()else permission.launch(Manifest.permission.RECORD_AUDIO)}){Text(tr("Enregistrer un message vocal","Record voice message"))}
   if(allowUpload)pending?.let{p->Text(p.optString("name"));Button(enabled=!busy,onClick={work{req("upload",p);pending=null;refresh()}}){Text(tr("Envoyer le fichier","Send file"))};TextButton(enabled=!busy,onClick={pending=null}){Text(tr("Abandonner la tentative locale","Discard local retry"))}}
@@ -125,6 +129,15 @@ private class ChatAudio{
      BitmapFactory.decodeByteArray(b,0,b.size,BitmapFactory.Options().apply{inSampleSize=sample})?:throw IllegalArgumentException("image")
     };preview=m.getString("id") to bitmap}}){Text(tr("Afficher l’image","View image"))}
     preview?.takeIf{it.first==m.optString("id")}?.let{p->Image(p.second.asImageBitmap(),contentDescription=m.optString("name"),modifier=Modifier.fillMaxWidth().heightIn(max=360.dp),contentScale=ContentScale.Fit);TextButton(onClick={clearPreview()}){Text(tr("Fermer l’aperçu","Close preview"))}}
+   }
+   if(postId!=null&&m.optString("kind")=="video"){
+    TextButton(enabled=!busy,onClick={work{val b=download(m);clearVideo();stopPlayer();val f=withContext(Dispatchers.IO){File.createTempFile("wm-video-",if(m.optString("mime")=="video/mp4")".mp4" else ".webm",context.cacheDir).also{it.writeBytes(b)}};video=m.getString("id") to f}}){Text(tr("Lire la vidéo","Play video"))}
+    video?.takeIf{it.first==m.optString("id")}?.let{v->key(v.second.absolutePath){
+     val player=remember{VideoView(context)}
+     DisposableEffect(player){onDispose{player.stopPlayback();v.second.delete()}}
+     AndroidView(factory={player.apply{setMediaController(MediaController(context).also{it.setAnchorView(this)});setVideoPath(v.second.absolutePath);setOnPreparedListener{start()};setOnErrorListener{_,_,_->error=true;clearVideo();true}}},modifier=Modifier.fillMaxWidth().height(220.dp))
+     TextButton(onClick={clearVideo()}){Text(tr("Fermer la vidéo","Close video"))}
+    }}
    }
    TextButton(enabled=!busy&&!recording,onClick={work{
     val b=download(m)

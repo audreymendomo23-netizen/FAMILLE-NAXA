@@ -402,16 +402,16 @@ create table public.wm_chat_media(
  sender_id uuid not null references public.wm_accounts(id),
  peer_id uuid references public.wm_accounts(id), group_id uuid references public.wm_chat_groups(id),
  room_id uuid references public.wm_rooms(id), channel text check(channel in ('agenda','room-chat')), post_id uuid,
- kind text not null check(kind in ('file','voice')),
- mime text not null check(mime in ('application/pdf','image/jpeg','image/png','audio/ogg','audio/webm','audio/mp4')),
+ kind text not null check(kind in ('file','voice','video')),
+ mime text not null check(mime in ('application/pdf','image/jpeg','image/png','audio/ogg','audio/webm','audio/mp4','video/mp4','video/webm')),
  name text not null check(length(name) between 1 and 120),
  bytes integer not null check(bytes between 1 and 1048576),
  sha256 text not null check(length(sha256)=64 and translate(sha256,'0123456789abcdef','')=''),
  state text not null default 'staged' check(state in ('staged','ready','revoked')),
  created_at timestamptz not null default clock_timestamp(), published_at timestamptz, revoked_at timestamptz, purged_at timestamptz,
  check(num_nonnulls(peer_id,group_id,room_id,post_id)=1), check(peer_id is null or peer_id<>sender_id),
- check((room_id is null)=(channel is null)),check(channel is distinct from 'agenda' or kind='file'),check(post_id is null or kind='file'),
- check((kind='voice')=(mime in ('audio/ogg','audio/webm','audio/mp4')))
+ check((room_id is null)=(channel is null)),check(channel is distinct from 'agenda' or kind='file'),check(post_id is null or kind in ('file','video')),check(kind<>'video' or post_id is not null),
+ check((kind='voice')=(mime in ('audio/ogg','audio/webm','audio/mp4'))),check((kind='video')=(mime in ('video/mp4','video/webm')))
 );
 create index wm_chat_media_direct on public.wm_chat_media(workspace_id,sender_id,peer_id,published_at desc,id);
 create index wm_chat_media_group on public.wm_chat_media(group_id,published_at desc,id);
@@ -477,8 +477,8 @@ begin
  select * into m from public.wm_chat_media x where x.id=mid;
  if p_action='reserve' then
   k:=p_data->>'kind';mime_type:=p_data->>'mime';filename:=p_data->>'name';size_bytes:=(p_data->>'bytes')::integer;sha:=p_data->>'sha256';
-  if k is null or mime_type is null or filename is null or size_bytes is null or sha is null or ((channel_name='agenda' or pid is not null) and k<>'file') then return null;end if;
-  if k not in ('file','voice') or mime_type not in ('application/pdf','image/jpeg','image/png','audio/ogg','audio/webm','audio/mp4') or (k='voice')<>(mime_type in ('audio/ogg','audio/webm','audio/mp4')) or length(filename) not between 1 and 120 or size_bytes not between 1 and 1048576 or length(sha)<>64 or translate(sha,'0123456789abcdef','')<>'' then return null;end if;
+  if k is null or mime_type is null or filename is null or size_bytes is null or sha is null or (channel_name='agenda' and k<>'file') or (pid is not null and k not in ('file','video')) or (pid is null and k='video') then return null;end if;
+  if k not in ('file','voice','video') or mime_type not in ('application/pdf','image/jpeg','image/png','audio/ogg','audio/webm','audio/mp4','video/mp4','video/webm') or (k='voice')<>(mime_type in ('audio/ogg','audio/webm','audio/mp4')) or (k='video')<>(mime_type in ('video/mp4','video/webm')) or length(filename) not between 1 and 120 or size_bytes not between 1 and 1048576 or length(sha)<>64 or translate(sha,'0123456789abcdef','')<>'' then return null;end if;
   if found then
    if m.workspace_id<>a.workspace_id or m.sender_id<>a.account_id or m.peer_id is distinct from peer or m.group_id is distinct from gid or m.room_id is distinct from rid or m.post_id is distinct from pid or m.channel is distinct from channel_name or m.kind<>k or m.mime<>mime_type or m.name<>filename or m.bytes<>size_bytes or m.sha256<>sha or m.state='revoked' or (gid is not null and m.created_at<joined) then return null;end if;
    if m.state='staged' and m.created_at<=clock_timestamp()-interval '15 minutes' then return null;end if;

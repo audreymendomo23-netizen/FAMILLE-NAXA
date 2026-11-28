@@ -10,7 +10,7 @@ const cases=[
 ["02.2",[],"Appels directs: signalisation et transport réel; Meet seul ne suffit pas"],
 ["02.3",["B2 collective group: three accounts","B2 real private Storage verified deletion"],"Suppression message pour soi/tous et reçus complets"],
 ["02.4",[],"Présence masquable, non-divulgation et filtre En ligne"],
-["03.1",["PASS V2 enterprise feed and official announcement","PASS V2 private company post attachment","PASS V2 company team targeting"],"Ciblage équipe/agence, vidéo, aperçu et qualification UI"],
+["03.1",["PASS V2 enterprise feed and official announcement","PASS V2 private company post attachment","PASS V2 company team targeting","PASS V2 company agency targeting","PASS V2 Chromium private professional video"],"Qualification vidéo et audience Android/Web/PWA, quotas à arbitrer"],
 ["03.2",["B4 actual Edge majority rules","PASS V2 company interactions","PASS V2 Chromium reaction","PASS V2 company poll","PASS V2 Chromium company poll"],"Réactions/commentaires/favoris/sondages dans le fil, modération et vidéos"],
 ["03.3",["actual N4 recipient-scoped in-app notice","PASS V2 enterprise feed and official announcement"],"Ciblage, pièces jointes et qualification UI"],
 ["03.4",["PASS V2 Chromium enterprise news","PASS V2 Chromium private image preview","PASS V2 company notices"],"Fiche professionnelle cliquable, notifications UI et parité complète à qualifier"],

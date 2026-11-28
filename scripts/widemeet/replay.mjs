@@ -1075,6 +1075,27 @@ try{
   await previewSection.getByRole("button",{name:"Fermer l’aperçu"}).click();
   assert.equal(await picture.count(),0);
   console.log("PASS V2 Chromium private image preview and close");
+  // Actual synthetic video, generated in Chromium without camera or microphone access.
+  const videoBytes=Buffer.from(await hp.evaluate(async()=>{
+   const canvas=document.createElement("canvas");canvas.width=80;canvas.height=60;
+   const ctx=canvas.getContext("2d"),stream=canvas.captureStream(12);
+   const recorder=new MediaRecorder(stream,{mimeType:"video/webm;codecs=vp8",videoBitsPerSecond:80000});
+   const chunks=[];recorder.ondataavailable=e=>chunks.push(e.data);
+   const stopped=new Promise((resolve,reject)=>{recorder.onstop=resolve;recorder.onerror=reject});
+   recorder.start();for(let i=0;i<12;i++){ctx.fillStyle=i%2?"#008040":"#ffce34";ctx.fillRect(0,0,80,60);await new Promise(r=>setTimeout(r,90))}
+   recorder.stop();await stopped;stream.getTracks().forEach(t=>t.stop());
+   return Array.from(new Uint8Array(await new Blob(chunks,{type:"video/webm"}).arrayBuffer()));
+  }));
+  assert.ok(videoBytes.length>100&&videoBytes.length<1048576);
+  await previewSection.getByLabel("Choisir une pièce jointe",{exact:true}).setInputFiles({name:"professionnel.webm",mimeType:"video/webm",buffer:videoBytes});
+  await previewSection.getByRole("button",{name:"Envoyer le fichier",exact:true}).click();
+  await previewSection.getByRole("button",{name:"Lire la vidéo",exact:true}).click();
+  const movie=previewSection.locator("video");
+  await movie.waitFor();
+  await movie.evaluate(async v=>{await v.play();if(!v.videoWidth)throw Error("no decoded video");await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error("no playback progress")),5000);v.addEventListener("timeupdate",()=>{if(v.currentTime>0){clearTimeout(timer);resolve()}},{once:true})})});
+  await previewSection.getByRole("button",{name:"Fermer la vidéo",exact:true}).click();
+  assert.equal(await movie.count(),0);
+  console.log("PASS V2 Chromium private professional video upload and actual playback");
 
   await hf.getByRole("button",{name:"Annonces",exact:true}).click();
   await hf.getByLabel("Votre annonce").fill("Annonce réelle Chromium");
