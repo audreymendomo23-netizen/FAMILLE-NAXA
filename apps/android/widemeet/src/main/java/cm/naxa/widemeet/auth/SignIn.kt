@@ -1,5 +1,10 @@
 package cm.naxa.widemeet.auth
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Image
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import cm.naxa.widemeet.R
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -38,9 +43,12 @@ import java.util.UUID
  }}
  return
  }
- Card(Modifier.fillMaxWidth()){
+ Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)){
  Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
- Text(tr("Connexion","Sign in"),style=MaterialTheme.typography.headlineMedium,modifier=Modifier.testTag("wm-signin-title"))
+ Surface(color=Color.White,shape=MaterialTheme.shapes.medium,modifier=Modifier.align(Alignment.CenterHorizontally)){Image(painterResource(R.drawable.widemeet_logo),contentDescription="WideMeet",modifier=Modifier.widthIn(max=220.dp).height(72.dp).padding(6.dp).testTag("wm-signin-logo"))}
+ Text(tr("Vos réunions, sans frontières.","Your meetings, without borders."),style=MaterialTheme.typography.bodyMedium,modifier=Modifier.align(Alignment.CenterHorizontally))
+ HorizontalDivider()
+ Text(tr("Connexion","Sign in"),style=MaterialTheme.typography.headlineMedium,modifier=Modifier.align(Alignment.CenterHorizontally).testTag("wm-signin-title"))
  OutlinedTextField(identifier,{identifier=it.take(27)},enabled=!busy,label={Text(tr("Identifiant WideMeet","WideMeet ID"))},singleLine=true,modifier=Modifier.fillMaxWidth())
  OutlinedTextField(password,{password=it.take(256)},enabled=!busy,label={Text(tr("Mot de passe","Password"))},singleLine=true,visualTransformation=if(show)VisualTransformation.None else PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
  TextButton(onClick={show=!show}){Text(if(show)tr("Masquer le mot de passe","Hide password")else tr("Afficher le mot de passe","Show password"))}

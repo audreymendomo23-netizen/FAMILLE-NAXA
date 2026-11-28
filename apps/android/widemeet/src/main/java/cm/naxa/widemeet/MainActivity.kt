@@ -87,16 +87,18 @@ class MainActivity:ComponentActivity(){
  val colors=if(dark)darkColorScheme(primary=Green,onPrimary=Black,secondary=Yellow,onSecondary=Black,background=Color(0xFF101611),surface=Color(0xFF1A241C),onSurface=White,onBackground=White,error=Color(0xFFFF7777)) else lightColorScheme(primary=Deep,onPrimary=White,secondary=Yellow,onSecondary=Black,background=Color(0xFFF6FAEF),surface=White,onSurface=Black,onBackground=Black,error=Color(0xFFC02626))
  val unavailable=tr("Cet espace sera disponible à la connexion de votre compte.","This area will be available when your account is connected.")
  MaterialTheme(colorScheme=colors){
- Scaffold(contentWindowInsets=WindowInsets.safeDrawing,topBar={
+ Box(Modifier.fillMaxSize()){
+ if(signIn)WideMeetSignInBackground(Modifier.matchParentSize())
+ Scaffold(containerColor=if(signIn)Color.Transparent else colors.background,contentWindowInsets=WindowInsets.safeDrawing,topBar={
  Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
-  Surface(color=White,shape=MaterialTheme.shapes.medium,modifier=Modifier.weight(1f)){Image(painterResource(R.drawable.widemeet_logo),contentDescription="WideMeet",modifier=Modifier.height(44.dp).padding(6.dp))}
-  TextButton(onClick={toggle()},modifier=Modifier.testTag("wm-theme").semantics{contentDescription=tr(if(dark)"Mode clair" else "Mode nuit",if(dark)"Light mode" else "Dark mode")}){Text(if(dark)"☀" else "☾",fontSize=22.sp)}
+  if(!signIn)Surface(color=White,shape=MaterialTheme.shapes.medium,modifier=Modifier.weight(1f)){Image(painterResource(R.drawable.widemeet_logo),contentDescription="WideMeet",modifier=Modifier.height(44.dp).padding(6.dp))}else Spacer(Modifier.weight(1f))
+  TextButton(onClick={toggle()},colors=if(signIn)ButtonDefaults.textButtonColors(containerColor=colors.surface,contentColor=colors.onSurface)else ButtonDefaults.textButtonColors(),modifier=Modifier.testTag("wm-theme").semantics{contentDescription=tr(if(dark)"Mode clair" else "Mode nuit",if(dark)"Light mode" else "Dark mode")}){Text(if(dark)"☀" else "☾",fontSize=22.sp)}
   if(!signIn)TextButton(onClick={menu=true},modifier=Modifier.testTag("wm-menu").semantics{contentDescription=tr("Options","Options")}){Text("☰",fontSize=22.sp)}
  }
  },bottomBar={if(!signIn)NavigationBar{labels.forEachIndexed{i,l->NavigationBarItem(modifier=Modifier.testTag("wm-tab-$i"),selected=tab==i&&detail.isEmpty(),onClick={tab=i;detail=""},icon={Text(symbols[i],fontSize=22.sp)},label={Text(l,fontSize=11.sp)},colors=NavigationBarItemDefaults.colors(indicatorColor=Green,selectedIconColor=Black,selectedTextColor=colors.onSurface))}}}){padding->
  Box(Modifier.fillMaxSize().padding(padding)){
  val contentScroll=key(signIn){rememberScrollState()}
- Column(Modifier.fillMaxSize().verticalScroll(contentScroll).padding(16.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
+ Column(Modifier.fillMaxSize().verticalScroll(contentScroll).padding(16.dp),verticalArrangement=if(signIn)Arrangement.spacedBy(14.dp,Alignment.CenterVertically)else Arrangement.spacedBy(14.dp)){
  if(switchError)Text(tr("Changement d’espace non confirmé. Reconnectez-vous.","Workspace switch unconfirmed. Sign in again."),color=MaterialTheme.colorScheme.error)
  if(logoutError)Text(tr("Déconnexion locale effectuée ; révocation distante non confirmée.","Local sign-out completed; remote revocation unconfirmed."),color=MaterialTheme.colorScheme.error)
  if(locked){UnlockRemembered(english,gateway,{session=it;locked=false;signIn=false;tab=0;detail=""},{locked=false;signIn=true;detail=""})}
@@ -138,6 +140,7 @@ class MainActivity:ComponentActivity(){
  }else{Text(labels[tab],style=MaterialTheme.typography.headlineMedium);Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){WideMeetPhoto(listOf("home","schedule","join","archive","signin")[tab],animate,170.dp);Text(unavailable);if(tab==4){TextButton(onClick={detail=menuLabels[13]}){Text(menuLabels[13])};TextButton(onClick={detail=menuLabels[9]}){Text(menuLabels[9])}}}}}
  }
  if(!signIn&&(alpha.value>0f||startup.value>0f))Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(Yellow.copy(alpha=maxOf(alpha.value,startup.value)),Color.Transparent),center=Offset(0f,0f),radius=700f)))
+ }
  }
  }
  if(switchDialog)AlertDialog(onDismissRequest={switchDialog=false},title={Text(tr("Changer d’espace","Switch workspace"))},text={Column{session?.workspaces?.forEach{w->TextButton(enabled=!switching&&w.id!=session?.activeWorkspaceId,onClick={changeWorkspace(w.id)}){Text(w.name)}}}},confirmButton={TextButton(onClick={switchDialog=false}){Text(tr("Fermer","Close"))}})

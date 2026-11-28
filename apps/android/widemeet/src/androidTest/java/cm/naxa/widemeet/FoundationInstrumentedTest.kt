@@ -42,11 +42,15 @@ class FoundationInstrumentedTest {
   rule.onNodeWithTag("wm-signin-title").assertTextEquals(if(previousLanguage)"Connexion" else "Sign in").assertIsDisplayed()
   rule.onNodeWithTag("wm-signin-submit").assertIsNotEnabled()
   rule.onNodeWithTag("wm-photo-signin").assertDoesNotExist()
+  rule.onNodeWithTag("wm-signin-background").assertExists()
+  rule.onNodeWithTag("wm-signin-background-image").assertExists()
+  rule.onNodeWithTag("wm-signin-logo").assertIsDisplayed()
   rule.onNodeWithTag("wm-tab-0").assertDoesNotExist()
   rule.onNodeWithTag("wm-menu").assertDoesNotExist()
   rule.onNodeWithTag("wm-theme").assertExists()
   rule.onNodeWithTag("wm-signin-back").performScrollTo().performClick()
   rule.onNodeWithTag("wm-photo-home").performScrollTo().assertIsDisplayed()
+  rule.onNodeWithTag("wm-signin-background").assertDoesNotExist()
   rule.onNodeWithTag("wm-tab-0").assertExists()
  }
  @Test fun nativeFaqNavigation(){

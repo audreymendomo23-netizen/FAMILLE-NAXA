@@ -36,11 +36,18 @@
 
 .wm-signin-copy{display:grid;gap:12px;min-width:0}
 
-.shell[data-wm-auth="signin"]{padding-bottom:env(safe-area-inset-bottom)}
-.shell[data-wm-auth="signin"] .brand{animation:none}
-.shell[data-wm-auth="signin"] main{min-height:calc(100dvh - 110px);align-content:center;justify-items:center}
+.shell[data-wm-auth="signin"]{max-width:none;min-height:100dvh;padding-bottom:env(safe-area-inset-bottom);background-color:var(--wm-deep);background-image:linear-gradient(180deg,rgba(7,85,44,.12),rgba(7,85,44,.38)),url("/visuals/signin.jpg");background-position:center;background-size:cover;background-repeat:no-repeat}
+.shell[data-wm-auth="signin"] header{background:transparent;justify-content:flex-end;position:relative}.shell[data-wm-auth="signin"] header .icon{background:var(--wm-card);color:var(--naxa-text)}
+.shell[data-wm-auth="signin"] main{min-height:calc(100dvh - 80px - env(safe-area-inset-bottom));align-content:center;justify-items:center}
 .shell[data-wm-auth="signin"] main>.card{width:100%;max-width:440px}
 .wm-signin-copy>button{border-color:transparent;background:transparent;color:var(--wm-deep);min-height:44px;padding:6px 10px}
 [data-theme=dark] .wm-signin-copy>button{color:var(--wm-green)}
 .wm-signin-copy>button:disabled{opacity:.55;cursor:default}
 .wm-signin-copy h1{font-size:clamp(26px,5vw,32px)}
+
+.wm-signin{box-shadow:0 18px 54px #0004;border-radius:24px}
+.wm-signin-brand{display:grid;justify-items:center;gap:10px;text-align:center;padding-bottom:14px;border-bottom:1px solid var(--wm-line)}
+.wm-signin-brand img{display:block;width:min(220px,100%);height:auto;background:white;border-radius:8px;padding:5px}
+.wm-signin-brand p{font-size:14px;line-height:1.4}
+.wm-signin-copy h1{text-align:center}
+.shell[data-wm-auth="signin"] main>p{background:var(--wm-card);color:var(--naxa-text);padding:12px;border-radius:12px;max-width:440px}
