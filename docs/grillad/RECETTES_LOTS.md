@@ -85,3 +85,6 @@ Campagne locale 46092177818 : 15/15 SUCCESS. Audit NAXA 46092597233 : comptes Pr
 
 ## Section 37 — Recettes d'interactions et Auth réelle locale
 Matrice docs/grillad/RECETTES_INTERACTIONS.md. Run local réel 46092875856 bloqué au droit sur auth.sessions, nettoyage PASS. Run global 46092875806 15/15 SUCCESS. Correctif 00e7885 et enrichissement du scénario existant ; run réel 46093153386 local-real queued , run global 46093153453 lancé. Les assertions supplémentaires ne sont pas des recettes indépendantes ; 220 unités techniques locales historiques + 1 scénario autonome de qualification non encore validé, historique Replay conservé sans double comptage. Aucun nouveau PASS revendiqué.
+
+## Section 38 — Vague parallèle
+Six suites réelles isolées (journey existant, identity, catalogue, cash, read-models, resilience) ; 5 nouvelles recettes nommées. 220 unités historiques + 6 scénarios locaux réels = 226 enregistrées ; pas de PASS présumé. Campagnes 46093327908 (15 jobs standard), 46093327871 (6 jobs réels en attente de verrou précédent au relevé). Voir §38.

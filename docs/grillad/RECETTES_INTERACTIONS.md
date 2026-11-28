@@ -18,3 +18,6 @@ Les scénarios ne sont pas des probabilités statistiques : couverture par class
 
 ## Campagne locale réelle
 Premier run 46092875856 : Supabase démarre, erreur de propriétaire auth.sessions avant Auth, nettoyage réussi. Correction limitée au conteneur éphémère : rôle administrateur local pour colonne tag et permissions postgres strictement nécessaires. Nouveau scénario Chromium : connexion, vente via formulaire, contrôle de persistance et replay, catalogue cinq familles, refus de sixième, stock, rôles, charges et annulation idempotente, objectif, règlements déclarés et rapprochement. Les mutations supplémentaires passent par API réelle, pas par interaction UI complète ; pas de simulation de réponse. Aucune opération externe ou sur production.
+
+## Vague parallèle — section 38
+Six groupes autonomes, chacun sur sa propre base jetable : journey (formulaire Chromium + backend), identity, catalogue, cash, read-models, resilience (les cinq derniers via Playwright APIRequestContext et vrai handler, non UI complète). Aucun arrêt entre groupes sur un échec (fail-fast:false). Les contrôles matériels et les services externes non configurés restent distincts. Exécution réelle et couverture totale ne sont pas synonymes.
