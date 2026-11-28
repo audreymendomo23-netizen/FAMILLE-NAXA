@@ -123,7 +123,7 @@ create function grillad_private.agent_allowed(p_permission text) returns boolean
 language plpgsql stable security definer set search_path=pg_catalog as $fn$
 declare u uuid:=auth.uid();sid uuid;ok boolean:=false;
 begin
- if u is null or coalesce(auth.jwt()->>'is_anonymous','false')='true' or to_regclass('public.support_agents') is null or to_regclass('public.support_agent_permissions') is null then return false;end if;
+ if u is null or coalesce(auth.jwt()->>'is_anonymous','false')='true' or coalesce(auth.jwt()->>'aal','')<>'aal2' or to_regclass('public.support_agents') is null or to_regclass('public.support_agent_permissions') is null then return false;end if;
  begin sid:=(auth.jwt()->>'session_id')::uuid;exception when invalid_text_representation then return false;end;
  if sid is null or not exists(select 1 from auth.sessions where id=sid and user_id=u) or not exists(select 1 from grillad_private.support_agent_access where agent=u and enabled) then return false;end if;
  execute 'select exists(select 1 from public.support_agents a join public.support_agent_permissions p on p.agent_user_id=a.user_id where a.user_id=$1 and a.status=''active'' and p.permission_code=$2 and p.revoked_at is null)' into ok using u,p_permission;
@@ -186,5 +186,26 @@ begin
 end $fn$;
 revoke all on function grillad_private.agent_allowed(text),public.grillad_support_thread(uuid,uuid,uuid,uuid,text),public.grillad_agent_queue(),public.grillad_agent_thread(uuid,text,uuid,text) from public,anon,authenticated;
 grant execute on function public.grillad_support_thread(uuid,uuid,uuid,uuid,text),public.grillad_agent_queue(),public.grillad_agent_thread(uuid,text,uuid,text) to authenticated;
+
+create function public.grillad_central_agent_access(p_agent uuid,p_enabled boolean,p_reason text) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare a uuid;valid boolean:=false;why text:=btrim(p_reason);
+begin
+ perform grillad_private.central_overview();
+ if p_agent is null or p_enabled is null or why is null or length(why) not between 10 and 300 or p_agent=auth.uid() then raise exception 'GRILLAD_AGENT_INPUT' using errcode='22023';end if;
+ if p_enabled then
+  if to_regclass('public.support_agents') is null or to_regclass('public.support_agent_permissions') is null then raise exception 'GRILLAD_AGENT_UNAVAILABLE' using errcode='42501';end if;
+  execute 'select exists(select 1 from public.support_agents a where a.user_id=$1 and a.status=''active'' and (select count(distinct p.permission_code) from public.support_agent_permissions p where p.agent_user_id=a.user_id and p.revoked_at is null and p.permission_code in (''queue_view'',''ticket_view_assigned'',''ticket_reply''))=3)' into valid using p_agent;
+  if not valid then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ end if;
+ insert into grillad_private.support_agent_access(agent,enabled) values(p_agent,p_enabled) on conflict(agent) do update set enabled=excluded.enabled;
+ -- Release only GRILLAD assignments if access is revoked; conversation remains intact.
+ if not p_enabled then delete from grillad_private.support_assignments where agent=p_agent;end if;
+ select id into a from famille_core.applications where code='grillad';
+ insert into famille_core.audit_events(app_id,actor_id,action_code,entity_type,entity_id,metadata) values(a,auth.uid(),'grillad.agent_access','support_agent',p_agent::text,jsonb_build_object('enabled',p_enabled,'reason',why));
+ return jsonb_build_object('agent',p_agent,'enabled',p_enabled);
+end $fn$;
+revoke all on function public.grillad_central_agent_access(uuid,boolean,text) from public,anon,authenticated;
+grant execute on function public.grillad_central_agent_access(uuid,boolean,text) to authenticated;
 
 commit;

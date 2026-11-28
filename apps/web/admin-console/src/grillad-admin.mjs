@@ -9,8 +9,14 @@ export async function grilladOverview({url,key,token,fetcher=fetch}){
 }
 
 export async function grilladCentralAction({url,key,token,action,body={},fetcher=fetch}){
- if(url!=="https://idupfjbkwjcavyisxteo.supabase.co"||!publicKeyAllowed(key)||typeof token!=="string"||!token||!["clients","client_state"].includes(action))throw Error("ACCESS_DENIED");
+ if(url!=="https://idupfjbkwjcavyisxteo.supabase.co"||!publicKeyAllowed(key)||typeof token!=="string"||!token||!["clients","client_state","agent_access"].includes(action))throw Error("ACCESS_DENIED");
  const r=await fetcher(url+"/rest/v1/rpc/grillad_central_"+action,{method:"POST",headers:{apikey:key,authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(body),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(20000)});
  if(!r.ok)throw Error("ACCESS_DENIED");
  return r.json();
+}
+
+export async function grilladAgentAction({url,key,token,action,body={},fetcher=fetch}){
+ if(url!=="https://idupfjbkwjcavyisxteo.supabase.co"||!publicKeyAllowed(key)||typeof token!=="string"||!token||!["queue","thread"].includes(action))throw Error("ACCESS_DENIED");
+ const r=await fetcher(url+"/rest/v1/rpc/grillad_agent_"+action,{method:"POST",headers:{apikey:key,authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(body),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(20000)});
+ if(!r.ok)throw Error("ACCESS_DENIED");return r.json();
 }
