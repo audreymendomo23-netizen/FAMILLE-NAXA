@@ -109,6 +109,7 @@ const c=ctx.result;const parsed=parsePromoteurPaymentSms(body.sms,c.channel,leve
   if(body.action==='workspace')return upstream(await post('/rest/v1/rpc/grillad_workspace',{},token));
   if(!uuid.test(body.org)||!uuid.test(body.site))return reply(400,{error:'SCOPE'});
   const scope={p_org:body.org,p_site:body.site};
+  if(body.action==='referral'&&['list','generate','attach'].includes(body.operation)&&(body.code==null||typeof body.code==='string'&&body.code.length<=40))return upstream(await post('/rest/v1/rpc/grillad_referral',{...scope,p_action:body.operation,p_code:body.code??null},token));
   if(body.action==='support_list')return upstream(await post('/rest/v1/rpc/grillad_support_list',scope,token));
   if(body.action==='support_open'&&uuid.test(body.event)&&typeof body.subject==='string'&&typeof body.description==='string'&&body.subject.length<=120&&body.description.length<=2000)return upstream(await post('/rest/v1/rpc/grillad_support_open',{...scope,p_event:body.event,p_subject:body.subject,p_description:body.description},token));
   if(body.action==='push_register'&&typeof body.enabled==='boolean'){

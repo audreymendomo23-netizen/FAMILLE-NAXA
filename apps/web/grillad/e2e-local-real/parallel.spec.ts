@@ -329,5 +329,11 @@ test('@transverse shared support registry, private ticket, exact replay and cent
   expect(Number(localSql("select count(*) from famille_core.support_tickets t join famille_core.applications a on a.id=t.app_id where a.code='grillad' and t.id='"+event+"'"))).toBe(1);
   await invoke(request,{action:'central_overview'},owner,403);
   await invoke(request,{action:'central_overview'},seller,403);
+  await s({action:'referral',operation:'generate'},403);
+  const referral=await o({action:'referral',operation:'generate'});
+  expect(referral.code).toMatch(/^[0-9A-F]{32}$/);expect(referral.reward_status).toBe('pending_policy');
+  expect(await o({action:'referral',operation:'generate'})).toEqual(referral);
+  await o({action:'referral',operation:'attach',code:referral.code},403);
+  expect(await o({action:'referral',operation:'list'})).toEqual(referral);
  }finally{await close(request,seller);await close(request,owner)}
 });
