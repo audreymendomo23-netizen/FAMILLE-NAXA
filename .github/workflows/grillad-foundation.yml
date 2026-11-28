@@ -159,6 +159,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_lifecycle_followup_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_lifecycle_guards_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_manual_tenders_v1.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_subscription_proofs_v1.sql
           if [ '${{ matrix.suite }}' = backup ]; then
             bash scripts/grillad/backup-restore-drill.sh
           else

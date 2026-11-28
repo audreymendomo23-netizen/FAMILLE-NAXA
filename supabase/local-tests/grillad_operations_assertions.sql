@@ -118,4 +118,26 @@ do $test$ declare v jsonb;begin
  if (v->>'available')::boolean or jsonb_array_length(v->'cameras')<>0 or jsonb_array_length(v->'incidents')<>0 or v->>'reason'<>'SOURCE_INACTIVE' then raise exception 'inactive source leak';end if;
 end $test$;
 reset role;
+-- NAXA-derived independent debit/credit proof, fixture only.
+set role service_role;
+select public.grillad_subscription_destination_set('orange_money','Fixture beneficiary','FIXTURE-DEST',true);
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','c1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"c1000000-0000-0000-0000-000000000011"}',true);
+do $test$ declare q uuid:='c2000000-0000-0000-0000-000000000009';v jsonb;begin
+ v:=public.grillad_payment_quote(current_setting('grillad.test.org')::uuid,current_setting('grillad.test.site')::uuid,q,'orange_money');
+ if v->'destination'->>'reference'<>'FIXTURE-DEST' then raise exception 'destination not frozen';end if;
+ v:=public.grillad_subscription_declare(current_setting('grillad.test.org')::uuid,current_setting('grillad.test.site')::uuid,q,'MANUAL-FIXTURE',6000,'699000011',now());
+ if v->>'status'<>'manual_review' then raise exception 'manual declaration auto approved';end if;
+end $test$;
+reset role;
+set role service_role;
+do $test$ declare q uuid:='c2000000-0000-0000-0000-000000000009';v jsonb;begin
+ v:=public.grillad_subscription_proof(q,1::smallint,'c1000000-0000-0000-0000-000000000001','DEBIT-FIXTURE',6000,'699000011','FIXTURE-DEST',now(),repeat('1',64));
+ if v->>'status'<>'awaiting_independent_proof' then raise exception 'single proof auto approved';end if;
+ v:=public.grillad_subscription_proof(q,2::smallint,'c1000000-0000-0000-0000-000000000002','CREDIT-FIXTURE',6000,'699000011','FIXTURE-DEST',now(),repeat('2',64));
+ if v->>'status'<>'processed' then raise exception 'independent proofs not matched';end if;
+end $test$;
+reset role;
 rollback;
