@@ -32,7 +32,7 @@ create function grillad_private.central_overview() returns jsonb
 language plpgsql stable security definer set search_path=pg_catalog as $fn$
 declare a uuid;sid uuid;allowed boolean:=false;u uuid:=auth.uid();
 begin
- if u is null or coalesce(auth.jwt()->>'is_anonymous','false')='true' then raise exception 'GRILLAD_CENTRAL_DENIED' using errcode='42501';end if;
+ if u is null or coalesce(auth.jwt()->>'is_anonymous','false')='true' or coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'GRILLAD_CENTRAL_DENIED' using errcode='42501';end if;
  begin sid:=(auth.jwt()->>'session_id')::uuid;exception when invalid_text_representation then raise exception 'GRILLAD_CENTRAL_DENIED' using errcode='42501';end;
  if sid is null or not exists(select 1 from auth.sessions where id=sid and user_id=u) or to_regclass('famille_core.family_admins') is null then raise exception 'GRILLAD_CENTRAL_DENIED' using errcode='42501';end if;
  execute 'select exists(select 1 from famille_core.family_admins where user_id=$1 and status=''active'' and revoked_at is null)' into allowed using u;
