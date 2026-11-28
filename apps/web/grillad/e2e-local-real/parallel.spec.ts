@@ -391,13 +391,32 @@ test('@transverse WebRTC bidirectional synthetic audio and screen-like video act
 
 // A real browser switches all three languages, persists the choice and checks authenticated FAQ.
 test('@transverse FR EN ff-CM login and FAQ language persistence',async({page})=>{
+ const browserEndpoint='https://grillad-local-ci.supabase.co/functions/v1/grillad';
+ // Same real local transport as @journey; no mocked authentication or data.
+ await page.route(browserEndpoint,async route=>{const response=await route.fetch({url:endpoint,maxRedirects:0});await route.fulfill({response})});
  await page.goto('/');await page.getByRole('combobox',{name:'Langue',exact:true}).selectOption('en');
  await expect(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();await expect(page.locator('html')).toHaveAttribute('lang','en');
  await page.reload();await expect(page.getByRole('combobox',{name:'Language',exact:true})).toHaveValue('en');
  await page.getByRole('combobox',{name:'Language',exact:true}).selectOption('ff-CM');await expect(page.getByRole('heading',{name:'Naatugol e kisal',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Naatu',exact:true})).toBeVisible();
  await page.getByRole('combobox',{name:'Ɗemngal',exact:true}).selectOption('en');
- await page.getByLabel('Phone (+237…)',{exact:true}).fill(accounts.owner.phone);await page.getByLabel('Password',{exact:true}).fill(accounts.owner.password);await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await page.getByLabel('Phone (+237…)',{exact:true}).fill(accounts.owner.phone);await page.getByLabel('Password',{exact:true}).fill(accounts.owner.password);const loginResponse=page.waitForResponse(r=>r.url()===browserEndpoint&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='login');await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ const response=await loginResponse;expect(response.status(),'real local Auth response').toBe(200);expect((await response.json()).result.user_id).toBe(accounts.owner.id);
  await expect(page.getByRole('heading',{name:'Home',exact:true})).toBeVisible();await page.getByRole('button',{name:'More',exact:true}).click();await page.getByRole('button',{name:'Support',exact:true}).click();
  await expect(page.getByText('How do I record a payment?',{exact:true})).toBeVisible();await page.getByRole('combobox',{name:'Language',exact:true}).selectOption('ff-CM');await expect(page.getByText('Hol no mi danndata njoɓdi?',{exact:true})).toBeVisible();
  await page.getByRole('combobox',{name:'Ɗemngal',exact:true}).selectOption('fr');await expect(page.getByText('Comment enregistrer un règlement ?',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Déconnexion',exact:true}).click();await expect(page.getByRole('heading',{name:'Connexion',exact:true})).toBeVisible();
+});
+
+// Responsive shell must stay inside the viewport in all three languages.
+test('@transverse responsive professional sign-in and keyboard access',async({page})=>{
+ for(const width of [320,390,768,1280]){
+  await page.setViewportSize({width,height:850});await page.goto('/');
+  for(const locale of ['fr','en','ff-CM']){
+   await page.locator('header select').selectOption(locale);
+   await expect(page.locator('html')).toHaveAttribute('lang',locale);
+   await expect(page.locator('.auth-panel h1')).toBeVisible();
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);
+   await page.locator('.auth-panel input[name=phone]').focus();
+   await expect(page.locator('.auth-panel input[name=phone]')).toBeFocused();
+  }
+ }
 });
