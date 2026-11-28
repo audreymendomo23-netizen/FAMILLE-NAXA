@@ -6,7 +6,9 @@ import {createHash} from "node:crypto";
 // Conservative commercial candidate; default/test modes retain existing qualification coverage.
 export default defineConfig(({mode})=>{
  if(mode==="commercial"){
-  for(const feature of ["BRIEFING_ARCHIVE","TRANSVERSE_OPERATIONS","COMMISSION_CONFIG","COMMISSION_SETTLEMENT","BILLING_V23","ATTENDANCE","MEETINGS","BRIEFING"]){
+  // Owner decision: include advanced attendance in the V1.0 candidate.
+  process.env.VITE_NAXA_SERVICES_ATTENDANCE_ENABLED="true";
+  for(const feature of ["BRIEFING_ARCHIVE","TRANSVERSE_OPERATIONS","COMMISSION_CONFIG","COMMISSION_SETTLEMENT","BILLING_V23","MEETINGS","BRIEFING"]){
    process.env["VITE_NAXA_SERVICES_"+feature+"_ENABLED"]="false";
   }
  }
