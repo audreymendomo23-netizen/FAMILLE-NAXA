@@ -8,6 +8,7 @@ on:
       - 'apps/web/grillad/e2e-local-real/**'
       - 'apps/web/grillad/playwright.local-real.config.ts'
       - 'supabase/local-tests/grillad_real_auth_seed.sql'
+      - 'supabase/drafts/grillad_transverse_v1.sql'
 permissions:
   contents: read
 concurrency:

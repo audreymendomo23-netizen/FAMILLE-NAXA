@@ -25,7 +25,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test scripts/grillad/infrastructure.test.mjs scripts/grillad/central-identity.test.mjs scripts/grillad/naxa-runner-reuse.test.mjs supabase/functions/grillad/handler.test.mjs supabase/functions/grillad-push/worker.test.mjs
+      - run: node --test scripts/grillad/infrastructure.test.mjs scripts/grillad/central-identity.test.mjs scripts/grillad/naxa-runner-reuse.test.mjs scripts/grillad/grillad-admin.test.mjs supabase/functions/grillad/handler.test.mjs supabase/functions/grillad-push/worker.test.mjs
+      - run: npm install --workspace @famille/admin-console --include-workspace-root=false --ignore-scripts
+      - run: npm run build --workspace @famille/admin-console
   web:
     strategy:
       fail-fast: false
