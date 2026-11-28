@@ -25,6 +25,7 @@ await ctx.route("**/*",async route=>{const req=route.request(),u=new URL(req.url
  }
  if(req.method()==="POST"&&table==="sec_incidents"){const cols=["organization_id","site_id","reporter_id","request_id","subject","priority","state"];const vals=cols.map(k=>["subject","priority","state"].includes(k)?literal(body[k]):uuid(body[k]));const rows=query(user,"with x as(insert into public.sec_incidents("+cols.join(",")+") values("+vals.join(",")+") returning *) select jsonb_agg(to_jsonb(x)) from x");lastIncident=rows[0].id;dbWrites++;return respond(rows)}
  if(req.method()==="POST"&&["/rest/v1/rpc/sec_erp_action","/rest/v1/rpc/sec_visit_pass"].includes(u.pathname)){const row=query(user,"select public."+table+"("+[uuid(body.p_org),uuid(body.p_site),uuid(body.p_event),literal(body.p_op),uuid(body.p_target),json(body.p_detail)].join(",")+")");dbWrites++;return respond(row)}
+ if(req.method()==="POST"&&u.pathname==="/rest/v1/rpc/sec_integration_list"){return respond(query(user,"select public.sec_integration_list("+[uuid(body.p_org),uuid(body.p_site)].join(",")+")"))}
  if(req.method()==="POST"&&u.pathname==="/rest/v1/rpc/sec_audit_page"){return respond(query(user,"select public.sec_audit_page("+[uuid(body.p_org),uuid(body.p_site),literal(body.p_source),json(body.p_before)].join(",")+")"))}
  if(req.method()==="POST"&&u.pathname==="/rest/v1/rpc/sec_set_activity_channel"){assert.equal(typeof body.p_enabled,"boolean");return respond(query(user,"select public.sec_set_activity_channel("+[uuid(body.p_org),uuid(body.p_site),literal(body.p_channel),String(body.p_enabled)].join(",")+")"))}
  if(req.method()==="POST"&&u.pathname==="/rest/v1/rpc/sec_read_activity"){return respond(query(user,"select public.sec_read_activity("+[uuid(body.p_org),uuid(body.p_site),uuid(body.p_id)].join(",")+")"))}
@@ -109,4 +110,9 @@ try{
  assert.throws(()=>query(users.other,"select public.sec_site_report("+reportArgs+")"));
  await page.goto(origin+"/#/B5.28");await page.getByRole("button",{name:"Calculer le rapport"}).click();await page.getByText("Données calculées et autorisées.").waitFor();await page.locator("dt").filter({hasText:/^maintenance.reviewed_cost_fcfa$/}).waitFor();await page.getByText("2500",{exact:true}).first().waitFor();
  console.log("PASS Chromium + PostgreSQL: extended scoped operational and financial reporting");
+ await page.goto(origin+"/#/B6.28");const secure=page.getByRole("region",{name:"Services sécurisés"});await secure.getByRole("button",{name:"Actualiser la gestion"}).click();await secure.getByText("Lecture du service confirmée.",{exact:true}).waitFor();
+ await page.goto(origin+"/#/B6.19");const accessAudit=page.getByRole("region",{name:"Journal transversal"});await accessAudit.getByLabel("Source du journal",{exact:true}).selectOption("access");await accessAudit.getByRole("button",{name:"Actualiser le journal transversal"}).click();await accessAudit.getByText(/access · integration_list_read · authorized/).waitFor();
+ const trace=query(users.manager,"select public.sec_audit_page("+[uuid(O),uuid(S),literal("access"),"null"].join(",")+")");
+ assert.ok(trace.rows.some(r=>r.operation==="integration_list_read"&&r.object_id===S&&r.actor_id===users.manager&&r.correlation_id===r.id&&r.origin==="access_rpc"));assert.throws(()=>query(users.other,"select public.sec_audit_page("+[uuid(O),uuid(S),literal("access"),"null"].join(",")+")"));
+ console.log("PASS Chromium + PostgreSQL: authorized access traced in the audit UI and isolated by site");
 }finally{await ctx.close();await browser.close()}
