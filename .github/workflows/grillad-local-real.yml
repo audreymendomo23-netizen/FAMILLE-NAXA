@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [journey, identity, catalogue, cash, read-models, resilience]
+        suite: [journey, identity, catalogue, cash, read-models, resilience, manager]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:

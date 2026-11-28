@@ -124,3 +124,29 @@ test('@resilience competing real HTTP sales and replay, no oversell',async({requ
   const snap=await o({action:'snapshot',from:day,to:day});expect(snap.finance.ca).toBe(3000);expect(snap.items.find(x=>x.id===item).remaining).toBe(0);
  }finally{await close(request,seller);await close(request,owner)}
 });
+
+// Three independent Auth users; manager is bound to site A and has no network-wide grant.
+test('@manager third real identity, site isolation and manager operations',async({request})=>{
+ let owner,seller,manager;
+ try{
+  owner=await login(request,'owner');seller=await login(request,'seller');manager=await login(request,'manager');
+  expect(new Set([owner,seller,manager]).size).toBe(3);
+  const w=await invoke(request,{action:'workspace'},manager);
+  expect(w.some(x=>x.site===site&&x.role==='manager')).toBe(true);
+  expect(w.some(x=>x.site===other)).toBe(false);
+  const m=scoped(request,manager),o=scoped(request,owner),s=scoped(request,seller);
+  await m({action:'snapshot',site:other,from:day,to:day},403);
+  await m({action:'snapshot',org:randomUUID(),from:day,to:day},403);
+  expect((await m({action:'snapshot',from:day,to:day})).finance).not.toBeNull();
+  expect((await s({action:'snapshot',from:day,to:day})).finance).toBeNull();
+  const item=randomUUID();
+  await mutation(o)('add_item',{name:'Poulet responsable',family:'Poulet',price:1000,cost:400},item);
+  await mutation(m)('prepare',{item,qty:2});
+  await mutation(m)('open_cash',{opening:0});
+  await mutation(s)('sell',{item,qty:1,price:1000,received:1000});
+  expect((await m({action:'snapshot',from:day,to:day})).finance.ca).toBe(1000);
+  const c=await mutation(m)('close_cash',{counted:1000});expect(c.difference).toBe(0);
+  await m({action:'report',site:other,from:day,to:day,network:false},403);
+  await m({action:'report',from:day,to:day,network:false});
+ }finally{for(const token of [manager,seller,owner])await close(request,token)}
+});

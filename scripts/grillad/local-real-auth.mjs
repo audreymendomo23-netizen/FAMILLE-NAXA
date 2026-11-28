@@ -6,7 +6,7 @@ const {GRILLAD_CI_LOCAL,GRILLAD_LOCAL_API:url,GRILLAD_LOCAL_ANON:key,GRILLAD_LOC
 if(GRILLAD_CI_LOCAL!=='1'||!['http://127.0.0.1:54321','http://localhost:54321'].includes(url)||!key||!service||!RUNNER_TEMP)throw Error('LOCAL_ONLY');
 const file=RUNNER_TEMP+'/grillad-real-accounts.json';
 async function provision(){
- const accounts={};for(const [role,phone] of [['owner','+237600000001'],['seller','+237600000002']]){
+ const accounts={};for(const [role,phone] of [['owner','+237600000001'],['seller','+237600000002'],['manager','+237600000003']]){
   const password=randomBytes(24).toString('base64url')+'Aa9!';
   const r=await fetch(url+'/auth/v1/admin/users',{method:'POST',headers:{apikey:service,Authorization:'Bearer '+service,'Content-Type':'application/json'},body:JSON.stringify({phone,password,phone_confirm:true}),redirect:'error'});
   if(!r.ok)throw Error('Local Auth provisioning '+role+' HTTP '+r.status);const u=await r.json();
@@ -21,7 +21,7 @@ async function provision(){
   console.log('PASS: actual local phone password grant '+role);
  }
  writeFileSync(file,JSON.stringify(accounts),{mode:0o600,flag:'wx'});
- console.log('PASS: two distinct local Auth users provisioned (no SMS)');
+ console.log('PASS: three distinct local Auth users provisioned (no SMS)');
 }
 function serve(){
  const env={url,key,service,origins:['http://127.0.0.1:4181']};
