@@ -92,11 +92,13 @@ begin
   if not found then raise exception 'request denied' using errcode='42501';end if;
   select * into p from public.sec_payment_receipts where organization_id=p_org and site_id=p_site and channel=q.payload->>'channel' and reference=q.payload->>'reference' and amount_fcfa=price and amount_fcfa=(q.payload->>'amount_fcfa')::bigint and provider_confirmed_at<=now() for update;
   if not found then raise exception 'unmatched receipt' using errcode='22023';end if;
-  perform pg_advisory_xact_lock(hashtextextended(p_site::text,3));
-  if exists(select 1 from public.sec_subscriptions where organization_id=p_org and site_id=p_site and ends_at>now()) then raise exception 'subscription already active' using errcode='23505';end if;
-  starts:=now();ends:=starts+case period_name when 'monthly' then interval '1 month' else interval '1 year' end;
+  -- One paid timeline per organization; never charge each Business/Professional site separately.
+  perform pg_advisory_xact_lock(hashtextextended(p_org::text,3));
+  select greatest(now(),coalesce(max(ends_at),now())) into starts from public.sec_subscriptions where organization_id=p_org;
+  -- Keep previously paid periods immutable; a different plan starts only at the next boundary.
+  ends:=starts+case period_name when 'monthly' then interval '1 month' else interval '1 year' end;
   insert into public.sec_subscriptions(id,organization_id,site_id,receipt_id,request_id,plan,period,starts_at,ends_at) values(p_event,p_org,p_site,p.id,q.request_id,plan_name,period_name,starts,ends);
-  out:=jsonb_build_object('target_id',p_target,'state','allocated','plan',plan_name,'ends_at',ends);
+  out:=jsonb_build_object('target_id',p_target,'state','allocated','plan',plan_name,'starts_at',starts,'ends_at',ends);
  when 'evidence_store' then
   if p_target is not null or p_detail-'reference'-'digest'-'base64'<>'{}'::jsonb or coalesce(p_detail->>'reference','') !~ '^[A-Za-z0-9._-]{1,80}$' or coalesce(p_detail->>'digest','') !~ '^[a-f0-9]{64}$' or coalesce(p_detail->>'base64','') !~ '^[A-Za-z0-9+/]+={0,2}$' then raise exception 'invalid evidence' using errcode='22023';end if;
   b:=decode(p_detail->>'base64','base64');digest_value:=encode(sha256(b),'hex');
