@@ -198,7 +198,7 @@ begin
    loop
     eid:=gen_random_uuid();
     insert into public.ns_commission_entries(id,org_id,site_id,member_id,sale_id,appointment_id,base_amount_xaf,commission_xaf,status,policy_version_id,source_event_id,idempotency_key,calculation_snapshot)
-    values(eid,p_org,p_site,sh.mid,s.id,a.id,sh.allocated_base,sh.allocated_commission,'pending_approval',p.id,a.id,eid,jsonb_build_object('source','explicit_shared_line','sale_line_id',l.id,'batch_id',p_id,'completion_day',d,'policy_version',p.version,'line_base_xaf',net,'share_bps',sh.bps));
+    values(eid,p_org,p_site,sh.mid,s.id,a.id,sh.allocated_base,sh.allocated_commission,'pending_approval',p.id,a.id,eid,jsonb_build_object('source','explicit_shared_line','sale_line_id',l.id,'batch_id',p_id,'completion_day',d,'policy_version',p.version,'line_base_xaf',net::bigint,'share_bps',sh.bps));
     insert into public.ns_commission_settlements(org_id,site_id,appointment_id,sale_id,entry_id,created_by,sale_line_id,allocation_member_id) values(p_org,p_site,a.id,s.id,eid,actor,l.id,sh.mid);
     entries:=entries||jsonb_build_array(jsonb_build_object('entry_id',eid,'member_id',sh.mid,'commission_xaf',sh.allocated_commission));
    end loop;
@@ -349,7 +349,7 @@ begin
  select coalesce(sum(amount_xaf),0) into paid from public.ns_payments where sale_id=s.id and org_id=p_org and site_id=p_site and status='confirmed' and confirmed_at is not null;
  prior:=e.status;
  if p_decision='approve' then
-  if e.status<>'pending_approval' or a.status<>'completed' or s.status<>'posted' or paid<>s.total_xaf or (not exists(select 1 from public.ns_commission_settlements where entry_id=e.id and sale_line_id is not null) and paid<>e.base_amount_xaf) or (exists(select 1 from public.ns_commission_settlements where entry_id=e.id and sale_line_id is not null) and not exists(select 1 from public.ns_commission_settlements t join public.ns_sale_lines l on l.id=t.sale_line_id where t.entry_id=e.id and l.sale_id=s.id and l.org_id=p_org and l.site_id=p_site and l.item_type='service' and l.quantity*l.unit_price_xaf-l.discount_xaf=case when t.allocation_member_id is not null then (e.calculation_snapshot->>'line_base_xaf')::bigint else e.base_amount_xaf end)) or exists(select 1 from public.ns_payments where sale_id=s.id and status in ('refunded','reversed')) then raise exception 'NS_COMMISSION_REVIEW_NOT_ELIGIBLE'; end if;
+  if e.status<>'pending_approval' or a.status<>'completed' or s.status<>'posted' or paid<>s.total_xaf or (not exists(select 1 from public.ns_commission_settlements where entry_id=e.id and sale_line_id is not null) and paid<>e.base_amount_xaf) or (exists(select 1 from public.ns_commission_settlements where entry_id=e.id and sale_line_id is not null) and not exists(select 1 from public.ns_commission_settlements t join public.ns_sale_lines l on l.id=t.sale_line_id where t.entry_id=e.id and l.sale_id=s.id and l.org_id=p_org and l.site_id=p_site and l.item_type='service' and l.quantity*l.unit_price_xaf-l.discount_xaf=case when t.allocation_member_id is not null then (e.calculation_snapshot->>'line_base_xaf')::numeric else e.base_amount_xaf end)) or exists(select 1 from public.ns_payments where sale_id=s.id and status in ('refunded','reversed')) then raise exception 'NS_COMMISSION_REVIEW_NOT_ELIGIBLE'; end if;
   next_status:='approved';
   update public.ns_commission_entries set status=next_status,approved_by=actor,approved_at=now() where id=e.id;
  elsif p_decision='reject' then
