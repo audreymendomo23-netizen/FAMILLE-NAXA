@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.dp
  "support"->listOf("Connectez-vous pour accéder à vos demandes et au Livechat texte. Ne transmettez jamais votre mot de passe.","Sign in to access your requests and text live chat. Never share your password.","faq","Consulter la FAQ","Read FAQ")
  "connect"->listOf("Le récepteur sécurisé n’est pas encore disponible. Rejoignez vos réunions sur cet appareil.","Secure receiver is not yet available. Join meetings on this device.","agenda","Ouvrir mon agenda","Open calendar")
  "transcription"->listOf("La transcription automatique n’est pas disponible. Les comptes rendus manuels restent accessibles selon vos droits.","Automatic transcription is unavailable. Manual minutes remain accessible according to your permissions.","archives","Ouvrir mes comptes rendus","Open minutes")
- else->listOf("Interface français et anglais. La traduction vocale simultanée n’est pas disponible.","French and English interface. Simultaneous voice translation is unavailable.","language","Changer la langue","Change language")
+ else->listOf("Interface français et anglais. L’écoute traduite dépend de la langue, des autorisations de la réunion et de votre appareil.","French and English interface. Translated listening depends on the language, meeting permissions and your device.","language","Changer la langue","Change language")
  }
  Text(tr(info[0],info[1]));Button(onClick={go(info[2])}){Text(tr(info[3],info[4]))}
  if(mode=="support"&&!authenticated)Button(onClick={onOpen("signin")}){Text(tr("Se connecter","Sign in"))}

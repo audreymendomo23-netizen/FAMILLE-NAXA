@@ -59,6 +59,7 @@ private fun stamp(ms:Long)= "%02d:%02d".format(java.util.Locale.ROOT,ms/60000,ms
  Text(tr("Suggestions de décisions et d’actions","Suggested decisions and actions"),style=MaterialTheme.typography.titleSmall)
  val none=tr("Aucune suggestion disponible.","No suggestions available.")
  for(line in candidates)Text(line);if(candidates.isEmpty())Text(none)
+ val discussion=review.optJSONArray("discussion_evidence");if(discussion!=null&&discussion.length()>0){Text(tr("Propositions et points à clarifier","Proposals and points to clarify"),style=MaterialTheme.typography.titleSmall);for(i in 0 until discussion.length()){val item=discussion.getJSONObject(i);val label=when(item.optString("category")){"question"->tr("Question","Question");"refusal"->tr("Refus ou absence d’accord","Refusal or no agreement");"conditional"->tr("Sous condition","Conditional");"proposal"->tr("Proposition","Proposal");else->tr("À vérifier","Needs review")};Text(label+" · "+sourceLine(item.getJSONObject("source")))}}
  val reviewDraft=tr("Extraits sourcés à vérifier — ","Source excerpts to review — ")+v.optString("recording_id")+"\n"+excerpts.joinToString("\n")+"\n\n"+tr("Suggestions de décisions et d’actions (à valider)","Suggested decisions and actions (pending approval)")+"\n"+(if(candidates.isEmpty())none else candidates.joinToString("\n"))
  if(onDraft!=null){
  val reviewChoices=(asrRows(review,"excerpts")+asrRows(review,"decision_candidates")).distinctBy{it.getInt("segment_index")}.sortedBy{it.getInt("segment_index")}

@@ -43,16 +43,23 @@ returns jsonb language sql immutable security invoker set search_path=pg_catalog
  ), excerpts as (
   select seg,ord from segments
   order by case when ord=1 or ord=total or ord=(total+1)/2 then 0 else 1 end, (seg->>'uncertain')::boolean,ord limit 5
+ ), evidence as (
+  select seg,ord,case
+   when seg->>'uncertain'<>'false' then 'uncertain'
+   when lower(seg->>'text') ~ '[?]' then 'question'
+   when lower(seg->>'text') ~ '(pas décidé|not decided|not agree|ne décidons pas|refusons|we reject|we refuse|nous refusons)' then 'refusal'
+   when lower(seg->>'text') ~ '(^|[[:space:][:punct:]])(si|if|unless|à condition|sous réserve|provided that)([[:space:][:punct:]]|$)' then 'conditional'
+   when lower(seg->>'text') ~ '(proposons|suggest|propose|hypothèse|hypothetical|pourrions|could consider)' then 'proposal'
+   when lower(seg->>'text') ~ '^[[:space:]]*(nous avons décidé|nous décidons|la décision est|we decided|we have decided|we agree to|action item:|action à réaliser:)' then 'decision'
+   else null end as kind
+  from segments
  ), candidates as (
-  select seg,ord from segments
-  where seg->>'uncertain'='false'
-   and lower(seg->>'text') ~ '^[[:space:]]*(nous avons décidé|nous décidons|la décision est|we decided|we have decided|we agree to|action item:|action à réaliser:)'
-   and lower(seg->>'text') !~ '(pas décidé|not decided|not agree|ne décidons pas|proposons|suggest|propose|hypothèse|hypothetical|[?])'
-  order by ord limit 10
+  select seg,ord from evidence where kind='decision' order by ord limit 10
  )
  select jsonb_build_object('method','extractive-review-v1','recording_id',p_recording,
   'excerpts',coalesce((select jsonb_agg(seg||jsonb_build_object('segment_index',ord-1) order by ord) from excerpts),'[]'::jsonb),
-  'decision_candidates',coalesce((select jsonb_agg(seg||jsonb_build_object('segment_index',ord-1) order by ord) from candidates),'[]'::jsonb))
+  'decision_candidates',coalesce((select jsonb_agg(seg||jsonb_build_object('segment_index',ord-1) order by ord) from candidates),'[]'::jsonb),
+  'discussion_evidence',coalesce((select jsonb_agg(jsonb_build_object('category',kind,'source',seg||jsonb_build_object('segment_index',ord-1)) order by ord) from (select seg,ord,kind from evidence where kind in ('question','refusal','conditional','proposal','uncertain') order by ord limit 30) d),'[]'::jsonb))
 $wm$;
 revoke all on function public.wm_transcription_review(jsonb,uuid) from public,anon,authenticated;
 grant execute on function public.wm_transcription_review(jsonb,uuid) to service_role;
