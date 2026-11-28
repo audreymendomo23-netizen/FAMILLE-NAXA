@@ -88,3 +88,7 @@ Matrice docs/grillad/RECETTES_INTERACTIONS.md. Run local réel 46092875856 bloqu
 
 ## Section 38 — Vague parallèle
 Six suites réelles isolées (journey existant, identity, catalogue, cash, read-models, resilience) ; 5 nouvelles recettes nommées. 220 unités historiques + 6 scénarios locaux réels = 226 enregistrées ; pas de PASS présumé. Campagnes 46093327908 (15 jobs standard), 46093327871 (6 jobs réels en attente de verrou précédent au relevé). Voir §38.
+
+- Run 46093153386 : pile locale, schémas, provisionnement des deux identités, installation npm/Chromium PASS. Le premier login propriétaire retourne HTTP 401. Le log CLI confirme « no SMS provider is enabled. Disabling phone login ». Nettoyage effectué. Campagne standard 46093153453 : 15/15 SUCCESS.
+- Commit 51140bcd2bab691eb55ecebff391b00ead110dd4 : configuration Twilio factice strictement locale, aucune clé de fournisseur réelle, aucun SMS envoyé ; précontrôle des deux grants password GoTrue et déconnexion des sessions temporaires. Configuration documentée par https://supabase.com/docs/guides/auth/testing-auth-flows. Aucun changement de handler/contrôles de sécurité produit. Verrou par SHA pour que les corrections n'attendent pas une ancienne révision. Les anciens runs continuent sans fail-fast.
+- Nouvelles campagnes 46093425891 (6 suites réelles) et 46093425901 (15 jobs standard) acceptées par GitHub, en file au relevé. Aucun résultat nouveau encore certifié. 226 unités enregistrées et jauge 94 % maintenues ; aucune opération hébergée ni SMS payant.
