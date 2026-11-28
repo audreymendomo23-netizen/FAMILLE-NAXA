@@ -55,4 +55,14 @@ end $q$;
 reset role;
 set local role anon;
 do $q$begin if has_function_privilege(current_user,'public.sec_field_action(uuid,uuid,uuid,text,uuid,jsonb)','EXECUTE') then raise exception 'anon access';end if;end $q$;
+reset role;set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000072',true);
+do $q$declare o uuid:='10000000-0000-0000-0000-000000000071';s uuid:='20000000-0000-0000-0000-000000000071';p uuid;e uuid:=gen_random_uuid();v jsonb;begin
+ v:=public.sec_field_action(o,s,gen_random_uuid(),'patrol_create',null,jsonb_build_object('label','QA scheduled','agent_id','00000000-0000-0000-0000-000000000071','checkpoints',jsonb_build_array('A'),'starts_at',now()+interval '1 hour','ends_at',now()+interval '2 hours'));p:=(v->>'target_id')::uuid;
+ v:=public.sec_field_action(o,s,e,'patrol_replace',p,'{"agent_id":"00000000-0000-0000-0000-000000000072","reason":"replacement"}');
+ if v->>'agent_id'<>'00000000-0000-0000-0000-000000000072' or v<>public.sec_field_action(o,s,e,'patrol_replace',p,'{"agent_id":"00000000-0000-0000-0000-000000000072","reason":"replacement"}') then raise exception 'replacement receipt';end if;
+ begin perform public.sec_field_action(o,s,gen_random_uuid(),'patrol_start',p,'{"reason":"early"}');raise exception 'early start accepted';exception when invalid_parameter_value then null;end;
+ v:=public.sec_field_action(o,s,gen_random_uuid(),'patrol_anomaly',p,'{"reason":"site unavailable"}');
+ if v->>'anomaly_recorded'<>'true' or (select state from public.sec_patrols where id=p)<>'planned' then raise exception 'anomaly failed';end if;
+end $q$;
 reset role;rollback;

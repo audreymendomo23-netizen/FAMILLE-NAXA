@@ -20,7 +20,7 @@ internal fun nativeFieldChoices(mode:String,state:String,mine:Boolean,completed:
  else->emptyList()
 }
 @Composable internal fun SecurityNativeField(screen:String){
- val mode=when(screen){"B4.13"->"attendance";"B4.14","B4.15","B4.17"->"patrol";"B4.24","B4.25"->"visitor";"B4.28","B4.29"->"vehicle";"B4.30","B4.33"->"safety";"B5.07","B5.08","B5.09","B5.10"->"shift";"B5.11","B5.12","B5.13","B5.16","B5.17","B5.18"->"maintenance";else->return}
+ val mode=when(screen){"B4.13"->"attendance";"B4.14","B4.15","B4.16","B4.17","B4.18"->"patrol";"B4.24","B4.25"->"visitor";"B4.28","B4.29"->"vehicle";"B4.30","B4.33"->"safety";"B5.07","B5.08","B5.09","B5.10"->"shift";"B5.11","B5.12","B5.13","B5.16","B5.17","B5.18"->"maintenance";else->return}
  val native=LocalSecurityNative.current;val s=native.session?:return;val site=native.site?:return;val gen=native.generation;val scope=rememberCoroutineScope()
  var rows by remember(screen,gen){mutableStateOf<List<JSONObject>>(emptyList())};var details by remember(screen,gen){mutableStateOf<List<JSONObject>>(emptyList())};var selected by remember(screen,gen){mutableStateOf("")};var reason by remember(screen,gen){mutableStateOf("")};var agent by remember(screen,gen){mutableStateOf("")};var device by remember(screen,gen){mutableStateOf("")};var label by remember(screen,gen){mutableStateOf("")};var points by remember(screen,gen){mutableStateOf("")};var index by remember(screen,gen){mutableStateOf("1")};var start by remember(screen,gen){mutableStateOf("")};var end by remember(screen,gen){mutableStateOf("")};var cost by remember(screen,gen){mutableStateOf("0")};var status by remember(screen,gen){mutableStateOf("")};var busy by remember(screen,gen){mutableStateOf(false)};var pendingId by remember(screen,gen){mutableStateOf("")};var pendingSig by remember(screen,gen){mutableStateOf("")}
  val erp=mode in setOf("shift","maintenance")
@@ -32,7 +32,8 @@ internal fun nativeFieldChoices(mode:String,state:String,mine:Boolean,completed:
   try{
    val payload=JSONObject();var op=choice
    when(choice){
-    "patrol_create"->{payload.put("label",label.trim()).put("agent_id",agent.trim()).put("checkpoints",JSONArray(points.lines().map{it.trim()}.filter{it.isNotEmpty()}))}
+    "patrol_create"->{payload.put("label",label.trim()).put("agent_id",agent.trim()).put("checkpoints",JSONArray(points.lines().map{it.trim()}.filter{it.isNotEmpty()}));require(start.isBlank()==end.isBlank());if(start.isNotBlank()){payload.put("starts_at",java.time.Instant.parse(start.trim()).toString());payload.put("ends_at",java.time.Instant.parse(end.trim()).toString())}}
+    "patrol_replace"->payload.put("agent_id",agent.trim())
     "shift_create"->{payload.put("label",label.trim()).put("agent_id",agent.trim()).put("starts_at",java.time.Instant.parse(start.trim()).toString()).put("ends_at",java.time.Instant.parse(end.trim()).toString())}
     "maintenance_assign"->{payload.put("technician_id",agent.trim()).put("device_id",device.trim()).put("scheduled_at",java.time.Instant.parse(start.trim()).toString())}
     "maintenance_complete"->{payload.put("diagnosis",reason.trim()).put("cost_fcfa",cost.toLong())}
@@ -54,12 +55,13 @@ internal fun nativeFieldChoices(mode:String,state:String,mine:Boolean,completed:
  if(mode=="patrol"&&row?.optString("state")=="running"){Text(row.optJSONArray("checkpoints")?.toString().orEmpty());OutlinedTextField(index,{index=it},label={Text("Index du checkpoint")})}
  if(mode=="patrol"&&screen=="B4.15"||mode=="shift"){
   OutlinedTextField(label,{label=it},label={Text("Libellé")});OutlinedTextField(agent,{agent=it},label={Text("Identifiant agent")})
-  if(mode=="patrol")OutlinedTextField(points,{points=it},label={Text("Checkpoints, un par ligne")})else{OutlinedTextField(start,{start=it},label={Text("Début UTC ISO 8601")});OutlinedTextField(end,{end=it},label={Text("Fin UTC ISO 8601")})}
+  if(mode=="patrol"){OutlinedTextField(points,{points=it},label={Text("Checkpoints, un par ligne")});OutlinedTextField(start,{start=it},label={Text("Début UTC facultatif")});OutlinedTextField(end,{end=it},label={Text("Fin UTC facultative")})}else{OutlinedTextField(start,{start=it},label={Text("Début UTC ISO 8601")});OutlinedTextField(end,{end=it},label={Text("Fin UTC ISO 8601")})}
   Button(enabled=!busy&&label.isNotBlank()&&agent.isNotBlank(),onClick={perform(if(mode=="patrol")"patrol_create" else "shift_create",null)}){Text(if(mode=="patrol")"Créer la ronde" else "Planifier la vacation")}
  }
  if(mode=="safety")Button(enabled=!busy&&reason.isNotBlank(),onClick={perform("safety_report",null)}){Text("Enregistrer le signalement interne")}
  if(mode=="maintenance"&&row?.optString("state")=="requested"){OutlinedTextField(agent,{agent=it},label={Text("Identifiant technicien")});OutlinedTextField(device,{device=it},label={Text("Identifiant appareil")});OutlinedTextField(start,{start=it},label={Text("Date UTC ISO 8601")})}
  if(mode=="maintenance"&&row?.optString("state")=="in_progress"&&mine){OutlinedTextField(cost,{cost=it},label={Text("Coût FCFA")})}
+ if(mode=="patrol"&&row!=null){if(!row.isNull("starts_at"))Text("Fenêtre : "+row.optString("starts_at")+" — "+row.optString("ends_at"));if(row.optString("state")=="planned"){OutlinedTextField(agent,{agent=it},label={Text("Agent remplaçant")});Button(enabled=!busy&&agent.isNotBlank()&&reason.isNotBlank(),onClick={perform("patrol_replace",selected)}){Text("Remplacer l’agent")}};if(row.optString("state") in setOf("planned","running","submitted"))Button(enabled=!busy&&reason.isNotBlank(),onClick={perform("patrol_anomaly",selected)}){Text("Signaler une anomalie")}}
  if(row!=null)nativeFieldChoices(mode,row.optString("state"),mine,detail?.let{!it.isNull("completed_at")}==true).forEach{choice->Button(enabled=!busy,onClick={perform(choice.op,selected)}){Text(choice.label)}}
  Text(status)
 }

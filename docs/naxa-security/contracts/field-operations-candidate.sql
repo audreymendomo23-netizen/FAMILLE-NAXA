@@ -14,9 +14,9 @@ alter table public.sec_attendance_drafts add constraint sec_attendance_review_st
 create table public.sec_patrols(
  id uuid primary key default gen_random_uuid(),organization_id uuid not null,site_id uuid not null,
  agent_id uuid not null references auth.users(id),created_by uuid not null references auth.users(id),
- label text not null check(length(trim(label)) between 1 and 120),checkpoints text[] not null check(cardinality(checkpoints) between 1 and 30),
+ label text not null check(length(trim(label)) between 1 and 120),starts_at timestamptz,ends_at timestamptz,check((starts_at is null and ends_at is null) or (starts_at is not null and ends_at is not null and ends_at>starts_at and ends_at-starts_at<=interval '24 hours')),checkpoints text[] not null check(cardinality(checkpoints) between 1 and 30),
  state text not null default 'planned' check(state in ('planned','running','submitted','reviewed','cancelled')),
- created_at timestamptz not null default now(),
+ created_at timestamptz not null default now(),started_at timestamptz,submitted_at timestamptz,reviewed_at timestamptz,reviewed_by uuid references auth.users(id),
  foreign key(organization_id,site_id) references public.sec_sites(organization_id,id)
 );
 create table public.sec_patrol_checks(
@@ -69,7 +69,7 @@ create policy sec_attendance_manager on public.sec_attendance_drafts for select 
 -- Narrow field commands with server-side state transitions, lock, idempotent receipts and audit.
 create function sec_private.field_action(p_org uuid,p_site uuid,p_event uuid,p_operation text,p_target uuid,p_detail jsonb) returns jsonb
 language plpgsql security definer set search_path=pg_catalog as $action$
-declare role_name text; prior public.sec_field_events%rowtype; receipt jsonb; current_state text; next_state text; reason text; target uuid; agent uuid; points text[]; idx integer; p public.sec_patrols%rowtype; reg public.sec_service_register%rowtype; last_direction text; who uuid; record_id uuid;
+declare role_name text; prior public.sec_field_events%rowtype; receipt jsonb; current_state text; next_state text; reason text; target uuid; agent uuid; points text[]; idx integer; p public.sec_patrols%rowtype; reg public.sec_service_register%rowtype; last_direction text; who uuid; record_id uuid; st timestamptz; en timestamptz;
 begin
  role_name:=sec_private.field_role(p_org,p_site);
  if role_name is null or role_name not in ('owner','manager','operator') or auth.uid() is null or p_event is null or jsonb_typeof(p_detail) is distinct from 'object' or octet_length(p_detail::text)>4096 then raise exception 'field denied' using errcode='42501';end if;
@@ -82,7 +82,7 @@ begin
  end if;
  reason:=trim(coalesce(p_detail->>'reason',''));
  if p_operation not in ('patrol_create') and (length(reason) not between 1 and 500 or reason ~ '[[:cntrl:]]') then raise exception 'reason required' using errcode='22023';end if;
- if p_operation in ('incident','work','attendance','patrol_create','patrol_review','patrol_cancel','safety_ack','safety_close') and role_name not in ('owner','manager') then raise exception 'manager required' using errcode='42501';end if;
+ if p_operation in ('incident','work','attendance','patrol_create','patrol_review','patrol_cancel','patrol_replace','safety_ack','safety_close') and role_name not in ('owner','manager') then raise exception 'manager required' using errcode='42501';end if;
  if p_operation in ('incident','work','attendance') then
   if p_detail - 'reason' - 'next' <> '{}'::jsonb then raise exception 'unknown field' using errcode='22023';end if;
   next_state:=p_detail->>'next';
@@ -104,19 +104,35 @@ begin
   end if;
   receipt:=jsonb_build_object('target_id',p_target,'state',next_state);
  elsif p_operation='patrol_create' then
-  if p_target is not null or p_detail-'label'-'agent_id'-'checkpoints'<>'{}'::jsonb or jsonb_typeof(p_detail->'checkpoints') is distinct from 'array' then raise exception 'invalid patrol' using errcode='22023';end if;
+  if p_target is not null or p_detail-'label'-'agent_id'-'checkpoints'-'starts_at'-'ends_at'<>'{}'::jsonb or jsonb_typeof(p_detail->'checkpoints') is distinct from 'array' then raise exception 'invalid patrol' using errcode='22023';end if;
   agent:=(p_detail->>'agent_id')::uuid;
   if not exists(select 1 from public.sec_site_memberships sm join public.sec_memberships m using(organization_id,user_id) where sm.organization_id=p_org and sm.site_id=p_site and sm.user_id=agent and sm.active and m.active and m.role in ('owner','manager','operator')) then raise exception 'agent unavailable' using errcode='42501';end if;
   select array_agg(trim(value)) into points from jsonb_array_elements_text(p_detail->'checkpoints');
   if coalesce(cardinality(points),0) not between 1 and 30 or exists(select 1 from unnest(points) t(v) where length(v) not between 1 and 120 or v ~ '[[:cntrl:]]') or (select count(distinct v) from unnest(points) t(v))<>cardinality(points) then raise exception 'invalid checkpoints' using errcode='22023';end if;
-  insert into public.sec_patrols(organization_id,site_id,agent_id,created_by,label,checkpoints) values(p_org,p_site,agent,auth.uid(),trim(p_detail->>'label'),points) returning id into target;
+  st:=(p_detail->>'starts_at')::timestamptz;en:=(p_detail->>'ends_at')::timestamptz;
+  if (st is null)<>(en is null) or (st is not null and (st<now()-interval '1 minute' or en<=st or en-st>interval '24 hours')) then raise exception 'invalid patrol window' using errcode='22023';end if;
+  insert into public.sec_patrols(organization_id,site_id,agent_id,created_by,label,checkpoints,starts_at,ends_at) values(p_org,p_site,agent,auth.uid(),trim(p_detail->>'label'),points,st,en) returning id into target;
   receipt:=jsonb_build_object('target_id',target,'state','planned');
+ elsif p_operation='patrol_replace' then
+  if p_detail-'reason'-'agent_id'<>'{}'::jsonb then raise exception 'invalid replacement' using errcode='22023';end if;
+  select * into p from public.sec_patrols where id=p_target and organization_id=p_org and site_id=p_site for update;
+  if not found then raise exception 'patrol denied' using errcode='42501';end if;
+  agent:=(p_detail->>'agent_id')::uuid;
+  if p.state<>'planned' or (p.ends_at is not null and p.ends_at<=now()) or agent=p.agent_id or not exists(select 1 from public.sec_site_memberships sm join public.sec_memberships m using(organization_id,user_id) where sm.organization_id=p_org and sm.site_id=p_site and sm.user_id=agent and sm.active and m.active and m.role in ('owner','manager','operator')) then raise exception 'invalid replacement' using errcode='22023';end if;
+  update public.sec_patrols set agent_id=agent where id=p.id;
+  receipt:=jsonb_build_object('target_id',p.id,'state','planned','previous_agent_id',p.agent_id,'agent_id',agent);
+ elsif p_operation='patrol_anomaly' then
+  if p_detail-'reason'<>'{}'::jsonb then raise exception 'invalid anomaly' using errcode='22023';end if;
+  select * into p from public.sec_patrols where id=p_target and organization_id=p_org and site_id=p_site for update;
+  if not found or (role_name='operator' and p.agent_id<>auth.uid()) then raise exception 'patrol denied' using errcode='42501';end if;
+  if p.state not in ('planned','running','submitted') then raise exception 'patrol closed' using errcode='22023';end if;
+  receipt:=jsonb_build_object('target_id',p.id,'state',p.state,'anomaly_recorded',true);
  elsif p_operation in ('patrol_start','patrol_check','patrol_submit','patrol_review','patrol_cancel') then
   if p_detail-'reason'-(case when p_operation='patrol_check' then 'index' else 'reason' end)<>'{}'::jsonb then raise exception 'unknown field' using errcode='22023';end if;
   select * into p from public.sec_patrols where id=p_target and organization_id=p_org and site_id=p_site for update;
   if not found then raise exception 'patrol denied' using errcode='42501';end if;
   if p_operation in ('patrol_start','patrol_check','patrol_submit') and p.agent_id<>auth.uid() then raise exception 'agent required' using errcode='42501';end if;
-  if p_operation='patrol_start' and p.state='planned' then next_state:='running';
+  if p_operation='patrol_start' and p.state='planned' and (p.starts_at is null or now()>=p.starts_at and now()<p.ends_at) then next_state:='running';
   elsif p_operation='patrol_check' and p.state='running' then
    idx:=(p_detail->>'index')::integer;
    if idx is null or idx<1 or idx>cardinality(p.checkpoints) or idx<>(select count(*)+1 from public.sec_patrol_checks where patrol_id=p.id) then raise exception 'checkpoint order' using errcode='22023';end if;
@@ -126,8 +142,8 @@ begin
   elsif p_operation='patrol_review' and p.state='submitted' and p.agent_id<>auth.uid() then next_state:='reviewed';
   elsif p_operation='patrol_cancel' and p.state in ('planned','running','submitted') then next_state:='cancelled';
   else raise exception 'invalid patrol transition' using errcode='22023';end if;
-  update public.sec_patrols set state=next_state where id=p.id;
-  receipt:=jsonb_build_object('target_id',p.id,'state',next_state,'manual_checkpoints_only',true);
+  update public.sec_patrols set state=next_state,started_at=case when p_operation='patrol_start' then now() else started_at end,submitted_at=case when p_operation='patrol_submit' then now() else submitted_at end,reviewed_at=case when p_operation='patrol_review' then now() else reviewed_at end,reviewed_by=case when p_operation='patrol_review' then auth.uid() else reviewed_by end where id=p.id;
+  receipt:=jsonb_build_object('target_id',p.id,'state',next_state,'manual_checkpoints_only',true,'late',p.ends_at is not null and now()>p.ends_at);
  elsif p_operation='passage' then
   if p_detail-'reason'-'direction'<>'{}'::jsonb then raise exception 'unknown field' using errcode='22023';end if;
   select * into reg from public.sec_service_register where id=p_target and organization_id=p_org and site_id=p_site and kind in ('visitor','vehicle') for update;
