@@ -18,10 +18,13 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: grillad-firebase-delivery-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   configured-android:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,6 +56,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+          cache-read-only: false
+          cache-cleanup: on-success
       - uses: android-actions/setup-android@v4
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compile configured Android client and run unit tests
