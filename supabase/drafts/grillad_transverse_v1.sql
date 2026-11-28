@@ -232,11 +232,10 @@ begin
  select * into v from grillad_private.backup_preferences where org=p_org and site=p_site and actor=auth.uid();
  return jsonb_build_object('frequency',coalesce(v.frequency,'off'),'minute',coalesce(v.local_minute,360),'weekday',coalesce(v.weekday,1),'monthday',coalesce(v.monthday,1),'timezone','Africa/Douala','destination','google_drive','cloud_status','not_connected','last_success',null);
 end $fn$;
-create function public.grillad_backup_export(p_org uuid,p_site uuid) returns jsonb
+create function grillad_private.backup_data(p_org uuid,p_site uuid) returns jsonb
 language plpgsql stable security definer set search_path=pg_catalog as $fn$
 declare v jsonb:='{}'::jsonb; t text; a jsonb; n bigint;
 begin
- if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_BACKUP_DENIED' using errcode='42501';end if;
  foreach t in array array['items','cash','cash_recounts','preparations','stock_adjustments','sales','cash_receipts','expenses','purchases','targets','dimension_targets','service_policy','service_revisions','daily_summary'] loop
   execute format('select count(*) from grillad_private.%I where org=$1 and site=$2',t) into n using p_org,p_site;
   if n>10000 then raise exception 'GRILLAD_BACKUP_TOO_LARGE' using errcode='22023';end if;
@@ -246,6 +245,104 @@ begin
  end loop;
  return jsonb_build_object('format','grillad-business-export-v1','org',p_org,'site',p_site,'generated_at',now(),'coverage','selected_business_tables_only','tables',v);
 end $fn$;
+
+create function public.grillad_backup_export(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $fn$
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_BACKUP_DENIED' using errcode='42501';end if;
+ return grillad_private.backup_data(p_org,p_site);
+end $fn$;
+revoke all on function grillad_private.backup_data(uuid,uuid) from public,anon,authenticated;
+create table grillad_private.drive_connections(
+ org uuid not null,site uuid not null,actor uuid not null references auth.users(id),
+ sealed text not null,last_success timestamptz,last_slot text,requested uuid,lease uuid,leased_at timestamptz,last_status text not null default 'connected',
+ primary key(org,site,actor),foreign key(org,site) references grillad_private.enabled_sites(org,site));
+create table grillad_private.drive_states(hash text primary key,org uuid not null,site uuid not null,actor uuid not null references auth.users(id),sealed text not null,expires_at timestamptz not null default now()+interval '10 minutes',foreign key(org,site) references grillad_private.enabled_sites(org,site));
+alter table grillad_private.drive_connections enable row level security;
+alter table grillad_private.drive_states enable row level security;
+revoke all on grillad_private.drive_connections,grillad_private.drive_states from public,anon,authenticated;
+create function grillad_private.drive_owner(o uuid,s uuid,u uuid) returns boolean language sql stable security definer set search_path=pg_catalog as $fn$
+select exists(select 1 from famille_core.applications a
+ join famille_core.organization_apps oa on oa.app_id=a.id and oa.organization_id=o and oa.status='active'
+ join famille_core.organizations g on g.id=o and g.status='active' and g.deleted_at is null
+ join famille_core.locations l on l.id=s and l.organization_id=o and l.status='active'
+ join grillad_private.enabled_sites e on e.org=o and e.site=s and e.enabled
+ join famille_core.memberships m on m.app_id=a.id and m.organization_id=o and m.user_id=u and m.status='active'
+ join famille_core.role_assignments r on r.membership_id=m.id and r.app_id=a.id and r.organization_id=o and r.role_code='owner' and r.location_id is null and r.status='active' and r.starts_at<=now() and (r.expires_at is null or r.expires_at>now())
+ join famille_core.client_app_access c on c.user_id=u and c.app_id=a.id and c.status='granted'
+ join famille_core.subscriptions b on b.app_id=a.id and b.organization_id=o
+ join famille_core.plans p on p.id=b.plan_id and p.app_id=a.id and p.status='active'
+ where a.code='grillad' and a.status='active' and ((b.status='active' and (b.starts_at is null or b.starts_at<=now()) and (b.ends_at is null or b.ends_at>=now())) or (b.status='past_due' and b.grace_until>=now()))
+ and ((p.code='grillad_access_month' and p.amount_fcfa=2000 and p.billing_period='monthly') or (p.code='grillad_access_year' and p.amount_fcfa=24000 and p.billing_period='yearly') or (p.code='grillad_premium_month' and p.amount_fcfa=6000 and p.billing_period='monthly') or (p.code='grillad_premium_year' and p.amount_fcfa=60000 and p.billing_period='yearly'))
+ and (p.code not like 'grillad_access_%' or (select count(*) from grillad_private.enabled_sites where org=o and enabled)=1));
+$fn$;
+create function public.grillad_drive_begin(p_org uuid,p_site uuid,p_hash text,p_sealed text) returns boolean language plpgsql security definer set search_path=pg_catalog as $fn$
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' or not grillad_private.drive_owner(p_org,p_site,auth.uid()) then raise exception 'DRIVE_DENIED' using errcode='42501';end if;
+ if p_hash is null or length(p_hash)<>64 or p_sealed is null or length(p_sealed)>4096 then raise exception 'DRIVE_INPUT' using errcode='22023';end if;
+ delete from grillad_private.drive_states where expires_at<now() or (org=p_org and site=p_site and actor=auth.uid());
+ insert into grillad_private.drive_states(hash,org,site,actor,sealed) values(p_hash,p_org,p_site,auth.uid(),p_sealed);
+ return true;
+end $fn$;
+create function public.grillad_drive_consume(p_hash text) returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
+declare d grillad_private.drive_states%rowtype;
+begin
+ delete from grillad_private.drive_states where hash=p_hash and expires_at>now() returning * into d;
+ if not found or not grillad_private.drive_owner(d.org,d.site,d.actor) then raise exception 'DRIVE_STATE' using errcode='42501';end if;
+ return jsonb_build_object('org',d.org,'site',d.site,'actor',d.actor,'sealed',d.sealed);
+end $fn$;
+create function public.grillad_drive_connect(p_org uuid,p_site uuid,p_actor uuid,p_sealed text) returns boolean language plpgsql security definer set search_path=pg_catalog as $fn$
+begin
+ if not grillad_private.drive_owner(p_org,p_site,p_actor) or p_sealed is null or length(p_sealed)>8192 then raise exception 'DRIVE_DENIED' using errcode='42501';end if;
+ insert into grillad_private.drive_connections(org,site,actor,sealed) values(p_org,p_site,p_actor,p_sealed)
+ on conflict(org,site,actor) do update set sealed=excluded.sealed,lease=null,leased_at=null,last_status='connected';
+ return true;
+end $fn$;
+create function public.grillad_drive_control(p_org uuid,p_site uuid,p_action text) returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
+declare d grillad_private.drive_connections%rowtype;
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'DRIVE_DENIED' using errcode='42501';end if;
+ if p_action='disconnect' then delete from grillad_private.drive_states where org=p_org and site=p_site and actor=auth.uid();delete from grillad_private.drive_connections where org=p_org and site=p_site and actor=auth.uid();
+ elsif p_action='now' then update grillad_private.drive_connections set requested=coalesce(requested,gen_random_uuid()) where org=p_org and site=p_site and actor=auth.uid();
+ if not found then raise exception 'DRIVE_NOT_CONNECTED' using errcode='22023';end if;
+ elsif p_action is distinct from 'status' then raise exception 'DRIVE_INPUT' using errcode='22023';end if;
+ select * into d from grillad_private.drive_connections where org=p_org and site=p_site and actor=auth.uid();
+ return jsonb_build_object('connected',d.actor is not null,'last_success',d.last_success,'status',coalesce(d.last_status,'not_connected'),'queued',d.requested is not null);
+end $fn$;
+create function public.grillad_drive_claim() returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
+declare d grillad_private.drive_connections%rowtype;p grillad_private.backup_preferences%rowtype;localtime timestamp:=now() at time zone 'Africa/Douala';slot text;candidate record;
+begin
+ for candidate in select c.org,c.site,c.actor from grillad_private.drive_connections c where (c.leased_at is null or c.leased_at<now()-interval '15 minutes') order by c.leased_at nulls first limit 100 loop
+  select * into d from grillad_private.drive_connections where org=candidate.org and site=candidate.site and actor=candidate.actor for update skip locked;
+  if not found or (d.leased_at is not null and d.leased_at>=now()-interval '15 minutes') or not grillad_private.drive_owner(d.org,d.site,d.actor) then continue;end if;
+  select * into p from grillad_private.backup_preferences where org=d.org and site=d.site and actor=d.actor;
+  slot:=null;
+  if d.requested is not null then slot:='manual-'||d.requested::text;
+  elsif p.frequency is not null and p.frequency<>'off' and extract(hour from localtime)*60+extract(minute from localtime)>=p.local_minute then
+   if p.frequency='daily' then slot:='daily-'||localtime::date::text;
+   elsif p.frequency='weekly' and extract(isodow from localtime)=p.weekday then slot:='weekly-'||localtime::date::text;
+   elsif p.frequency='monthly' and extract(day from localtime)=p.monthday then slot:='monthly-'||to_char(localtime,'YYYY-MM');end if;
+  end if;
+  if slot is null or slot=d.last_slot then continue;end if;
+  update grillad_private.drive_connections set lease=gen_random_uuid(),leased_at=now(),last_status='running' where org=d.org and site=d.site and actor=d.actor returning * into d;
+  return jsonb_build_object('org',d.org,'site',d.site,'actor',d.actor,'sealed',d.sealed,'lease',d.lease,'slot',slot);
+ end loop;
+ return null;
+end $fn$;
+create function public.grillad_drive_payload(p_org uuid,p_site uuid,p_actor uuid,p_lease uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $fn$
+begin
+ if not grillad_private.drive_owner(p_org,p_site,p_actor) or not exists(select 1 from grillad_private.drive_connections where org=p_org and site=p_site and actor=p_actor and lease=p_lease and leased_at>now()-interval '15 minutes') then raise exception 'DRIVE_DENIED' using errcode='42501';end if;
+ return grillad_private.backup_data(p_org,p_site);
+end $fn$;
+create function public.grillad_drive_finish(p_org uuid,p_site uuid,p_actor uuid,p_lease uuid,p_slot text,p_ok boolean) returns boolean language plpgsql security definer set search_path=pg_catalog as $fn$
+begin
+ update grillad_private.drive_connections set last_status=case when p_ok then 'uploaded' else 'failed' end,last_success=case when p_ok then now() else last_success end,last_slot=case when p_ok then p_slot else last_slot end,requested=case when p_ok and p_slot='manual-'||requested::text then null else requested end,lease=null,leased_at=case when p_ok then null else now() end
+ where org=p_org and site=p_site and actor=p_actor and lease=p_lease;
+ return found;
+end $fn$;
+revoke all on function grillad_private.drive_owner(uuid,uuid,uuid),public.grillad_drive_begin(uuid,uuid,text,text),public.grillad_drive_consume(text),public.grillad_drive_connect(uuid,uuid,uuid,text),public.grillad_drive_control(uuid,uuid,text),public.grillad_drive_claim(),public.grillad_drive_payload(uuid,uuid,uuid,uuid),public.grillad_drive_finish(uuid,uuid,uuid,uuid,text,boolean) from public,anon,authenticated;
+grant execute on function public.grillad_drive_begin(uuid,uuid,text,text),public.grillad_drive_control(uuid,uuid,text) to authenticated;
+grant execute on function public.grillad_drive_consume(text),public.grillad_drive_connect(uuid,uuid,uuid,text),public.grillad_drive_claim(),public.grillad_drive_payload(uuid,uuid,uuid,uuid),public.grillad_drive_finish(uuid,uuid,uuid,uuid,text,boolean) to service_role;
+
 revoke all on function public.grillad_backup_preferences(uuid,uuid,text,integer,integer,integer),public.grillad_backup_export(uuid,uuid) from public,anon,authenticated;
 grant execute on function public.grillad_backup_preferences(uuid,uuid,text,integer,integer,integer),public.grillad_backup_export(uuid,uuid) to authenticated;
 

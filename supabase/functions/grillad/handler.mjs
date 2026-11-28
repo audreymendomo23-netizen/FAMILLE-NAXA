@@ -1,3 +1,4 @@
+import {start as startDrive} from '../grillad-drive/worker.mjs';
 // Dedicated GRILLAD gateway, adapted from the family accounting bearer/RPC pattern.
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const date=/^\d{4}-\d{2}-\d{2}$/;
@@ -111,6 +112,8 @@ const c=ctx.result;const parsed=parsePromoteurPaymentSms(body.sms,c.channel,leve
   const scope={p_org:body.org,p_site:body.site};
   if(body.action==='referral'&&['list','generate','attach'].includes(body.operation)&&(body.code==null||typeof body.code==='string'&&body.code.length<=40))return upstream(await post('/rest/v1/rpc/grillad_referral',{...scope,p_action:body.operation,p_code:body.code??null},token));
   if(body.action==='support_thread'&&uuid.test(body.ticket)&&(body.event==null||uuid.test(body.event)&&typeof body.message==='string'&&body.message.length<=2000))return upstream(await post('/rest/v1/rpc/grillad_support_thread',{...scope,p_ticket:body.ticket,p_event:body.event??null,p_body:body.message??null},token));
+  if(body.action==='drive_begin'&&typeof body.password==='string'&&body.password.length>=12&&body.password.length<=128){const url=await startDrive(env.drive??{},body.password,async(hash,sealed)=>{const r=await post('/rest/v1/rpc/grillad_drive_begin',{...scope,p_hash:hash,p_sealed:sealed},token);if(!r.ok||r.result!==true)throw Error('DRIVE_DENIED')});return reply(200,{result:{url}});}
+  if(body.action==='drive_control'&&['status','now','disconnect'].includes(body.operation))return upstream(await post('/rest/v1/rpc/grillad_drive_control',{...scope,p_action:body.operation},token));
   if(body.action==='backup_export')return upstream(await post('/rest/v1/rpc/grillad_backup_export',scope,token));
   if(body.action==='backup_preferences'&&(body.frequency==null||['off','daily','weekly','monthly'].includes(body.frequency)&&Number.isInteger(body.minute)&&Number.isInteger(body.weekday)&&Number.isInteger(body.monthday)))return upstream(await post('/rest/v1/rpc/grillad_backup_preferences',{...scope,p_frequency:body.frequency??null,p_minute:body.minute??null,p_weekday:body.weekday??null,p_monthday:body.monthday??null},token));
   if(body.action==='support_list')return upstream(await post('/rest/v1/rpc/grillad_support_list',scope,token));
