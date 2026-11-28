@@ -45,6 +45,8 @@ try{
  const w=await createWorkspace("Replay A"),other=await createWorkspace("Replay B");
  const h=await fixture(w,"promoteur"),g=await fixture(w,"staff"),o=await fixture(other,"promoteur");
  process.env.WM_CHAT_MEDIA_QUALIFIED="true";
+ // Simulated approval strictly in the disposable runner, never a legal approval of the product.
+ process.env.WM_LEGAL_APPROVED_VERSION="wm-commercial-20261128-v1";
  const pushKey=randomBytes(32).toString("hex");process.env.WM_PUSH_QUALIFIED="true";process.env.WM_PUSH_ENCRYPTION_KEY=pushKey;
  await success(base+"/storage/v1/bucket",{id:"wm-chat-media",name:"wm-chat-media",public:false,file_size_limit:1048576});
  const code=await readFile("supabase/functions/widemeet-room/index.ts","utf8");
@@ -67,6 +69,20 @@ try{
  assert.ok((await request(auth+"/register",{...registration,display_name:"Changed"})).status>=400);
  }
  pass("actual autonomous individual and enterprise registration, stable retry, no automatic entitlement");
+ const commercialVersion="wm-commercial-20261128-v1";
+ const policy=await ok(auth+"/registration-policy",{});
+ assert.equal(policy.available,true);assert.equal(policy.terms_version,commercialVersion);assert.equal(policy.privacy_version,commercialVersion);
+ const commercialPassword="Qa7!"+randomBytes(18).toString("hex");
+ const commercialRegistration={installation_id:randomUUID(),request_id:randomUUID(),kind:"individual",display_name:"Commercial flow fixture",workspace_name:"Commercial flow fixture",password:commercialPassword,accepted_terms:true,accepted_privacy:true,terms_version:commercialVersion,privacy_version:commercialVersion};
+ assert.equal((await request(auth+"/register",{...commercialRegistration,accepted_terms:false})).status,400);
+ assert.equal((await request(auth+"/register",{...commercialRegistration,accepted_privacy:false})).status,400);
+ assert.equal((await request(auth+"/register",{...commercialRegistration,privacy_version:"obsolete"})).status,400);
+ const commercialAccount=await ok(auth+"/register",commercialRegistration);
+ const commercialSession=await login({login:commercialAccount.login_id,password:commercialPassword});
+ assert.equal(commercialSession.workspaces[0].kind,"individual");
+ const receipt=await success(base+"/rest/v1/wm_registration_receipts?select=terms_version,privacy_version&request_id=eq."+commercialRegistration.request_id,undefined,service,service,"GET");
+ assert.equal(receipt.length,1);assert.equal(receipt[0].terms_version,commercialVersion);assert.equal(receipt[0].privacy_version,commercialVersion);
+ pass("commercial registration: both acceptances, exact versions, durable receipt and real login");
  // Exercise the pass using a synthetic receipt in this disposable database only.
  assert.ok(individualSession);
  const ps=individualSession.access_token;

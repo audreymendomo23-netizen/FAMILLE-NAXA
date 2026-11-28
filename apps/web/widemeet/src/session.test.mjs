@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {parseSession,leaseValid,workspaceAccess,mayPay,login,authorizedRequest,switchWorkspace,requestRecovery} from "./session.mjs";
+import {parseSession,leaseValid,workspaceAccess,mayPay,login,authorizedRequest,switchWorkspace,requestRecovery,registrationPolicy,registerAccount,COMMERCIAL_LEGAL_VERSION} from "./session.mjs";
 const id="00000000-0000-4000-8000-000000000001",device="00000000-0000-4000-8000-000000000002",org="00000000-0000-4000-8000-000000000003",personal="00000000-0000-4000-8000-000000000004";
 const now=100000,mono=100, raw={app_id:"WIDEMEET",access_token:"test-only-token-1234567890",member_id:id,device_id:device,expires_at:200000,server_now:now,require_password_change:false,active_workspace_id:org,workspaces:[{id:org,kind:"enterprise",name:"Fixture",role:"promoteur",enabled:true},{id:personal,kind:"individual",name:"Personal",role:"owner",enabled:true}]};
 test("promoter pays active org only",()=>{const s=parseSession(raw,now,mono);assert.equal(mayPay(s,org,now,mono),true);assert.equal(mayPay(s,personal,now,mono),false)});
@@ -18,3 +18,24 @@ test("switch accepts exact server scope and refuses extended expiry",async()=>{c
 
 test("recovery requests are scoped and never send passwords or tokens",async()=>{const fake=async(url,opt)=>{assert.equal(url.pathname,"/widemeet-auth/request-recovery");assert.deepEqual(JSON.parse(opt.body),{app_id:"WIDEMEET",identifier:"WM-FIXTURE1",installation_id:device,platform:"web"});assert.equal(opt.cache,"no-store");assert.equal(opt.headers.Authorization,undefined);return {ok:true,json:async()=>({accepted:true})}};assert.equal(await requestRecovery("https://example.test/widemeet-auth"," wm-fixture1 ",fake,()=>device),true);});
 test("recovery rejects unknown transport and unconfirmed response",async()=>{let calls=0;const fake=async()=>{calls++;return {ok:true,json:async()=>({accepted:false})}};await assert.rejects(()=>requestRecovery("https://example.test/naxa-services-auth","WM-FIXTURE1",fake,()=>device));await assert.rejects(()=>requestRecovery("https://example.test/widemeet-auth","invalid",fake,()=>device));assert.equal(calls,0);await assert.rejects(()=>requestRecovery("https://example.test/widemeet-auth","WM-FIXTURE1",fake,()=>device),/RECOVERY_UNCONFIRMED/);});
+
+
+test("registration requires the exact approved commercial version and both legal acknowledgements",async()=>{
+ const base="https://example.test/functions/v1/widemeet-auth";let calls=0;
+ const policy=(available,version)=>async(url,init)=>{calls++;assert.equal(new URL(url).pathname,"/functions/v1/widemeet-auth/registration-policy");assert.equal(init.cache,"no-store");return Response.json({available,terms_version:version,privacy_version:version})};
+ assert.equal(await registrationPolicy(base,policy(true,COMMERCIAL_LEGAL_VERSION)),true);
+ assert.equal(await registrationPolicy(base,policy(false,COMMERCIAL_LEGAL_VERSION)),false);
+ assert.equal(await registrationPolicy(base,policy(true,"wm-replay-draft-20261126")),false);
+ const form={request_id:id,kind:"individual",display_name:"Fixture",workspace_name:"Fixture",password:"Valid-password-123",accepted_terms:true,accepted_privacy:true};
+ const send=async(url,init)=>{calls++;const b=JSON.parse(init.body);assert.equal(b.terms_version,COMMERCIAL_LEGAL_VERSION);assert.equal(b.privacy_version,COMMERCIAL_LEGAL_VERSION);assert.equal(b.accepted_privacy,true);assert.equal(b.accepted_terms,true);assert.equal(new URL(url).pathname,"/functions/v1/widemeet-auth/register");return Response.json({login_id:"WM-TESTFIXTURE1",kind:"individual"})};
+ await assert.rejects(registerAccount(base,{...form,accepted_privacy:false},send,()=>device));assert.equal(calls,3);
+ await assert.rejects(registerAccount(base,{...form,accepted_terms:false},send,()=>device));assert.equal(calls,3);
+ assert.equal((await registerAccount(base,form,send,()=>device)).login_id,"WM-TESTFIXTURE1");assert.equal(calls,4);
+});
+test("commercial legal text is identical on Android and Web",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const a=await readFile(new URL("./legal-commercial.json",import.meta.url),"utf8");
+ const b=await readFile(new URL("../../../android/widemeet/src/main/assets/legal-commercial.json",import.meta.url),"utf8");
+ assert.equal(a,b);const docs=JSON.parse(a);assert.equal(docs.version,COMMERCIAL_LEGAL_VERSION);
+ for(const locale of ["fr","en"])for(const kind of ["terms","privacy"])assert.ok(docs[locale][kind].sections.length>=6);
+});

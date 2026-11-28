@@ -124,7 +124,10 @@ Deno.serve(async request=>{
  return send(200,v);
  }
  const commercialVersion="wm-commercial-20261128-v1";
- const commercialReady=Deno.env.get("WM_SIGNUP_QUALIFIED")==="true"&&Deno.env.get("WM_LEGAL_APPROVED_VERSION")===commercialVersion;
+ const aliasDomain=(Deno.env.get("WM_AUTH_ALIAS_DOMAIN")??"").trim().toLowerCase();
+ const validAliasDomain=/^[a-z0-9.-]{3,100}$/.test(aliasDomain)&&aliasDomain.includes(".")&&!aliasDomain.startsWith(".")&&!aliasDomain.endsWith(".");
+ const commercialReady=validAliasDomain&&Deno.env.get("WM_SIGNUP_QUALIFIED")==="true"&&Deno.env.get("WM_LEGAL_APPROVED_VERSION")===commercialVersion;
+ const billingReplay=url==="http://127.0.0.1:54321"&&Deno.env.get("WM_BILLING_TEST")==="true";
  // The old contract is strictly confined to the existing disposable loopback Replay.
  const replayReady=url==="http://127.0.0.1:54321"&&Deno.env.get("WM_SIGNUP_QUALIFIED")==="true";
  if(action==="registration-policy")return send(200,{available:commercialReady,terms_version:commercialVersion,privacy_version:commercialVersion});
@@ -397,7 +400,7 @@ Deno.serve(async request=>{
  return result?send(200,result):send(403,{error:"scope"});
  }
  if(["billing-list","billing-create","billing-cancel"].includes(name)){
- if(Deno.env.get("WM_BILLING_TEST")!=="true")return send(503,{error:"unavailable"});
+ if(!billingReplay)return send(503,{error:"unavailable"});
  const result=await rest("rpc/wm_billing_action",{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
  return result?send(200,result):send(403,{error:"scope"});
  }
@@ -407,7 +410,7 @@ Deno.serve(async request=>{
  if(name==="billing"&&!["owner","promoteur"].includes(profile.role))return send(403,{error:"scope"});
  const ent=(await rest("wm_room_entitlements?select=plan,enabled,valid_until&workspace_id=eq."+eq(context.workspace_id)+"&limit=1"))?.[0];
  const valid=ent?.enabled===true&&Date.parse(ent.valid_until)>Date.now();
- if(name==="billing")return send(200,{plan:valid?ent.plan:null,valid_until:valid?ent.valid_until:null,kind:profile.workspace_kind,payment_available:false,intent_available:Deno.env.get("WM_BILLING_TEST")==="true"});
+ if(name==="billing")return send(200,{plan:valid?ent.plan:null,valid_until:valid?ent.valid_until:null,kind:profile.workspace_kind,payment_available:false,intent_available:billingReplay});
  const metrics=await rest("rpc/wm_identity_action",{method:"POST",body:JSON.stringify({p_hash,p_action:"dashboard-identity",p_data:{}})});
  if(!metrics)return send(403,{error:"scope"});
  const rows=valid||profile.workspace_kind==="individual"?await rest("rpc/wm_room_list",{method:"POST",body:JSON.stringify({p_hash})}):[];
