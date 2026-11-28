@@ -25,8 +25,8 @@ private data class PassPending(val signature:String,val event:String,val detail:
  val n=LocalSecurityNative.current;val s=n.session?:return;val site=n.site?:return;val g=n.generation;val scope=rememberCoroutineScope()
  var register by remember(screen,g){mutableStateOf("")};var code by remember(screen,g){mutableStateOf("")};var issued by remember(screen,g){mutableStateOf("")};var expires by remember(screen,g){mutableLongStateOf(0L)};var minutes by remember(screen,g){mutableStateOf("30")};var rows by remember(screen,g){mutableStateOf<List<JSONObject>>(emptyList())};var busy by remember(screen,g){mutableStateOf(false)};var status by remember(screen,g){mutableStateOf("")};var pending by remember(screen,g){mutableStateOf<PassPending?>(null)}
  fun act(op:String,target:String){if(busy)return;busy=true;scope.launch{try{
- val signature=op+":"+target+":"+(if(op=="issue")minutes else if(op=="consume")code else "")
- val e=pending?.takeIf{it.signature==signature}?:PassPending(signature,UUID.randomUUID().toString(),when(op){"issue"->JSONObject().put("token",securityPassToken()).put("minutes",minutes.toInt());"consume"->JSONObject().put("token",code.substringAfter("."));else->JSONObject()});pending=e
+ val signature=op+":"+target+":"+(if(op=="issue")minutes else if(op=="consume"||op=="consume_entry")code else "")
+ val e=pending?.takeIf{it.signature==signature}?:PassPending(signature,UUID.randomUUID().toString(),when(op){"issue"->JSONObject().put("token",securityPassToken()).put("minutes",minutes.toInt());"consume","consume_entry"->JSONObject().put("token",code.substringAfter("."));else->JSONObject()});pending=e
  val v=SecurityNativeApi.visitPass(s,site,e.event,op,target,e.detail)
  if(n.generation==g){if(op=="issue"){expires=java.time.Instant.parse(v.getString("expires_at")).toEpochMilli();check(expires>System.currentTimeMillis());issued=v.getString("pass_id")+"."+e.detail.getString("token")} else code="";pending=null;rows=emptyList();status="Contrôle de passage : "+v.optString("state")+" — aucune ouverture physique."}
  }catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g)status="Passage refusé ou non confirmé."}finally{if(n.generation==g)busy=false}}}
@@ -41,6 +41,7 @@ private data class PassPending(val signature:String,val event:String,val detail:
  Button(enabled=!busy,onClick={scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE).setPrompt("Scanner le QR temporaire").setBeepEnabled(false).setBarcodeImageEnabled(false))}){Text("Scanner le QR")}
  OutlinedTextField(code,{code=it},enabled=!busy,label={Text("Code de passage")})
  Button(enabled=!busy&&Regex("^[a-f0-9-]{36}\\.[a-f0-9]{64}$").matches(code),onClick={act("consume",code.substringBefore("."))}){Text("Vérifier et consommer le code")}
+ Button(enabled=!busy&&valid.matches(code),onClick={act("consume_entry",code.substringBefore("."))}){Text("Vérifier le QR et consigner l’entrée")}
  Button(enabled=!busy,onClick={busy=true;scope.launch{try{val v=SecurityNativeApi.records(s,site,"sec_visit_passes");if(n.generation==g)rows=v}catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g){rows=emptyList();status="Lecture refusée."}}finally{if(n.generation==g)busy=false}}}){Text("Actualiser les codes")}
  rows.forEach{r->Text(r.optString("id")+" · "+r.optString("expires_at")+" · "+(if(!r.isNull("revoked_at"))"Révoqué" else if(!r.isNull("used_at"))"Utilisé" else "Non utilisé"));if(r.isNull("used_at")&&r.isNull("revoked_at"))Button(enabled=!busy,onClick={act("revoke",r.optString("id"))}){Text("Révoquer le code")}}
  Text(status)

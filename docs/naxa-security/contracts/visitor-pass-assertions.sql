@@ -34,4 +34,15 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000172'
 do $q$begin
  begin perform public.sec_visit_pass('10000000-0000-0000-0000-000000000171','20000000-0000-0000-0000-000000000171','50000000-0000-0000-0000-000000000179','consume','50000000-0000-0000-0000-000000000177','{"token":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}');raise exception 'revoked pass accepted';exception when insufficient_privilege then null;end;
 end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000171',true);
+select public.sec_visit_pass('10000000-0000-0000-0000-000000000171','20000000-0000-0000-0000-000000000171','50000000-0000-0000-0000-000000000180','issue',(select id from public.sec_service_register where request_id='30000000-0000-0000-0000-000000000171'),'{"token":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","minutes":10}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000172',true);
+do $q$declare o uuid:='10000000-0000-0000-0000-000000000171';s uuid:='20000000-0000-0000-0000-000000000171';p uuid:='50000000-0000-0000-0000-000000000180';e uuid:=gen_random_uuid();v jsonb;d jsonb:='{"token":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}';begin
+ v:=public.sec_visit_pass(o,s,e,'consume_entry',p,d);
+ if v->>'state'<>'entered' or v->>'physical_access'<>'false' or v<>public.sec_visit_pass(o,s,e,'consume_entry',p,d) then raise exception 'entry receipt';end if;
+ if (select count(*) from public.sec_passage_logs where register_id=(v->>'register_id')::uuid and direction='entry')<>1 then raise exception 'atomic entry';end if;
+ begin perform public.sec_visit_pass(o,s,gen_random_uuid(),'consume_entry',p,d);raise exception 'repeat entry';exception when insufficient_privilege then null;end;
+ perform public.sec_field_action(o,s,gen_random_uuid(),'passage',(v->>'register_id')::uuid,'{"direction":"exit","reason":"QA checkout"}');
+ if (select count(*) from public.sec_passage_logs where register_id=(v->>'register_id')::uuid and direction='exit')<>1 then raise exception 'checkout absent';end if;
+end $q$;
 reset role;rollback;
