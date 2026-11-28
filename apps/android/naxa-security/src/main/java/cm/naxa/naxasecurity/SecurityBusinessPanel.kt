@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
  SecurityModulePanel(screen.id)
  SecurityNativeCaseReport(screen.id)
  SecurityNativeField(screen.id)
+ SecurityNativeVisitorPass(screen.id)
  SecurityNativeAudit(screen.id)
  SecurityActivityInbox(screen.id)
  SecurityNativeCatalog(screen.id)
