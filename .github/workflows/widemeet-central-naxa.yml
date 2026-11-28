@@ -25,6 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_central_fixture.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_central_registry_prerequisite.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_billing.sql

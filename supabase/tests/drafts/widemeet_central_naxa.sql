@@ -10,7 +10,7 @@ declare
 begin
  insert into auth.users(id) values(admin),(agent),(other),(low),(customer),(aaccount),(oaccount);
  insert into auth.sessions values(asid,admin,'aal2',exp),(ssid,agent,'aal2',exp),(osid,other,'aal2',exp),(lsid,low,'aal1',exp);
- insert into famille_core.family_admins values(admin,'active',null);
+ insert into famille_core.family_admins(user_id,status,revoked_at) values(admin,'active',null);
  insert into public.wm_accounts(id,auth_user_id,login_id,auth_alias,display_name) values
  (customer,customer,'WM-CUSTOMER1','customer@fixture.test','Customer'),
  (aaccount,aaccount,'WM-AGENT0001','agent@fixture.test','Agent'),

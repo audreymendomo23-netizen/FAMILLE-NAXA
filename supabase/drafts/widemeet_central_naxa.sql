@@ -40,7 +40,7 @@ revoke all on function public.wm_support_session_live(uuid) from public,anon,aut
 grant execute on function public.wm_support_session_live(uuid) to service_role;
 create function public.wm_central_dispatch(p_user uuid,p_session uuid,p_exp timestamptz,p_new_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public,auth,famille_core as $wm$
-declare adm boolean; ag uuid; wid uuid; dev uuid; h text; tid uuid; target uuid; enabled boolean; v jsonb;
+declare adm boolean; ag uuid; wid uuid; dev uuid; h text; tid uuid; target uuid; v_enabled boolean; v jsonb;
 begin
  if p_exp is null or p_exp<=clock_timestamp()+interval '1 second' or not public.wm_central_auth_live(p_user,p_session) then return null;end if;
  select exists(select 1 from famille_core.family_admins f where f.user_id=p_user and f.status='active' and f.revoked_at is null) into adm;
@@ -71,18 +71,18 @@ begin
  if p_action='agent-set' and adm then
   target:=(p_data->>'operator_id')::uuid;ag:=(p_data->>'account_id')::uuid;
   if target is null or ag is null or target=p_user or jsonb_typeof(p_data->'enabled') is distinct from 'boolean' then return null;end if;
-  enabled:=(p_data->>'enabled')::boolean;
+  v_enabled:=(p_data->>'enabled')::boolean;
   -- Map only already-provisioned dedicated support accounts. No new passwords or identities.
   if not exists(select 1 from auth.users u where u.id=target) or not exists(select 1 from public.wm_support_agents a join public.wm_accounts x on x.id=a.account_id where a.account_id=ag and a.enabled and x.enabled and x.auth_user_id<>target)
    or (select count(*) from public.wm_memberships where account_id=ag)<>1
    or not exists(select 1 from public.wm_memberships m join public.wm_workspaces w on w.id=m.workspace_id where m.account_id=ag and m.enabled and m.role='owner' and w.kind='individual' and w.enabled)
    or exists(select 1 from famille_core.family_admins where user_id=target and status='active') then return null;end if;
-  insert into public.wm_central_agent_links(operator_id,account_id,enabled) values(target,ag,enabled)
+  insert into public.wm_central_agent_links(operator_id,account_id,enabled) values(target,ag,v_enabled)
    on conflict(operator_id) do update set enabled=excluded.enabled,changed_at=clock_timestamp()
    where wm_central_agent_links.account_id=excluded.account_id;
   if not found then return null;end if;
-  if not enabled then update public.wm_device_sessions d set revoked_at=clock_timestamp(),refresh_hash=null,refresh_until=null where d.revoked_at is null and exists(select 1 from public.wm_central_support_sessions z where z.operator_id=target and z.device_id=d.id);end if;
-  insert into public.wm_central_audit(actor_id,action,target_id) values(p_user,case when enabled then 'agent-enabled' else 'agent-disabled' end,target);
+  if not v_enabled then update public.wm_device_sessions d set revoked_at=clock_timestamp(),refresh_hash=null,refresh_until=null where d.revoked_at is null and exists(select 1 from public.wm_central_support_sessions z where z.operator_id=target and z.device_id=d.id);end if;
+  insert into public.wm_central_audit(actor_id,action,target_id) values(p_user,case when v_enabled then 'agent-enabled' else 'agent-disabled' end,target);
   return jsonb_build_object('saved',true);
  end if;
  if ag is null or p_action not in ('support-queue','support-claim','support-read','support-reply','support-close','support-release','support-call-read','support-call-accept','support-call-decline','support-call-end','support-call-heartbeat','support-call-grant','support-screen-stop') then return null;end if;
