@@ -1,0 +1,2 @@
+import {defineConfig} from '@playwright/test';
+export default defineConfig({testDir:'./e2e-replay',timeout:120000,workers:1,retries:0,reporter:'dot',use:{baseURL:'http://127.0.0.1:4181',browserName:'chromium',trace:'off',screenshot:'off',video:'off'},webServer:{command:'npx vite preview --host 127.0.0.1 --port 4181 --strictPort',port:4181,reuseExistingServer:false}});

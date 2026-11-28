@@ -1,0 +1,41 @@
+name: GRILLAD — NAXA Replay E2E (real Auth, no production)
+on:
+  push:
+    branches: [work/grillad-foundation-20261127]
+    paths:
+      - '.github/workflows/grillad-naxa-replay.yml'
+      - 'scripts/grillad/replay-preflight.mjs'
+      - 'apps/web/grillad/e2e-replay/**'
+      - 'apps/web/grillad/playwright.replay.config.ts'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: grillad-naxa-replay
+  cancel-in-progress: false
+jobs:
+  replay:
+    name: NAXA Replay — real accounts / Chromium
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NAXA_STORAGE_E2E_URL: ${{ secrets.NAXA_STORAGE_E2E_URL }}
+      NAXA_STORAGE_E2E_ANON_KEY: ${{ secrets.NAXA_STORAGE_E2E_ANON_KEY }}
+      NAXA_REPLAY_GRILLAD_OWNER_PHONE: ${{ secrets.NAXA_REPLAY_GRILLAD_OWNER_PHONE }}
+      NAXA_REPLAY_GRILLAD_OWNER_PASSWORD: ${{ secrets.NAXA_REPLAY_GRILLAD_OWNER_PASSWORD }}
+      NAXA_REPLAY_GRILLAD_SELLER_PHONE: ${{ secrets.NAXA_REPLAY_GRILLAD_SELLER_PHONE }}
+      NAXA_REPLAY_GRILLAD_SELLER_PASSWORD: ${{ secrets.NAXA_REPLAY_GRILLAD_SELLER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail closed unless authorized NAXA Replay is available
+        run: node scripts/grillad/replay-preflight.mjs
+      - run: npm install --workspace @famille/grillad-web --include-workspace-root=false --ignore-scripts
+      - run: npx --workspace @famille/grillad-web playwright install --with-deps chromium
+      - run: node scripts/grillad/cloudflare-pages-build.mjs
+      - name: Real Replay browser login and database-backed permissions (no interception)
+        run: npm exec --workspace @famille/grillad-web -- playwright test --config playwright.replay.config.ts
