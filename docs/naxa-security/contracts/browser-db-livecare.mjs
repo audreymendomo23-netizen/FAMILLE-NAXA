@@ -8,7 +8,7 @@ const literal=v=>v===null?"null":"convert_from(decode('"+Buffer.from(String(v),"
 const uuid=v=>literal(v)+"::uuid",json=v=>literal(JSON.stringify(v))+"::jsonb";
 function query(user,sql){assert.ok(Object.values(users).includes(user));const command="begin;set local role authenticated;select set_config('request.jwt.claim.sub',"+literal(user)+",true);"+sql+";commit;";
  const out=execFileSync("psql",["-X","-qAt","-v","ON_ERROR_STOP=1"],{input:command,encoding:"utf8",timeout:10000,stdio:["pipe","pipe","pipe"]}).trim().split("\n");return JSON.parse(out.at(-1))}
-const reads=new Set(["sec_sites","sec_support_cases","sec_support_messages","sec_module_requests","sec_incidents","sec_work_orders","sec_preferences","sec_inbox","sec_incident_notes","sec_shifts","sec_maintenance_details","sec_visit_passes","sec_service_register"]);
+const reads=new Set(["sec_sites","sec_support_cases","sec_support_messages","sec_module_requests","sec_incidents","sec_work_orders","sec_preferences","sec_inbox","sec_incident_notes","sec_shifts","sec_maintenance_details","sec_visit_passes","sec_service_register","sec_audit_timeline"]);
 const browser=await chromium.launch({headless:true});const ctx=await browser.newContext({viewport:{width:420,height:900},serviceWorkers:"block"});
 let lastCase=null,lastIncident=null,dbWrites=0,denials=0;
 await ctx.route("**/*",async route=>{const req=route.request(),u=new URL(req.url());if(u.origin===origin)return route.continue();if(u.origin!==api)return route.abort();
@@ -89,4 +89,6 @@ try{
  await pass.getByLabel("Code de passage",{exact:true}).fill(code);await pass.getByRole("button",{name:"Vérifier et consommer le code"}).click();await pass.getByText("Passage refusé ou non confirmé.").waitFor();
  assert.ok(query(users.manager,"select to_jsonb(p) from public.sec_visit_passes p where id="+uuid(code.split(".")[0])).used_at);
  console.log("PASS Chromium + PostgreSQL: single-use visitor control and replay denial");
+ await page.goto(origin+"/#/B6.19");const audit=page.getByRole("region",{name:"Journal transversal"});await audit.getByRole("button",{name:"Actualiser le journal transversal"}).click();await audit.getByText("Journal autorisé chargé.",{exact:true}).waitFor();await audit.getByText(/service · visit_consume · checked/).waitFor();assert.equal(await audit.getByText(code,{exact:false}).count(),0);const ownAudit=query(users.customer,"select coalesce(jsonb_agg(to_jsonb(a)),'[]') from public.sec_audit_timeline a");assert.ok(ownAudit.some(a=>a.operation==="visit_consume"&&a.actor_id===users.customer));assert.ok(!JSON.stringify(ownAudit).includes(code.split(".")[1]));assert.ok(ownAudit.every(a=>!Object.hasOwn(a,"detail")&&!Object.hasOwn(a,"receipt")));
+ await logout();await login("other");await page.goto(origin+"/#/B6.19");await audit.getByRole("button",{name:"Actualiser le journal transversal"}).click();await audit.getByText("Journal autorisé chargé.",{exact:true}).waitFor();assert.equal(await audit.getByText(/visit_consume/).count(),0);console.log("PASS Chromium + PostgreSQL: audit timeline scoped, no pass secret or payload");
 }finally{await ctx.close();await browser.close()}
