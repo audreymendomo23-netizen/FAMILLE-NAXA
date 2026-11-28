@@ -13,6 +13,18 @@ container="$(docker ps --filter ancestor=postgres:17 --format '{{.ID}}')"
 fixture=supabase/local-tests/grillad_auth_bridge_assertions.sql
 [[ "$(tail -n 1 "$fixture")" == 'rollback;' ]]
 sed '$s/^rollback;$/commit;/' "$fixture" | psql -X -v ON_ERROR_STOP=1
+# Populate the newly added transverse domains in the isolated database before dump.
+psql -X -v ON_ERROR_STOP=1 <<'SQL'
+begin;
+insert into grillad_private.referral_codes(org) values('b2000000-0000-0000-0000-000000000001');
+insert into famille_core.support_tickets(id,user_id,app_id,organization_id,subject,description)
+ select 'b7a00000-0000-0000-0000-000000000001','b1000000-0000-0000-0000-000000000001',id,'b2000000-0000-0000-0000-000000000001','Recovery fixture','Synthetic support text' from famille_core.applications where code='grillad';
+insert into grillad_private.support_messages(id,ticket,author,author_kind,body)
+ values('b7a00000-0000-0000-0000-000000000002','b7a00000-0000-0000-0000-000000000001','b1000000-0000-0000-0000-000000000001','customer','Synthetic conversation');
+insert into grillad_private.backup_preferences(org,site,actor,frequency,local_minute,weekday,monthday)
+ values('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','b1000000-0000-0000-0000-000000000001','weekly',360,1,1);
+commit;
+SQL
 docker exec "$container" createdb -U postgres grillad_restore_test
 [[ "$(PGDATABASE=grillad_restore_test psql -XAt -v ON_ERROR_STOP=1 -c 'select current_database()')" == grillad_restore_test ]]
 openssl rand -hex 32 > "$tmp/pass"
@@ -55,6 +67,9 @@ do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-00
 begin
  if jsonb_array_length(public.grillad_workspace())<>2 or (public.grillad_report(o,s,d,d,false,null,null,null)->>'ca')::int<>2000 then raise exception 'restored owner scope or totals';end if;
  begin perform count(*) from grillad_private.sales;raise exception 'restored private access leaked';exception when insufficient_privilege then null;end;
+ if public.grillad_referral(o,s,'list')->>'code' is null then raise exception 'restored referral missing';end if;
+ if public.grillad_backup_preferences(o,s)->>'frequency' is distinct from 'weekly' then raise exception 'restored schedule missing';end if;
+ if public.grillad_support_thread(o,s,'b7a00000-0000-0000-0000-000000000001')->'messages'->0->>'body' is distinct from 'Synthetic conversation' then raise exception 'restored conversation missing';end if;
 end $$;
 select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000002',true);
 select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000012","app_metadata":{}}',true);

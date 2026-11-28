@@ -160,4 +160,82 @@ do $test$ declare t uuid:='b7000000-0000-0000-0000-000000000001';v jsonb;begin
 end $test$;
 reset role;
 
+
+-- Independent test-only organization and owner; no hosted fixture or real payment.
+insert into auth.users(id,email) values('b1000000-0000-0000-0000-000000000005','grillad-referral@x.invalid');
+insert into auth.sessions(id,user_id) values('b1000000-0000-0000-0000-000000000015','b1000000-0000-0000-0000-000000000005');
+insert into famille_core.organizations(id,legal_name,organization_type,status) values('b2000000-0000-0000-0000-000000000005','Referral fixture','retail','active');
+insert into famille_core.organization_apps(organization_id,app_id,status) select 'b2000000-0000-0000-0000-000000000005',id,'active' from famille_core.applications where code='grillad';
+insert into famille_core.locations(id,organization_id,name) values('b3000000-0000-0000-0000-000000000005','b2000000-0000-0000-0000-000000000005','Referral fixture');
+insert into grillad_private.enabled_sites(org,site) values('b2000000-0000-0000-0000-000000000005','b3000000-0000-0000-0000-000000000005');
+insert into famille_core.client_app_access(user_id,app_id,status) select 'b1000000-0000-0000-0000-000000000005',id,'granted' from famille_core.applications where code='grillad';
+insert into famille_core.memberships(user_id,organization_id,app_id,status) select 'b1000000-0000-0000-0000-000000000005','b2000000-0000-0000-0000-000000000005',id,'active' from famille_core.applications where code='grillad';
+insert into famille_core.role_assignments(membership_id,app_id,organization_id,role_code) select id,app_id,organization_id,'owner' from famille_core.memberships where user_id='b1000000-0000-0000-0000-000000000005';
+insert into famille_core.subscriptions(organization_id,app_id,plan_id,status,starts_at,ends_at) select 'b2000000-0000-0000-0000-000000000005',app_id,id,'active',now()-interval '1 day',now()+interval '1 day' from famille_core.plans where code='grillad_access_month';
+insert into famille_private.account_app_access(user_id,app_code,account_kind,organization_id,location_id,role_code) values('b1000000-0000-0000-0000-000000000005','grillad','professional','b2000000-0000-0000-0000-000000000005',null,'owner');
+set role service_role;
+do $$begin if not public.grillad_auth_begin(repeat('5',64),false) or not public.grillad_auth_finish(repeat('5',64),'b1000000-0000-0000-0000-000000000005','b1000000-0000-0000-0000-000000000015','b4000000-0000-0000-0000-000000000005','android') then raise exception 'referral owner session';end if;end $$;
+reset role;
+set role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+select set_config('grillad.fixture.referrer_code',public.grillad_referral('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','generate')->>'code',true);
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000005',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000015","app_metadata":{}}',true);
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000005';s uuid:='b3000000-0000-0000-0000-000000000005';v jsonb;c text:=current_setting('grillad.fixture.referrer_code');begin
+ v:=public.grillad_referral(o,s,'attach',c);
+ if v->>'linked' is distinct from 'true' or public.grillad_referral(o,s,'attach',c)<>v then raise exception 'referral link or replay';end if;
+ perform set_config('grillad.fixture.referred_code',public.grillad_referral(o,s,'generate')->>'code',true);
+ begin perform public.grillad_referral('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','list');raise exception 'foreign referral access';exception when insufficient_privilege then null;end;
+end $$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';v jsonb;begin
+ begin perform public.grillad_referral(o,s,'attach',current_setting('grillad.fixture.referred_code'));raise exception 'referral cycle accepted';exception when insufficient_privilege then null;end;
+ v:=public.grillad_referral(o,s,'list');if v->>'referrals'<>'1' or v->>'paid_referrals'<>'0' then raise exception 'unpaid conversion counted';end if;
+end $$;
+reset role;
+-- Explicit synthetic reconciled proof and its negative controls; not a customer debit.
+insert into grillad_private.central_requests(id,org,site,actor,kind,details,status,resolved_at,resolution) values('b8100000-0000-0000-0000-000000000005','b2000000-0000-0000-0000-000000000005','b3000000-0000-0000-0000-000000000005','b1000000-0000-0000-0000-000000000005','renewal','{"plan":"grillad_access_month","amount":2000}','processed',now(),'b8200000-0000-0000-0000-000000000005');
+insert into famille_core.payment_intents(id,subscription_id,expected_amount_fcfa,channel,status) select 'b8300000-0000-0000-0000-000000000005',id,2000,'fixture','matched' from famille_core.subscriptions where organization_id='b2000000-0000-0000-0000-000000000005';
+insert into grillad_private.renewal_payment_links(request_id,intent_id) values('b8100000-0000-0000-0000-000000000005','b8300000-0000-0000-0000-000000000005');
+insert into famille_core.payment_matches(id,payment_intent_id,provider,transaction_reference,amount_fcfa,verified_at,status) values('b8200000-0000-0000-0000-000000000005','b8300000-0000-0000-0000-000000000005','fixture','REFERRAL-CI-5',1999,now(),'confirmed');
+set role authenticated;
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';begin
+ if public.grillad_referral(o,s,'list')->>'paid_referrals'<>'0' then raise exception 'wrong amount conversion';end if;
+end $$;
+reset role;
+update famille_core.payment_matches set amount_fcfa=2000,verified_at=now()-interval '1 day' where id='b8200000-0000-0000-0000-000000000005';
+set role authenticated;
+do $$begin if public.grillad_referral('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','list')->>'paid_referrals'<>'0' then raise exception 'prior proof counted';end if;end $$;
+reset role;
+update famille_core.payment_matches set verified_at=now() where id='b8200000-0000-0000-0000-000000000005';
+set role authenticated;
+do $$declare v jsonb;begin
+ v:=public.grillad_referral('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','list');
+ if v->>'paid_referrals'<>'1' or v->>'reward_status'<>'pending_policy' then raise exception 'verified conversion or unauthorized reward';end if;
+end $$;
+reset role;
+
+-- Agent reply and revocation must preserve messages and deny cross-app access.
+insert into famille_core.support_tickets(id,user_id,app_id,subject,description) select 'b7000000-0000-0000-0000-000000000005','b1000000-0000-0000-0000-000000000005',id,'Foreign fixture','Other application support fixture' from famille_core.applications where code='zipple';
+set role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000003',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000013","aal":"aal2","app_metadata":{}}',true);
+do $$declare t uuid:='b7000000-0000-0000-0000-000000000001';e uuid:='b7100000-0000-0000-0000-000000000001';v jsonb;begin
+ begin perform public.grillad_agent_thread('b7000000-0000-0000-0000-000000000005','claim');raise exception 'foreign app ticket';exception when insufficient_privilege then null;end;
+ v:=public.grillad_agent_thread(t,'reply',e,'Agent test response');
+ if jsonb_array_length(v->'messages')<>1 or public.grillad_agent_thread(t,'reply',e,'Agent test response')<>v then raise exception 'agent reply replay';end if;
+end $$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000004',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000014","aal":"aal2","app_metadata":{}}',true);
+select public.grillad_central_agent_access('b1000000-0000-0000-0000-000000000003',false,'Synthetic agent revocation');
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000003',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000013","aal":"aal2","app_metadata":{}}',true);
+do $$begin begin perform public.grillad_agent_queue();raise exception 'revoked queue access';exception when insufficient_privilege then null;end;end $$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+do $$declare v jsonb;begin v:=public.grillad_support_thread('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','b7000000-0000-0000-0000-000000000001');if jsonb_array_length(v->'messages')<>1 or v->'messages'->0->>'body'<>'Agent test response' then raise exception 'revocation lost conversation';end if;end $$;
+reset role;
+
 rollback;
