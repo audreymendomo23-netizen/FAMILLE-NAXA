@@ -86,6 +86,12 @@ internal object SecurityNativeApi {
  suspend fun activityChannels(s:SecurityNativeSession,site:SecurityNativeSite):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);val v=JSONObject(call("/rest/v1/rpc/sec_activity_channels",s.token,JSONObject().put("p_org",site.organization).put("p_site",site.id)));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("user_id")==s.user);val a=v.getJSONObject("channels");check(listOf("fcm","web_push","sms","whatsapp","email").all{a.opt(it) is Boolean});a
  }
+ suspend fun evidenceShare(s:SecurityNativeSession,site:SecurityNativeSite,body:JSONObject):JSONObject=withContext(Dispatchers.IO){
+  checkScope(s,site);val p=JSONObject(body.toString()).put("p_org",site.organization).put("p_site",site.id);val v=JSONObject(call("/rest/v1/rpc/sec_evidence_share",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user&&v.optString("operation")==p.optString("p_op"));v.getJSONObject("result")
+ }
+ suspend fun evidenceShareDownload(s:SecurityNativeSession,site:SecurityNativeSite,id:String):JSONObject=withContext(Dispatchers.IO){
+  checkScope(s,site);val v=JSONObject(call("/rest/v1/rpc/sec_evidence_share_download",s.token,JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_id",SecurityNativeContract.uuid(id))));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user&&v.optString("share_id")==id);v
+ }
  suspend fun alarmAction(s:SecurityNativeSession,site:SecurityNativeSite,event:String,alarm:String,op:String,reason:String):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);require(op in setOf("ack","escalate","review"));val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_event",SecurityNativeContract.uuid(event)).put("p_alarm",SecurityNativeContract.uuid(alarm)).put("p_op",op).put("p_reason",reason);val v=JSONObject(call("/rest/v1/rpc/sec_alarm_action",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("actor_id")==s.user&&v.optString("event_id")==event&&v.optString("alarm_id")==alarm&&v.optString("operation")==op&&v.opt("physical_action")==false);v
  }
