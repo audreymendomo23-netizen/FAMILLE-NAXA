@@ -390,3 +390,6 @@ Total 16 actions planifiées, aucune clôture V2 prouvée, pas de taux de constr
 
 ## 28/11/2026 — Audit de reprise V2
 Audit des sources de WideMeet, NAXA historique, NAXA SERVICES, ZIPPLE, GRILLAD, SECURITY, BOOTIK et inventaire des autres : [AUDIT_REUTILISATION_V2_20261128.md](AUDIT_REUTILISATION_V2_20261128.md). Matrice des 16 actions, SHA/blob, distinction reprise/adaptation/nouveau, contrats communs avant parallélisation. Priorité à WideMeet déjà intégré ; aucune UI sœur à copier, master inchangé. Loyable/Campus shells vus, COTIZ/KIOSKO/HOTEL inventaire seul, JOBLY non localisé. Pas de tests ni CI réexécutés, pas de portage ou progression V2 déclarés, pas de branche code, main, déploiement ou migration. 0/16 clôtures V2 restent attestées.
+
+## 28/11/2026 — Arbitrage de navigation Mon entreprise
+Actualités et Annonces sont deux rubriques intégrées de Mon entreprise. Une actualité = publication récente d'un collaborateur habilité, visible dans le fil selon l'audience ; annonces = communications officielles selon droits. Pas de modules autonomes dupliqués. Raccourcis éventuels vers rubriques ; onglets textuels proposés sans modifier le master. V2-03 inchangé en nombre d'actions, 0/16 clôtures V2 attestées ; mise à jour documentaire uniquement.

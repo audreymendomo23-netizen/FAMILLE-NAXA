@@ -38,3 +38,6 @@ Drive autonome, coédition, connaissances, management, assistant IA entreprise, 
 
 ## Audit de réutilisation préalable (28/11/2026)
 Matrice technique des 16 actions et références immuables : [AUDIT_REUTILISATION_V2_20261128.md](AUDIT_REUTILISATION_V2_20261128.md). Prioriser WM, reprendre contrats et tests des sœurs sans copier leur UI ni leurs données. Inventaire et lecture ciblée réalisés ; portage et qualification non démarrés. Figer contrats identité/présence/notification/source fichier avant travail parallèle.
+
+## Précision de périmètre V2-03 (28/11/2026)
+[V] V2-03.1 : Actualités est le fil des publications récentes des staffs habilités dans Mon entreprise ; contrôler publication, visibilité ciblée et absence de fuite. V2-03.3 : Annonces est une rubrique interne de Mon entreprise, distincte du fil par nature officielle et droits, non un module autonome. V2-03.4 : proposer des onglets textuels conformes au master et raccourcis éventuels pointant directement vers la rubrique, sans duplication ni nouvelle carte. Vérifier navigation et accès négatifs. Aucun changement du nombre d'actions, aucune recette exécutée.
