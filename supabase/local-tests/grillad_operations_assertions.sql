@@ -101,4 +101,14 @@ do $test$ declare v jsonb;e uuid:=gen_random_uuid();q uuid:='c2000000-0000-0000-
  v:=public.grillad_security_tick(10);if (v->>'processed')::int<>1 or (v->>'failed')::int<>0 then raise exception 'security tick';end if;
 end $test$;
 reset role;
+-- Reading an inactive donor must not expose old cached inventory.
+update public.sec_sites set active=false where id='c4000000-0000-0000-0000-000000000002';
+set role authenticated;
+select set_config('request.jwt.claim.sub','c1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"c1000000-0000-0000-0000-000000000011"}',true);
+do $test$ declare v jsonb;begin
+ v:=public.grillad_security_list(current_setting('grillad.test.org')::uuid,current_setting('grillad.test.site')::uuid);
+ if (v->>'available')::boolean or jsonb_array_length(v->'cameras')<>0 or jsonb_array_length(v->'incidents')<>0 or v->>'reason'<>'SOURCE_INACTIVE' then raise exception 'inactive source leak';end if;
+end $test$;
+reset role;
 rollback;

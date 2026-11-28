@@ -9,6 +9,7 @@ Deno.serve(async req=>{
   if(!r.ok)throw Error('JOB_REFUSED');return await r.json();
  };
  const results=await Promise.allSettled([rpc('grillad_daily_tick',{p_limit:100}),rpc('grillad_purge_attendance_photos',{}),rpc('grillad_central_reconcile',{p_limit:100}),rpc('grillad_security_tick',{p_limit:100})]);
- const status=results.every(x=>x.status==='fulfilled')?200:503;
- return new Response(JSON.stringify({daily:results[0].status==='fulfilled',purge:results[1].status==='fulfilled',central:results[2].status==='fulfilled',security:results[3].status==='fulfilled'&&Number(results[3].value?.failed??0)===0}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+ const securityOk=results[3].status==='fulfilled'&&Number(results[3].value?.failed??0)===0;
+ const status=results.every(x=>x.status==='fulfilled')&&securityOk?200:503;
+ return new Response(JSON.stringify({daily:results[0].status==='fulfilled',purge:results[1].status==='fulfilled',central:results[2].status==='fulfilled',security:securityOk}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 });
