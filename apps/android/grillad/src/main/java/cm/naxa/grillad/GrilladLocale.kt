@@ -31,7 +31,7 @@ internal fun grilladLabel(key:String,locale:String):String=if(locale=="fr")key e
  "Enregistrer" -> if(locale=="en")"Save" else "Danndu"
  "Annuler" -> if(locale=="en")"Cancel" else "Haaytu"
  "Quantité" -> if(locale=="en")"Quantity" else "Keewal"
- "Prix" -> if(locale=="en")"Prix" else "Prix"
+ "Prix" -> if(locale=="en")"Price" else "Prix"
  "Mot de passe" -> if(locale=="en")"Password" else "Finnde"
  "Se connecter" -> if(locale=="en")"Sign in" else "Naatu"
  "Aide" -> if(locale=="en")"Help" else "Ballal"
@@ -42,7 +42,7 @@ internal fun grilladLabel(key:String,locale:String):String=if(locale=="fr")key e
  "Indisponible" -> if(locale=="en")"Unavailable" else "Alaa jooni"
  "Créer un ticket" -> if(locale=="en")"Create ticket" else "Sos kayit"
  "Envoyer la demande" -> if(locale=="en")"Submit request" else "Neldu ɗaɓɓitannde"
- "Retour" -> if(locale=="en")"Retour" else "Retour"
+ "Retour" -> if(locale=="en")"Back" else "Retour"
  "Nouvelle vente" -> if(locale=="en")"New sale" else "Jaaygol kesol"
  else -> key
 }

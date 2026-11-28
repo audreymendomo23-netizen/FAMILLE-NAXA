@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {referralCodeFromHash,referralLink} from './referral-link.mjs';
+const code='abcdef0123456789abcdef0123456789';
+test('referral link keeps app path but never propagates query tokens or other fragments',()=>{const href=referralLink('https://grillad.example/app?token=secret#connect=private',code);assert.equal(href,'https://grillad.example/app#referral='+code.toUpperCase());assert.equal(referralCodeFromHash(new URL(href).hash),code.toUpperCase());assert.equal(referralCodeFromHash('#referral='+code+'&x=1'),null);assert.equal(referralCodeFromHash('#connect='+code),null);assert.throws(()=>referralLink('https://grillad.example','bad'));assert.throws(()=>referralLink('javascript:alert(1)',code))});

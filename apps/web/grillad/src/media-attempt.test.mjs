@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {mediaAttempt} from './media-attempt.mjs';
+test('late media permission after cancellation is rejected, including after a new attempt',()=>{const a=mediaAttempt();const first=a.begin();assert.equal(a.valid(first),true);a.invalidate();assert.equal(a.valid(first),false);const second=a.begin();assert.equal(a.valid(first),false);assert.equal(a.valid(second),true);a.invalidate();assert.equal(a.valid(second),false)});

@@ -121,7 +121,7 @@ export const labels={
     "Keewal"
   ],
   "Prix": [
-    "Prix",
+    "Price",
     "Prix"
   ],
   "Mot de passe": [
@@ -165,7 +165,7 @@ export const labels={
     "Neldu ɗaɓɓitannde"
   ],
   "Retour": [
-    "Retour",
+    "Back",
     "Retour"
   ],
   "Nouvelle vente": [

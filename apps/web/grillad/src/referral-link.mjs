@@ -1,0 +1,2 @@
+export function referralCodeFromHash(hash){return /^#referral=([0-9a-f]{32})$/i.exec(hash)?.[1].toUpperCase()??null}
+export function referralLink(href,code){if(!/^[0-9a-f]{32}$/i.test(code))throw Error('INVALID_REFERRAL');const u=new URL(href);if(!['https:','http:'].includes(u.protocol))throw Error('INVALID_ORIGIN');u.username='';u.password='';u.search='';u.hash='referral='+code.toUpperCase();return u.href}
