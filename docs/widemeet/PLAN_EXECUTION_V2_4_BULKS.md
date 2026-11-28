@@ -41,3 +41,7 @@ Matrice technique des 16 actions et références immuables : [AUDIT_REUTILISATIO
 
 ## Précision de périmètre V2-03 (28/11/2026)
 [V] V2-03.1 : Actualités est le fil des publications récentes des staffs habilités dans Mon entreprise ; contrôler publication, visibilité ciblée et absence de fuite. V2-03.3 : Annonces est une rubrique interne de Mon entreprise, distincte du fil par nature officielle et droits, non un module autonome. V2-03.4 : proposer des onglets textuels conformes au master et raccourcis éventuels pointant directement vers la rubrique, sans duplication ni nouvelle carte. Vérifier navigation et accès négatifs. Aucun changement du nombre d'actions, aucune recette exécutée.
+
+
+## 28/11/2026 — Arbitrage propriétaire : Actualités remplace Mon entreprise
+[V] Décision prioritaire sur les anciens libellés : renommer le réseau social interne « Actualités » (EN : News), supprimer le sous-onglet redondant Actualités, ouvrir directement le fil des publications des staffs, conserver Annonces comme rubrique distincte accessible depuis Actualités, avec Retour au fil. Conserver les droits, données, moteur unique et accès Collaborateurs et invitations. Les anciennes occurrences du master et des décisions historiques décrivent la référence d'origine, non la navigation actuelle. Aucun changement du PNG, des couleurs, du périmètre fonctionnel ou des droits. Web et Android alignés, recette Chromium adaptée et enrichie; nouvelle qualification à constater.

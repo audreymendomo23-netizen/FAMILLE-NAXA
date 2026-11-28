@@ -106,3 +106,7 @@ Les textes descriptifs des sept étapes du master original sont également valid
 
 ## 10. Mon entreprise : regroupement des actualités et annonces
 [V] Actualités et Annonces appartiennent à Mon entreprise. Actualité = publication récente d'un staff habilité, affichée dans le fil d'actualité autorisé. Annonce = communication officielle, rubrique intégrée. [P] Onglets texte dans la grammaire visuelle du master (soulignement vert actif), sans cartes ; les raccourcis de la planche peuvent pointer vers les rubriques, à réconcilier avant implémentation. Ne pas modifier le PNG ni supprimer Équipes/Sondages silencieusement. Le placement précis des onglets et l'éventuel affichage des annonces dans le fil restent non décidés. Aucun changement de code.
+
+
+## 28/11/2026 — Arbitrage propriétaire : Actualités remplace Mon entreprise
+[V] Décision prioritaire sur les anciens libellés : renommer le réseau social interne « Actualités » (EN : News), supprimer le sous-onglet redondant Actualités, ouvrir directement le fil des publications des staffs, conserver Annonces comme rubrique distincte accessible depuis Actualités, avec Retour au fil. Conserver les droits, données, moteur unique et accès Collaborateurs et invitations. Les anciennes occurrences du master et des décisions historiques décrivent la référence d'origine, non la navigation actuelle. Aucun changement du PNG, des couleurs, du périmètre fonctionnel ou des droits. Web et Android alignés, recette Chromium adaptée et enrichie; nouvelle qualification à constater.

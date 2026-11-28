@@ -19,8 +19,8 @@ import java.util.UUID
  suspend fun load(){data=req("list",JSONObject().put("kind",kind))}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){data=null;error=true}finally{busy=false}}}
  LaunchedEffect(kind){data=null;work{load()}}
- Text(tr("Mon entreprise","My company"),style=MaterialTheme.typography.headlineMedium)
- Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){listOf("news" to tr("Actualités","News"),"announcement" to tr("Annonces","Announcements")).forEach{(k,label)->TextButton(enabled=!busy&&pending==null,onClick={body="";kind=k}){Text(if(kind==k)"• "+label else label)}}}
+ Text(tr("Actualités","News"),style=MaterialTheme.typography.headlineMedium)
+ Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){if(kind=="news"){TextButton(enabled=!busy&&pending==null,onClick={body="";kind="announcement"}){Text(tr("Annonces","Announcements"))}}else{TextButton(enabled=!busy&&pending==null,onClick={body="";kind="news"}){Text(tr("Retour au fil","Back to feed"))};Text(tr("Annonces","Announcements"),style=MaterialTheme.typography.titleMedium)}}
  HorizontalDivider()
  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
  if(error)Text(tr("Action non confirmée. Réessayez.","Action not confirmed. Try again."),color=MaterialTheme.colorScheme.error)
