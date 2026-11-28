@@ -84,7 +84,7 @@ alter table grillad_private.referral_links enable row level security;
 revoke all on grillad_private.referral_codes,grillad_private.referral_links from public,anon,authenticated;
 create function public.grillad_referral(p_org uuid,p_site uuid,p_action text,p_code text default null) returns jsonb
 language plpgsql security definer set search_path=pg_catalog as $fn$
-declare c text;r uuid;v uuid;result jsonb;
+declare c text;r uuid;v uuid;result jsonb;paid integer;
 begin
  if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_REFERRAL_DENIED' using errcode='42501';end if;
  if p_action not in ('list','generate','attach') or p_action is null then raise exception 'GRILLAD_REFERRAL_INPUT' using errcode='22023';end if;
@@ -100,7 +100,15 @@ begin
   if v is distinct from r then raise exception 'GRILLAD_REFERRAL_ALREADY_LINKED' using errcode='22023';end if;
  end if;
  select code into c from grillad_private.referral_codes where org=p_org;
- select jsonb_build_object('code',c,'linked',exists(select 1 from grillad_private.referral_links where referred_org=p_org),'referrals',(select count(*) from grillad_private.referral_links where referrer_org=p_org),'reward_status','pending_policy') into result;
+ -- Count only confirmed independent matched subscription payments for GRILLAD, after referral attachment.
+ select count(*) into paid from grillad_private.referral_links l where l.referrer_org=p_org and exists(
+  select 1 from famille_core.subscriptions s join famille_core.applications a on a.id=s.app_id and a.code='grillad'
+  join famille_core.payment_intents i on i.subscription_id=s.id and i.status='matched'
+  join famille_core.payment_matches m on m.payment_intent_id=i.id and m.status='confirmed' and m.amount_fcfa=i.expected_amount_fcfa
+  join grillad_private.renewal_payment_links rl on rl.intent_id=i.id
+  join grillad_private.central_requests q on q.id=rl.request_id and q.org=l.referred_org and q.kind='renewal' and q.status='processed'
+  where s.organization_id=l.referred_org and m.verified_at>=l.created_at);
+ select jsonb_build_object('code',c,'linked',exists(select 1 from grillad_private.referral_links where referred_org=p_org),'referrals',(select count(*) from grillad_private.referral_links where referrer_org=p_org),'paid_referrals',paid,'reward_status','pending_policy') into result;
  return result;
 end $fn$;
 revoke all on function public.grillad_central_clients(),public.grillad_central_client_state(uuid,text,text,text),public.grillad_referral(uuid,uuid,text,text) from public,anon,authenticated;
@@ -164,6 +172,8 @@ create function public.grillad_agent_thread(p_ticket uuid,p_action text,p_event 
 language plpgsql security definer set search_path=pg_catalog as $fn$
 declare a uuid;t famille_core.support_tickets%rowtype;m grillad_private.support_messages%rowtype;v jsonb;msg text:=btrim(p_body);
 begin
+ if auth.uid() is null then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ perform pg_advisory_xact_lock(hashtextextended('grillad-agent:'||auth.uid()::text,0));
  if not grillad_private.agent_allowed('ticket_view_assigned') or p_action is null or p_action not in ('claim','read','reply') then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
  select id into a from famille_core.applications where code='grillad';
  select * into t from famille_core.support_tickets where id=p_ticket and app_id=a and deleted_at is null and status not in ('resolved','closed') for update;
@@ -193,6 +203,7 @@ declare a uuid;valid boolean:=false;why text:=btrim(p_reason);
 begin
  perform grillad_private.central_overview();
  if p_agent is null or p_enabled is null or why is null or length(why) not between 10 and 300 or p_agent=auth.uid() then raise exception 'GRILLAD_AGENT_INPUT' using errcode='22023';end if;
+ perform pg_advisory_xact_lock(hashtextextended('grillad-agent:'||p_agent::text,0));
  if p_enabled then
   if to_regclass('public.support_agents') is null or to_regclass('public.support_agent_permissions') is null then raise exception 'GRILLAD_AGENT_UNAVAILABLE' using errcode='42501';end if;
   execute 'select exists(select 1 from public.support_agents a where a.user_id=$1 and a.status=''active'' and (select count(distinct p.permission_code) from public.support_agent_permissions p where p.agent_user_id=a.user_id and p.revoked_at is null and p.permission_code in (''queue_view'',''ticket_view_assigned'',''ticket_reply''))=3)' into valid using p_agent;

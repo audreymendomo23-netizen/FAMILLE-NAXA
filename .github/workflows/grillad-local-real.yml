@@ -9,6 +9,10 @@ on:
       - 'apps/web/grillad/playwright.local-real.config.ts'
       - 'supabase/local-tests/grillad_real_auth_seed.sql'
       - 'supabase/drafts/grillad_transverse_v1.sql'
+      - 'supabase/functions/grillad/**'
+      - 'supabase/functions/grillad-drive/**'
+      - 'apps/web/grillad/src/**'
+      - 'scripts/grillad/replay-business-archive.sql'
 permissions:
   contents: read
 concurrency:
