@@ -83,7 +83,18 @@ jobs:
           gradle-version: '8.7'
       - uses: android-actions/setup-android@v4
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-      - run: gradle --no-daemon --stacktrace :grillad:testDebugUnitTest :grillad:assembleDebug
+      - name: Android build and tests (retry transient plugin resolution only)
+        shell: bash
+        run: |
+          set -o pipefail
+          if gradle --no-daemon --stacktrace :grillad:testDebugUnitTest :grillad:assembleDebug 2>&1 | tee /tmp/grillad-gradle.log; then
+            exit 0
+          fi
+          if grep -Eq "Plugin .* was not found|could not resolve plugin artifact" /tmp/grillad-gradle.log; then
+            gradle --no-daemon --stacktrace :grillad:testDebugUnitTest :grillad:assembleDebug
+          else
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
