@@ -327,6 +327,12 @@ test('@transverse shared support registry, private ticket, exact replay and cent
   expect((await s({action:'support_list'})).map(x=>x.id)).toEqual([event]);
   expect(await o({action:'support_list'})).toEqual([]);
   await o({action:'support_thread',ticket:event},403);
+  await o({action:'support_call',ticket:event,operation:'request'},403);
+  const queued=await s({action:'support_call',ticket:event,operation:'request',screen:false});expect(queued).toMatchObject({status:'queued',screen_consent:false});
+  expect(await s({action:'support_call',ticket:event,operation:'request',screen:false})).toEqual(queued);
+  await s({action:'support_call',ticket:event,operation:'offer',sdp:'v=0 fixture'},403);
+  expect(await s({action:'support_call',ticket:event,operation:'end'})).toMatchObject({status:'ended'});
+  expect(await s({action:'support_call',ticket:event,operation:'read'})).toMatchObject({status:'idle'});
   const m={action:'support_thread',ticket:event,event:randomUUID(),message:'Précision pour mon dossier'};
   const thread=await s(m);expect(thread.messages).toHaveLength(1);expect(await s(m)).toEqual(thread);
   await s({...m,message:'Contenu différent'},403);
@@ -341,11 +347,11 @@ test('@transverse shared support registry, private ticket, exact replay and cent
   const pref=await o({action:'backup_preferences',frequency:'weekly',minute:360,weekday:1,monthday:1});
   expect(pref).toMatchObject({frequency:'weekly',minute:360,cloud_status:'not_connected',last_success:null});
   expect(await o({action:'backup_preferences'})).toEqual(pref);
-  const archive=await o({action:'backup_export'});expect(archive).toMatchObject({format:'grillad-business-export-v1',org,site});
+  const archive=await o({action:'backup_export'});expect(archive).toMatchObject({format:'grillad-business-export-v2',org,site});expect(Object.keys(archive.tables)).toHaveLength(21);expect(archive.tables.attendance.every(x=>x.photo===null)).toBe(true);
   expect(Object.keys(archive.tables)).not.toContain('events');
   await s({action:'referral',operation:'generate'},403);
   const referral=await o({action:'referral',operation:'generate'});
-  expect(referral.code).toMatch(/^[0-9A-F]{32}$/);expect(referral.reward_status).toBe('pending_policy');
+  expect(referral.code).toMatch(/^[0-9A-F]{32}$/);expect(referral.reward_status).toBe('pending_policy');expect(referral.paid_referrals).toBe(0);
   expect(await o({action:'referral',operation:'generate'})).toEqual(referral);
   await o({action:'referral',operation:'attach',code:referral.code},403);
   expect(await o({action:'referral',operation:'list'})).toEqual(referral);

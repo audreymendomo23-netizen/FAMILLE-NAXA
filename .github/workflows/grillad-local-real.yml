@@ -3,6 +3,7 @@ on:
   push:
     branches: [work/grillad-foundation-20261127]
     paths:
+      - 'apps/android/grillad/**'
       - 'scripts/grillad/gradle-ci.sh'
       - 'supabase/drafts/grillad*.sql'
       - 'apps/web/admin-console/src/GrilladAdmin.tsx'
