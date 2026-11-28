@@ -78,7 +78,7 @@ internal fun briefingText(report:JSONObject,language:String):String {
  }
 }
 internal fun nativeBriefingPeriod(rows:List<JSONObject>,end:LocalDate,days:Int):Map<String,Long?> {
- require(days in setOf(2,7,30)&&rows.size==days)
+ require(days in 1..366&&rows.size==days)
  rows.forEachIndexed{i,r->validateNativeBriefing(r,end.minusDays((days-1-i).toLong()).toString())}
  require(rows.all{it.getString("scope")==rows.first().getString("scope")})
  fun total(values:List<Long?>):Long? {
@@ -177,14 +177,14 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   fun metricLabel(k:String)=when(k){"appointments"->w.appointment;"completed"->w.completed;"revenue"->w.revenue;"sales"->w.sales;"clocks"->w.attendance;else->label("Ventes sans coût","Uncosted sales","Jaaygol alaa njaru","Ventas sin coste","Vendite senza costo","未记录成本的销售")}
   fun periodAction(action:String,id:String?=null){
    if(!foreground||busy||!briefingDateAllowed(date))return
-   val end=date;val days=periodDays;val generation=++requestGeneration
+   val end=date;val start=if(periodDays==366)end.withDayOfYear(1) else end.minusDays((periodDays-1).toLong());val days=(java.time.temporal.ChronoUnit.DAYS.between(start,end)+1).toInt();val generation=++requestGeneration
    loadJob?.cancel();stop();busy=true;error=false;notice=false
    loadJob=scope.launch{
     try{
      suspend fun rpc(name:String,body:JSONObject=JSONObject()):String=StaffRosterApi.call(latest,"rpc/"+name,body.put("p_org",latest.account.organizationId).put("p_site",siteId))
      fun current()=foreground&&generation==requestGeneration
      when(action){
-      "load"->{val start=end.minusDays((days-1).toLong());require(briefingDateAllowed(start));val rows=(0 until days).map{i->JSONObject(rpc("ns_daily_briefing",JSONObject().put("p_day",start.plusDays(i.toLong()).toString())))};val result=nativeBriefingPeriod(rows,end,days);if(current())period=result}
+      "load"->{require(briefingDateAllowed(start));val payload=JSONArray(rpc("ns_briefing_period",JSONObject().put("p_start",start.toString()).put("p_end",end.toString())));require(payload.length()==days);val rows=(0 until days).map{payload.getJSONObject(it)};val result=nativeBriefingPeriod(rows,end,days);if(current())period=result}
       "save"->{require(period!=null&&end.isBefore(briefingToday()));val receipt=JSONObject(rpc("ns_archive_briefing",JSONObject().put("p_id",UUID.randomUUID().toString()).put("p_start",end.minusDays((days-1).toLong()).toString()).put("p_end",end.toString())));UUID.fromString(receipt.getString("id"));if(current())notice=true}
       "list"->{val rows=JSONArray(rpc("ns_list_briefing_archives"));require(rows.length()<=100);val result=(0 until rows.length()).map{i->val r=rows.getJSONObject(i);val rid=r.getString("id");UUID.fromString(rid);val a=LocalDate.parse(r.getString("period_start"));val b=LocalDate.parse(r.getString("period_end"));require(!a.isAfter(b));rid to "$a — $b"};if(current())archiveIds=result}
       "open"->{val r=JSONObject(rpc("ns_read_briefing_archive",JSONObject().put("p_id",id)));require(r.getString("id")==id);val rows=r.getJSONArray("snapshot");val ending=LocalDate.parse(r.getString("period_end"));val values=(0 until rows.length()).map{rows.getJSONObject(it)};require(values.all{it.getString("scope")==r.getString("scope")});val result=nativeBriefingPeriod(values,ending,rows.length());if(current()){period=null;report=null;playText(result.entries.joinToString(". "){(k,v)->metricLabel(k)+": "+(v?.toString()?:w.error)});notice=true}}
@@ -232,7 +232,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
     report?.let{Text(briefingText(it,language))}
     HorizontalDivider()
     Text(label("Bilan par période","Period report","Jaŋtol sahaa","Informe por período","Resoconto per periodo","期间报告"),style=MaterialTheme.typography.titleMedium)
-    Row{listOf(2,7,30).forEach{d->TextButton(onClick={stop();periodDays=d;period=null},enabled=!busy&&foreground){Text((if(d==periodDays)"✓ " else "")+d.toString())}}}
+    Row{listOf(1,2,7,30,366).forEach{d->TextButton(onClick={stop();periodDays=d;period=null},enabled=!busy&&foreground){Text((if(d==periodDays)"✓ " else "")+(if(d==366)label("Année","Year","Hitaande","Año","Anno","年") else d.toString()))}}}
     OutlinedButton(onClick={periodAction("load")},enabled=!busy&&foreground){Text(label("Calculer la période","Calculate period","Lim sahaa","Calcular período","Calcola periodo","计算期间"))}
     period?.forEach{(k,v)->TextButton(onClick={playText(metricLabel(k)+": "+v)},enabled=!busy&&foreground&&v!=null){Text(metricLabel(k)+": "+(v?.toString()?:w.error))}}
     OutlinedButton(onClick={periodAction("save")},enabled=!busy&&foreground&&period!=null&&date.isBefore(briefingToday())){Text(label("Archiver","Archive","Resnu","Archivar","Archivia","归档"))}

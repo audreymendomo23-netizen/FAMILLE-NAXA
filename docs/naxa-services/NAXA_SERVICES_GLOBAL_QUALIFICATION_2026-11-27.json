@@ -171,7 +171,7 @@
       "workflow": "technical-gate",
       "status": "partial",
       "acceptance": "Consolidations autorisées, rubriques complètes, archive, notification et interaction vocale ; aucune donnée inventée.",
-      "residual": "V32 ajoute rappels récurrents opt-in, interface Web et Android, bilan natif multi-période, archives et écoute des indicateurs. Qualification terminale, exécution cron réelle, exhaustivité des rubriques, reconnaissance vocale native et preuve physique restent ouvertes."
+      "residual": "Périmètre figé CDC 26/11 §Bilan intelligent : exactitude des rubriques conditionnelles et consolidation des sites/postes autorisés, matin/intermédiaire/soir, résumé/détaillé, interrogation vocale sous droits sur Android/Web/PWA et notification à disponibilité. Jour/semaine/mois/année et archive privée : candidats construits ; recette annuelle ajoutée, résultat terminal requis. Six voix physiques : B3-08 seulement. Rappels hebdomadaires à heure fixe non exigés."
     },
     {
       "id": "B3-08",
@@ -213,7 +213,7 @@
       "workflow": "replay-isolated",
       "status": "partial",
       "acceptance": "Cas terminé + paiement confirmé + allocation explicite ; idempotence, concurrence, annulation et extournes transactionnelles ; sans taux universel.",
-      "residual": "Ordonnancement pg_cron candidat documenté (rollback par défaut). Activation autorisée, qualification terminale, partage intra-ligne, extournes partielles et sources sans rendez-vous restent ouverts."
+      "residual": "Périmètre figé décision 27/11 §commissions : association explicite des prestations réalisées aux exécutants et encaissements, partage configuré, extournes selon preuve et paramètres approuvés, registre rémunérations, idempotence, concurrence, annulation, qualification Android/Web/PWA. V30 : file/worker présents, exécution effective à qualifier ; cadence 10 secondes non exigée. Aucun barème ni répartition par défaut, aucune sortie d'argent."
     },
     {
       "id": "B4-05",

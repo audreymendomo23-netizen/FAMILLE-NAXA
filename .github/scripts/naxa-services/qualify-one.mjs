@@ -202,7 +202,7 @@ const evidence={
       "job": "replay",
       "markers": [
         "PASS real scoped partial briefing text and language selection",
-        "PASS B3 private server report archive: create, read, cross-member denial and delete","PASS B3 scoped period questions: exact completed count and no personal finance","PASS B3 private archive notification: one owner inbox record, redacted payload","PASS B3 reminder opt-in and opt-out, client cannot run scheduler"
+        "PASS B3 private server report archive: create, read, cross-member denial and delete","PASS B3 scoped period questions: exact completed count and no personal finance","PASS B3 private archive notification: one owner inbox record, redacted payload","PASS B3 annual authorized period, exact dates, no personal finance and oversized range refused"
       ]
     }
   ],

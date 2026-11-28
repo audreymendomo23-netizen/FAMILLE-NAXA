@@ -1143,6 +1143,16 @@ jobs:
                   assert.equal(await questions.locator('option[value=revenue]').count(),0);
                   pass('B3 scoped period questions: exact completed count and no personal finance');
                   pass('B3 real browser multi-day personal period: two authorized days and no financial disclosure');
+                  await period.getByLabel('Report duration').selectOption('366');
+                  const annual=await rpc(guest,'ns_briefing_period',()=>period.getByRole('button',{name:'Calculate period',exact:true}).click());
+                  assert.equal(annual[0].day,yesterday.slice(0,4)+'-01-01');assert.equal(annual.at(-1).day,yesterday);
+                  assert.ok(annual.every(r=>r.scope==='personal'&&r.finance===null));
+                  await period.locator('[data-briefing-period-result="'+annual.length+'"]').waitFor();
+                  assert.ok((await json(base+'/rest/v1/rpc/ns_briefing_period',{p_org:host.org.id,p_site:host.site.id,p_start:'2020-01-01',p_end:yesterday},guestAuth.access_token,anon)).status>=400);
+                  await period.getByLabel('Report duration').selectOption('2');
+                  await period.getByRole('button',{name:'Calculate period',exact:true}).click();
+                  await period.locator('[data-briefing-period-result="2"]').waitFor();
+                  pass('B3 annual authorized period, exact dates, no personal finance and oversized range refused');
                   phase='B3 private report archive';
                   const archive=period.getByRole('region',{name:'Report archives',exact:true});
                   const saved=await rpc(guest,'ns_archive_briefing',()=>archive.getByRole('button',{name:'Archive period',exact:true}).click());

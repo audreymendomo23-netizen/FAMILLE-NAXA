@@ -5,6 +5,9 @@ import org.junit.Test
 class BriefingPayloadInstrumentedTest {
  private fun report()=JSONObject("""{"day":"2026-11-27","generated_at":"2026-11-27T12:00:00Z","scope":"personal","coverage":"partial_confirmed_server_facts","finance":null,"appointments":{"scheduled_count":2,"completed_count":1},"personal_clock_events":{"event_count":3}}""")
  private fun denied(r:JSONObject){assertTrue(runCatching{validateNativeBriefing(r,"2026-11-27")}.isFailure)}
+ @Test fun annualPeriodPreservesEveryDayAndRejectsGaps(){
+  val end=java.time.LocalDate.parse("2024-12-31");val rows=(0 until 366).map{i->report().put("day",end.minusDays((365-i).toLong()).toString())};val result=nativeBriefingPeriod(rows,end,366);assertEquals(732L,result["appointments"]);assertTrue(runCatching{nativeBriefingPeriod(rows.drop(1),end,366)}.isFailure)
+ }
  @Test fun periodPreservesScopeAndUnknownFinance(){
   val a=report().put("day","2026-11-26");val b=report()
   val result=nativeBriefingPeriod(listOf(a,b),java.time.LocalDate.parse("2026-11-27"),2)

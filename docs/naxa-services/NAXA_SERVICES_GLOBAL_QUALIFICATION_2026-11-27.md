@@ -69,3 +69,7 @@ Aucun PASS automatique. Voir le registre d'exécution distinct.
 
 - B4-04 : V30 file événementielle et worker service-only en recette ; pas de scheduler hébergé ni règles de partage/extourne inventées.
 - B3-07 : V31 notification d'archive in-app et questions déterministes sur bilan, voix locale facultative ; pas de preuve micro physique ni de couverture exhaustive.
+
+### Périmètre figé par les décisions validées (28 novembre)
+
+B3-07 : exclusivement le bilan intelligent du CDC §26/11 ; les rappels hebdomadaires à heure fixe ne sont pas une condition de fermeture. La preuve physique six voix est suivie en B3-08. Jour/semaine/mois/année, archives, rôle/scope, rubriques, trois moments de la journée, résumé/détaillé, notification à disponibilité et Q&A restent exigés. B4-04 : exclusivement l'addendum commissions du 27/11, y compris partage et extourne configurés ; fréquence technique non imposée, pas de taux ni décaissement automatique. Qualification au SHA exact obligatoire.

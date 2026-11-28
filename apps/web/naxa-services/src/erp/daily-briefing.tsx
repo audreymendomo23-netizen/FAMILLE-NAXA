@@ -47,13 +47,14 @@ export function briefingDayAllowed(day:string,now=Date.now()){
  return /^\d{4}-\d{2}-\d{2}$/.test(day)&&day>=earliest&&day<=today&&Number.isFinite(Date.parse(day+"T00:00:00Z"))&&new Date(day+"T00:00:00Z").toISOString().slice(0,10)===day;
 }
 export function briefingPeriodDays(end:string,days:number,now=Date.now()):string[]{
- if(![2,7,30].includes(days)||!briefingDayAllowed(end,now))throw Error("INVALID_BRIEFING_PERIOD");
- const dates=Array.from({length:days},(_,i)=>new Date(Date.parse(end+"T00:00:00Z")-(days-1-i)*86400000).toISOString().slice(0,10));
+ if(![1,2,7,30,366].includes(days)||!briefingDayAllowed(end,now))throw Error("INVALID_BRIEFING_PERIOD");
+ const count=days===366?Math.round((Date.parse(end+"T00:00:00Z")-Date.parse(end.slice(0,4)+"-01-01T00:00:00Z"))/86400000)+1:days;
+ const dates=Array.from({length:count},(_,i)=>new Date(Date.parse(end+"T00:00:00Z")-(count-1-i)*86400000).toISOString().slice(0,10));
  if(!dates.every(d=>briefingDayAllowed(d,now)))throw Error("INVALID_BRIEFING_PERIOD");
  return dates;
 }
 export function summarizeBriefingPeriod(dates:string[],values:unknown[]){
- if(!dates.length||dates.length!==values.length||new Set(dates).size!==dates.length)throw Error("INCOMPLETE_BRIEFING_PERIOD");
+ if(!dates.length||dates.length>366||dates.length!==values.length||new Set(dates).size!==dates.length||dates.some((d,i)=>i>0&&Date.parse(d)-Date.parse(dates[i-1])!==86400000))throw Error("INCOMPLETE_BRIEFING_PERIOD");
  const rows=values.map((v,i)=>validateBriefing(v,dates[i]));
  if(rows.some(r=>r.scope!==rows[0].scope))throw Error("BRIEFING_SCOPE_CHANGED");
  const sum=(v:number[])=>{const n=v.reduce((a,b)=>a+b,0);if(!Number.isSafeInteger(n))throw Error("BRIEFING_TOTAL_OVERFLOW");return n;};
@@ -77,7 +78,7 @@ const periodCopy:Record<Lang,[string,string,string,string,string,string,string,s
 type Archive={id:string;scope:"site"|"personal";period_start:string;period_end:string;created_at:string};
 function validateArchive(value:unknown):Archive{
  const v=value as Archive,valid=(s:string)=>typeof s==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s))&&new Date(s+"T00:00:00Z").toISOString().slice(0,10)===s;
- if(!v||typeof v.id!=="string"||!/^[0-9a-f-]{36}$/i.test(v.id)||!["site","personal"].includes(v.scope)||!valid(v.period_start)||!valid(v.period_end)||v.period_start>v.period_end||(Date.parse(v.period_end)-Date.parse(v.period_start))/86400000>29||typeof v.created_at!=="string"||!Number.isFinite(Date.parse(v.created_at)))throw Error("INVALID_ARCHIVE");return v;
+ if(!v||typeof v.id!=="string"||!/^[0-9a-f-]{36}$/i.test(v.id)||!["site","personal"].includes(v.scope)||!valid(v.period_start)||!valid(v.period_end)||v.period_start>v.period_end||(Date.parse(v.period_end)-Date.parse(v.period_start))/86400000>365||typeof v.created_at!=="string"||!Number.isFinite(Date.parse(v.created_at)))throw Error("INVALID_ARCHIVE");return v;
 }
 const archiveLabels:Record<Lang,string[]>={
  fr:["Archives du bilan","Archiver la période","Charger les archives","Ouvrir","Supprimer","Seules les journées terminées peuvent être archivées.","Archive indisponible"],
@@ -130,19 +131,16 @@ function PeriodBriefing({account,siteId,authEndpoint,anonKey,getToken,day,lang}:
   const current=()=>alive.current&&controller.current===c&&!c.signal.aborted&&document.visibilityState!=="hidden";
   try{
    if(!anonKey)throw Error("BRIEFING_UNAVAILABLE");
-   const dates=briefingPeriodDays(day,days),values:unknown[]=[];
-   for(let i=0;i<dates.length;i+=3){
-    if(!current())return;
-    const batch=await Promise.all(dates.slice(i,i+3).map(d=>privateRequest<unknown>(c.signal,current,getToken,(token,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/ns_daily_briefing",{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_day:d}),signal,cache:"no-store",credentials:"omit",redirect:"error"}))));
-    values.push(...batch);
-   }
+   const dates=briefingPeriodDays(day,days);
+   const values=await privateRequest<unknown>(c.signal,current,getToken,(token,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/ns_briefing_period",{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_start:dates[0],p_end:dates[dates.length-1]}),signal,cache:"no-store",credentials:"omit",redirect:"error"}));
+   if(!Array.isArray(values))throw Error("INVALID_BRIEFING_PERIOD");
    const result=summarizeBriefingPeriod(dates,values);
    if(current())setReport(result);
   }catch{if(current()){setReport(null);setError(true);c.abort();controller.current=null;setBusy(false);}}
   finally{if(current())setBusy(false);}
  }
  return <section aria-label={title} aria-busy={busy}><h3>{title}</h3><p>{note}</p>
- <label>{duration}<select value={days} disabled={busy} onChange={e=>{clear();setDays(Number(e.target.value));}}>{[2,7,30].map(d=><option key={d} value={d}>{d} {unit}</option>)}</select></label>
+ <label>{duration}<select value={days} disabled={busy} onChange={e=>{clear();setDays(Number(e.target.value));}}>{[1,2,7,30,366].map(d=><option key={d} value={d}>{d===366?({fr:"Année à la date choisie",en:"Year to selected date","ff-CM":"Hitaande haa ñalnde suɓaande",es:"Año hasta la fecha",it:"Anno fino alla data","zh-CN":"年初至所选日期"})[lang]:d+" "+unit}</option>)}</select></label>
  <button className="btn secondary" disabled={busy||!briefingDayAllowed(day)} onClick={()=>void load()}>{calculate}</button>
  {error&&<p role="alert">{unavailable}</p>}
  {report&&<div data-briefing-period-result={report.rows.length}><button type="button" className="btn secondary" onClick={()=>downloadLocal(briefingPeriodCsv(report),"naxa-bilan-"+day+".csv","text/csv;charset=utf-8")}>{({fr:"Exporter le bilan CSV",en:"Export report CSV","ff-CM":"Yaltin jaŋtol CSV",es:"Exportar informe CSV",it:"Esporta resoconto CSV","zh-CN":"导出 CSV 报告"})[lang]}</button><p>{report.rows[0].day} — {report.rows[report.rows.length-1].day}</p>

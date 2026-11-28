@@ -6,17 +6,32 @@ create table public.ns_briefing_archives(
  snapshot jsonb not null check(jsonb_typeof(snapshot)='array'),created_at timestamptz not null default now(),
  foreign key(site_id,org_id) references public.ns_sites(id,org_id),
  foreign key(member_id,org_id) references public.ns_members(id,org_id),
- check(period_end-period_start between 0 and 29),check(jsonb_array_length(snapshot)=period_end-period_start+1)
+ check(period_end-period_start between 0 and 365),check(jsonb_array_length(snapshot)=period_end-period_start+1)
 );
 create index ns_briefing_archives_owner_idx on public.ns_briefing_archives(org_id,site_id,member_id,created_at desc);
 alter table public.ns_briefing_archives enable row level security;
 revoke all on public.ns_briefing_archives from public,anon,authenticated;
 grant select,insert,delete on public.ns_briefing_archives to service_role;
+-- Bounded range, same per-day authorization and no alternate data source.
+create function public.ns_briefing_period(p_org uuid,p_site uuid,p_start date,p_end date) returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+declare today date:=(now() at time zone 'Africa/Douala')::date;d date;fact jsonb;facts jsonb:='[]'::jsonb;v_scope text;
+begin
+ if auth.uid() is null or public.ns_current_member_id(p_org) is null or p_start is null or p_end is null or p_end-p_start not between 0 and 365 or p_start<today-366 or p_end>today then raise exception 'NS_BRIEFING_PERIOD_FORBIDDEN';end if;
+ d:=p_start;
+ while d<=p_end loop
+  fact:=public.ns_daily_briefing(p_org,p_site,d);
+  if v_scope is null then v_scope:=fact->>'scope';elsif v_scope is distinct from fact->>'scope' then raise exception 'NS_BRIEFING_PERIOD_SCOPE';end if;
+  facts:=facts||jsonb_build_array(fact);d:=d+1;
+ end loop;
+ return facts;
+end $fn$;
+revoke all on function public.ns_briefing_period(uuid,uuid,date,date) from public,anon,authenticated;
+grant execute on function public.ns_briefing_period(uuid,uuid,date,date) to authenticated;
 create function public.ns_archive_briefing(p_org uuid,p_site uuid,p_id uuid,p_start date,p_end date) returns jsonb language plpgsql security definer set search_path='' as $fn$
 declare actor uuid; fact jsonb; snapshots jsonb:='[]'::jsonb; d date; v_scope text; old public.ns_briefing_archives%rowtype; today date:=(now() at time zone 'Africa/Douala')::date;
 begin
  actor:=public.ns_current_member_id(p_org);
- if auth.uid() is null or actor is null or p_id is null or p_start is null or p_end is null or p_end-p_start not between 0 and 29 or p_start<today-366 or p_end>=today then raise exception 'NS_ARCHIVE_INVALID_OR_FORBIDDEN';end if;
+ if auth.uid() is null or actor is null or p_id is null or p_start is null or p_end is null or p_end-p_start not between 0 and 365 or p_start<today-366 or p_end>=today then raise exception 'NS_ARCHIVE_INVALID_OR_FORBIDDEN';end if;
  v_scope:=public.ns_daily_briefing(p_org,p_site,p_end)->>'scope';
  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_org::text||':'||p_site::text||':'||actor::text||':briefing-archive',0));
  select * into old from public.ns_briefing_archives where id=p_id;
