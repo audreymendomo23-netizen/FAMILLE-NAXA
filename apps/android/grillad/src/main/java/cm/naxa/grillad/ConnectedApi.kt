@@ -5,19 +5,19 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.json.JSONArray
 import java.net.URL
-import javax.net.ssl.HttpsURLConnection
+import java.net.HttpURLConnection
 internal class GrilladApiError(val status:Int,message:String):Exception(message)
 internal fun obj(vararg pairs:Pair<String,Any?>)=JSONObject().apply{pairs.forEach{(k,v)->put(k,v?:JSONObject.NULL)}}
 internal fun rows(a:JSONArray?)=if(a==null)emptyList() else (0 until a.length()).mapNotNull{a.optJSONObject(it)}
 internal fun validGrilladConfig(url:String,key:String):Boolean=runCatching{
  val u=URL(url)
- require(u.protocol=="https"&&u.host.endsWith(".supabase.co")&&u.path=="/functions/v1/grillad"&&u.port==-1&&u.userInfo==null&&u.query==null&&u.ref==null)
+ require((BuildConfig.DEBUG&&BuildConfig.GRILLAD_LOCAL_RECIPE&&url=="http://127.0.0.1:4182/functions/v1/grillad")||(u.protocol=="https"&&u.host.endsWith(".supabase.co")&&u.path=="/functions/v1/grillad"&&u.port==-1&&u.userInfo==null&&u.query==null&&u.ref==null))
  key.startsWith("sb_publishable_")||JSONObject(String(Base64.decode(key.split(".")[1],Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING))).optString("role")=="anon"
 }.getOrDefault(false)
 internal class ConnectedApi(private val url:String,private val key:String){
  suspend fun call(body:JSONObject,access:String?=null):Any=withContext(Dispatchers.IO){
   require(validGrilladConfig(url,key)){"Configuration GRILLAD invalide"}
-  val c=URL(url).openConnection() as HttpsURLConnection
+  val c=URL(url).openConnection() as HttpURLConnection
   try{
    c.requestMethod="POST";c.instanceFollowRedirects=false;c.connectTimeout=15000;c.readTimeout=20000;c.doOutput=true;c.useCaches=false
    c.setRequestProperty("Content-Type","application/json");c.setRequestProperty("apikey",key);access?.let{c.setRequestProperty("Authorization","Bearer "+it)}

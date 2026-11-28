@@ -1,0 +1,60 @@
+name: GRILLAD — Android native connected isolated E2E
+on:
+  push:
+    branches: [work/grillad-foundation-20261127]
+    paths:
+      - 'apps/android/grillad/**'
+      - 'scripts/grillad/android-connected-recipe.sh'
+      - '.github/workflows/grillad-android-connected.yml'
+      - 'scripts/grillad/local-real-*'
+permissions:
+  contents: read
+jobs:
+  native-connected:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: supabase/setup-cli@v3
+        with:
+          version: '2.122.1'
+      - run: bash scripts/grillad/local-real-setup.sh
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - uses: android-actions/setup-android@v4
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build recipe-only debug APK and instrumentation
+        env:
+          GRILLAD_LOCAL_RECIPE: '1'
+        run: |
+          export GRILLAD_PUBLIC_KEY="$GRILLAD_LOCAL_ANON"
+          gradle --no-daemon :grillad:assembleDebug :grillad:assembleDebugAndroidTest
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash scripts/grillad/android-connected-recipe.sh
+      - name: Destroy isolated stack and credentials
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/grillad-local-stack/supabase" ]; then
+            (cd "$RUNNER_TEMP/grillad-local-stack" && supabase stop --no-backup)
+          fi
+          rm -f "$RUNNER_TEMP/grillad-local.env" "$RUNNER_TEMP/grillad-real-accounts.json"

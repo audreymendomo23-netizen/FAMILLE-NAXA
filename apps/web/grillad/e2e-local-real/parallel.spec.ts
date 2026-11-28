@@ -1,3 +1,4 @@
+import {run as runPushWorker} from '../../../../supabase/functions/grillad-push/worker.mjs';
 import {test,expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
@@ -225,4 +226,72 @@ test('@push true Android-tagged Auth registration, preference and opt-out withou
   for(const c of claims)expect(localSql("select public.grillad_push_start('"+c.id+"') is null")).toBe('t');
   expect(Number(localSql("select count(*) from grillad_private.push_attempts where status='skipped'"))).toBe(claims.length);
  }finally{await close(request,seller);await close(request,owner)}
+});
+
+test('@finance-review incomplete cost, immutable historical sale and independently approved cash recount',async({request})=>{
+ const owner=await login(request,'owner'),manager=await login(request,'manager'),seller=await login(request,'seller'),o=scoped(request,owner),m=mutation(o),g=mutation(scoped(request,manager)),s=mutation(scoped(request,seller));
+ try{
+  const item=randomUUID();await m('add_item',{name:'Cout CI',family:'Poulet',price:1000},item);
+  await m('set_cost_composition',{item,reason:'Incomplet',components:[{label:'Intrant',amount:400},{label:'Charbon',amount:null}]});
+  let x=await o({action:'snapshot',from:day,to:day});expect(x.items.find(i=>i.id===item).cost_quality).toBe('incomplete');
+  await m('set_cost_composition',{item,reason:'Lot',batch_units:3,components:[{label:'Intrant',amount:1000},{label:'Charbon',amount:100}]});
+  x=await o({action:'snapshot',from:day,to:day});expect(x.items.find(i=>i.id===item).cost).toBe(367);
+  await g('prepare',{item,qty:3});await g('open_cash',{opening:0});const sale=randomUUID();await s('sell',{item,qty:1,price:1000,received:1000},sale);
+  await m('set_cost_composition',{item,reason:'Nouvelle estimation',components:[{label:'Intrant',amount:600}]});
+  const pre=await o({action:'snapshot',from:day,to:day});expect(pre.finance.ca).toBe(1000);expect(pre.finance.cost).toBe(367);
+  const cash=pre.cash.id;await g('close_cash',{counted:1000});const req=randomUUID(),data={cash,counted:950,reason:'Recomptage CI'};
+  expect((await g('cash_recount_request',data,req)).status).toBe('pending');
+  await g('cash_recount_decide',{request:req,decision:'approved',reason:'Interdit'},randomUUID(),403);
+  await m('cash_recount_decide',{request:req,decision:'approved',reason:'Vérifié'});
+  x=await o({action:'snapshot',from:day,to:day});expect(x.cash_history.find(c=>c.id===cash)).toMatchObject({counted:1000,reviewed_counted:950,reviewed_difference:-50});expect(x.finance.ca).toBe(1000);
+  await s('sell',{item,qty:1,price:1000,received:1000},randomUUID(),400);
+ }finally{for(const t of [seller,manager,owner])await close(request,t)}
+});
+test('@attendance-review separate missing departure proof and independent approval',async({request})=>{
+ const owner=await login(request,'owner'),manager=await login(request,'manager'),seller=await login(request,'seller'),o=scoped(request,owner),s=scoped(request,seller),m=mutation(scoped(request,manager));
+ try{
+  await mutation(o)('set_attendance_policy',{enabled:true,staff_informed:true,reason:'CI',latitude:4.05,longitude:9.7,radius_m:200,max_accuracy_m:50,max_age_seconds:300,photo_retention_days:1});
+  const arrival=randomUUID(),at=new Date(Date.now()-120000).toISOString(),photo=Buffer.from('ffd8ff000000000000000000000000ffd9','hex').toString('base64');
+  const proof={action:'attendance_capture',event:arrival,kind:'arrival',at,lat:4.05,lon:9.7,accuracy:10,photo};
+  await s({...proof,lat:5},400);await s(proof);await s(proof);
+  const event=randomUUID(),payload={arrival,seconds:30,reason:'Départ oublié CI'};expect((await mutation(s)('missing_departure_request',payload,event)).status).toBe('pending');
+  await mutation(s)('missing_departure_decide',{request:event,decision:'approved',reason:'Interdit'},randomUUID(),403);
+  await m('missing_departure_decide',{request:event,decision:'approved',reason:'Contrôlé'});
+  const status=await s({action:'attendance_status'});expect(status.history).toHaveLength(1);expect(status.history[0].kind).toBe('arrival');expect(status.history[0].open_arrival).toBe(false);expect(status.missing_departures.find(x=>x.id===event).status).toBe('approved');
+ }finally{for(const t of [seller,manager,owner])await close(request,t)}
+});
+test('@push-worker real RPC lifecycle and FCM transport boundary stub, no external delivery',async({request})=>{
+ const a=accounts.seller,s=await invoke(request,{action:'login',phone:a.phone,password:a.password,installation:randomUUID(),platform:'android'}),seller=s.access;
+ const owner=await login(request,'owner'),o=scoped(request,owner),v=scoped(request,seller);
+ try{
+  const item=randomUUID();await mutation(o)('add_item',{name:'Worker CI',family:'Poulet',price:1000,cost:400},item);
+  await v({action:'push_register',enabled:true,token:'fixture-worker-not-real-fcm-'+'x'.repeat(40),project:'grillad'});
+  const event=randomUUID();await mutation(v)('prepare',{item,qty:1},event);
+  let sent=0;
+  const fixtureFetch=async(url,init)=>{
+   const u=new URL(String(url));if(u.origin==='https://idupfjbkwjcavyisxteo.supabase.co'&&/^\/rest\/v1\/rpc\/grillad_push_(claim|start|finish)$/.test(u.pathname))return fetch('http://127.0.0.1:54321'+u.pathname,init);
+   if(u.href==='https://fcm.googleapis.com/v1/projects/grillad/messages:send'){sent++;const m=JSON.parse(init.body).message;expect(m.data).toEqual({app:'grillad',kind:'inbox'});expect(m).not.toHaveProperty('notification');return new Response(JSON.stringify({name:'projects/grillad/messages/local-fixture'}),{status:200})}
+   throw Error('EXTERNAL_NETWORK_FORBIDDEN');
+  };
+  const secret='local-fixture-job-secret-'.padEnd(40,'x'),env={url:'https://idupfjbkwjcavyisxteo.supabase.co',service:process.env.GRILLAD_LOCAL_SERVICE,jobSecret:secret,account:JSON.stringify({type:'service_account',project_id:'grillad',client_email:'fixture@grillad.iam.gserviceaccount.com',private_key:'-----BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----'})};
+  const job=()=>runPushWorker(new Request('http://127.0.0.1/job',{method:'POST',headers:{'x-grillad-job-secret':secret}}),env,fixtureFetch,async()=> 'local-fixture-bearer');
+  const first=await job();expect(first.status).toBe(200);expect((await first.json()).accepted).toBeGreaterThan(0);expect(sent).toBeGreaterThan(0);
+  expect(Number(localSql("select count(*) from grillad_private.push_attempts where notice_id='event:"+event+"' and status='accepted'"))).toBe(1);
+  const before=sent,second=await job();expect(second.status).toBe(200);expect(sent).toBe(before);
+ }finally{await close(request,seller);await close(request,owner)}
+});
+test('@zipple-mobile manual tender and no double imputation or external debit',async({request})=>{
+ const owner=await login(request,'owner'),o=scoped(request,owner),m=mutation(o),qr='grillad_local_mobile_qr_0123456789',item=randomUUID();
+ try{
+  partnerFixture('zipple');
+  const h="encode(sha256(convert_to('"+qr+"','UTF8')),'hex')";
+  localSql("select public.grillad_partner_approval('zipple','"+org+"','"+site+"','"+partnerOrg+"','"+partnerSite+"','"+accounts.owner.id+"',repeat('a',64),repeat('b',64)); select public.grillad_partner_zipple('"+link+"','"+org+"','"+site+"','"+partnerOrg+"','"+partnerSite+"',"+h+",now()+interval '1 day');");
+  await m('add_item',{name:'Mobile Connect',family:'Poulet',price:1000,cost:400},item);await m('prepare',{item,qty:3});await m('open_cash',{opening:0});await m('connect_item_set',{link,item,enabled:true,reason:'CI'});
+  const order=randomUUID();await invoke(request,{action:'connect_submit',qr,order,lines:[{item,qty:1}]});
+  for(const next of ['accepted','preparing','ready'])await o({action:'connect_transition',order,event:randomUUID(),next});
+  const handed={action:'connect_transition',order,event:randomUUID(),next:'handed',received:1000,method:'mtn_momo'};
+  await o(handed);await o(handed);
+  const x=await o({action:'snapshot',from:day,to:day});expect(x.finance.ca).toBe(1000);expect(x.finance.connect_ca).toBe(1000);expect(x.finance.mtn_declared).toBe(1000);expect(x.finance.encaissements).toBe(0);
+  expect((await m('close_cash',{counted:0})).difference).toBe(0);
+ }finally{await close(request,owner)}
 });

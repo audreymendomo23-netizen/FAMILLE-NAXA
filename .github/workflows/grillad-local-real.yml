@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [journey, identity, catalogue, cash, read-models, resilience, manager, zipple, security, billing-recovery, push, device]
+        suite: [journey, identity, catalogue, cash, read-models, resilience, manager, zipple, security, billing-recovery, push, device, finance-review, attendance-review, push-worker, zipple-mobile]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
