@@ -351,8 +351,21 @@ test('@transverse shared support registry, private ticket, exact replay and cent
   const pref=await o({action:'backup_preferences',frequency:'weekly',minute:360,weekday:1,monthday:1});
   expect(pref).toMatchObject({frequency:'weekly',minute:360,cloud_status:'not_connected',last_success:null});
   expect(await o({action:'backup_preferences'})).toEqual(pref);
-  const archive=await o({action:'backup_export'});expect(archive).toMatchObject({format:'grillad-business-export-v2',org,site});expect(Object.keys(archive.tables)).toHaveLength(21);expect(archive.tables.attendance.every(x=>x.photo===null)).toBe(true);
+  const archive=await o({action:'backup_export'});
+  expect(archive).toMatchObject({format:'grillad-business-export-v3',org,site});
+  const expectedTables=['items','cash','cash_recounts','preparations','stock_adjustments','sales','cash_receipts','expenses','purchases','targets','dimension_targets','service_policy','service_revisions','daily_summary','attendance_policy','attendance','attendance_corrections','missing_departures','missing_arrivals','notice_preference','notice_read','backup_preferences'];
+  expect(Object.keys(archive.tables)).toHaveLength(22);
+  expect(Object.keys(archive.tables).sort()).toEqual(expectedTables.sort());
+  for(const name of expectedTables){
+   expect(Array.isArray(archive.tables[name])).toBe(true);
+   for(const row of archive.tables[name])expect(row).toMatchObject({org,site});
+  }
+  expect(archive.tables.attendance.every(x=>x.photo===null)).toBe(true);
+  expect(archive.tables.backup_preferences).toEqual(expect.arrayContaining([expect.objectContaining({org,site,frequency:'weekly',local_minute:360,weekday:1,monthday:1})]));
   expect(Object.keys(archive.tables)).not.toContain('events');
+  expect(Object.keys(archive.tables)).not.toContain('drive_connections');
+  expect(Object.keys(archive.tables)).not.toContain('drive_states');
+  expect(Object.keys(archive.tables)).not.toContain('support_messages');
   await s({action:'referral',operation:'generate'},403);
   const referral=await o({action:'referral',operation:'generate'});
   expect(referral.code).toMatch(/^[0-9A-F]{32}$/);expect(referral.reward_status).toBe('pending_policy');expect(referral.paid_referrals).toBe(0);
