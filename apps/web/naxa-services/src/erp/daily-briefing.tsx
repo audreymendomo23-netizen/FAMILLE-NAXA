@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from "react";
+import {BriefingQuestions} from "./briefing-questions";
 import {privateRequest} from "./private-request";
 import {downloadLocal} from "./calendar-export";
 import type {WebAuthAccount} from "../auth/session";
@@ -56,7 +57,7 @@ export function summarizeBriefingPeriod(dates:string[],values:unknown[]){
  if(rows.some(r=>r.scope!==rows[0].scope))throw Error("BRIEFING_SCOPE_CHANGED");
  const sum=(v:number[])=>{const n=v.reduce((a,b)=>a+b,0);if(!Number.isSafeInteger(n))throw Error("BRIEFING_TOTAL_OVERFLOW");return n;};
  const financeDays=rows.filter(r=>r.finance!==null).length;
- return {rows,scope:rows[0].scope,financeDays,appointments:sum(rows.map(r=>r.appointments.scheduled_count)),completed:sum(rows.map(r=>r.appointments.completed_count)),revenue:financeDays===rows.length?sum(rows.map(r=>r.finance!.revenue_xaf)):null,clocks:rows.every(r=>r.personal_clock_events!==null)?sum(rows.map(r=>r.personal_clock_events!.event_count)):null};
+ return {rows,scope:rows[0].scope,financeDays,appointments:sum(rows.map(r=>r.appointments.scheduled_count)),completed:sum(rows.map(r=>r.appointments.completed_count)),revenue:financeDays===rows.length?sum(rows.map(r=>r.finance!.revenue_xaf)):null,sales:financeDays===rows.length?sum(rows.map(r=>r.finance!.confirmed_sales_count)):null,uncosted:financeDays===rows.length?sum(rows.map(r=>r.finance!.uncosted_sales_count)):null,clocks:rows.every(r=>r.personal_clock_events!==null)?sum(rows.map(r=>r.personal_clock_events!.event_count)):null};
 }
 export function briefingPeriodCsv(report:ReturnType<typeof summarizeBriefingPeriod>){
  const rows=report.rows;const site=report.scope==="site";
@@ -147,6 +148,7 @@ function PeriodBriefing({account,siteId,authEndpoint,anonKey,getToken,day,lang}:
  <p>{t.appointments}: {report.appointments} · {t.completed}: {report.completed}</p>
  {report.scope==="site"&&<p>{report.revenue===null?missing:revenue+": "+report.revenue} ({report.financeDays}/{report.rows.length} {unit})</p>}
  {report.clocks!==null&&<p>{t.clocks}: {report.clocks}</p>}
+ <BriefingQuestions key={lang+":"+report.rows[0].day+":"+report.rows.length} report={report} lang={lang}/>
  <ul>{report.rows.map(r=><li key={r.day}>{r.day} · {t.appointments}: {r.appointments.scheduled_count} · {t.completed}: {r.appointments.completed_count}{r.finance!==null?" · "+revenue+": "+r.finance.revenue_xaf:""}</li>)}</ul></div>}{import.meta.env.VITE_NAXA_SERVICES_BRIEFING_ARCHIVE_ENABLED==="true"&&<BriefingArchives account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} day={day} lang={lang} report={report}/>}</section>;
 }
 export function DailyBriefing(props:Props){

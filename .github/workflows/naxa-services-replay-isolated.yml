@@ -255,7 +255,7 @@ jobs:
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql naxa_services_v22_first_password_gate.sql naxa_services_v23_erp_financial_consistency.sql naxa_services_v24_commission_configuration.sql naxa_services_v25_commission_settlement.sql naxa_services_v26_transverse_operations.sql naxa_services_v27_briefing_archive.sql naxa_services_v28_commission_multiline.sql naxa_services_v29_commission_deferred.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql naxa_services_v22_first_password_gate.sql naxa_services_v23_erp_financial_consistency.sql naxa_services_v24_commission_configuration.sql naxa_services_v25_commission_settlement.sql naxa_services_v26_transverse_operations.sql naxa_services_v27_briefing_archive.sql naxa_services_v28_commission_multiline.sql naxa_services_v29_commission_deferred.sql naxa_services_v30_commission_events.sql naxa_services_v31_briefing_notifications.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
@@ -1137,11 +1137,21 @@ jobs:
                   await period.locator('[data-briefing-period-result="2"]').waitFor();
                   assert.equal(await period.locator('li').count(),2);
                   assert.equal(await period.getByText('Confirmed revenue (XAF)',{exact:false}).count(),0);
+                  const questions=period.getByRole('region',{name:'Report questions',exact:true});
+                  await questions.getByLabel('Choose a metric').selectOption('completed');
+                  assert.match(await questions.locator('[data-briefing-answer]').innerText(),/^Completed appointments: [0-9]+$/);
+                  assert.equal(await questions.locator('option[value=revenue]').count(),0);
+                  pass('B3 scoped period questions: exact completed count and no personal finance');
                   pass('B3 real browser multi-day personal period: two authorized days and no financial disclosure');
                   phase='B3 private report archive';
                   const archive=period.getByRole('region',{name:'Report archives',exact:true});
                   const saved=await rpc(guest,'ns_archive_briefing',()=>archive.getByRole('button',{name:'Archive period',exact:true}).click());
                   assert.equal(saved.scope,'personal');assert.ok(saved.id);
+                  const notices=await success(base+'/rest/v1/ns_notification_outbox?select=id,recipient_member_id,payload_redacted,channel&event_code=eq.briefing_archive_ready&idempotency_key=eq.briefing-archive:'+saved.id,undefined,admin,admin,'GET');
+                  assert.equal(notices.length,1);assert.equal(notices[0].recipient_member_id,guestAuth.account.member_id);assert.equal(notices[0].channel,'in_app');assert.deepEqual(notices[0].payload_redacted,{});
+                  const inboxRows=await success(base+'/rest/v1/ns_notification_inbox?select=member_id,event_code,payload_redacted&notification_id=eq.'+notices[0].id,undefined,admin,admin,'GET');
+                  assert.equal(inboxRows.length,1);assert.equal(inboxRows[0].member_id,guestAuth.account.member_id);assert.equal(inboxRows[0].event_code,'briefing_archive_ready');assert.deepEqual(inboxRows[0].payload_redacted,{});
+                  pass('B3 private archive notification: one owner inbox record, redacted payload');
                   const archivedReport=archive.locator('[data-archive-id="'+saved.id+'"]');
                   await archivedReport.waitFor();
                   const snapshot=await rpc(guest,'ns_read_briefing_archive',()=>archivedReport.getByRole('button',{name:'Open',exact:true}).click());

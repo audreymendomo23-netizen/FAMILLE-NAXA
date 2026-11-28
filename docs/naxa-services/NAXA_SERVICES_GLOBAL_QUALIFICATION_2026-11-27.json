@@ -171,7 +171,7 @@
       "workflow": "technical-gate",
       "status": "partial",
       "acceptance": "Consolidations autorisées, rubriques complètes, archive, notification et interaction vocale ; aucune donnée inventée.",
-      "residual": "Bilan multi-jours et archive privée construits ; notifications, Q&A vocal et rubriques exhaustives restent ouverts."
+      "residual": "V31 ajoute notification privée d'archive et questions sur indicateurs exacts, microphone strictement local si disponible ; qualification terminale, rubriques métier exhaustives, parité native, voix physiques et rappels récurrents encore ouverts."
     },
     {
       "id": "B3-08",
@@ -213,7 +213,7 @@
       "workflow": "replay-isolated",
       "status": "partial",
       "acceptance": "Cas terminé + paiement confirmé + allocation explicite ; idempotence, concurrence, annulation et extournes transactionnelles ; sans taux universel.",
-      "residual": "V25–V29 rapprochement, approbation, remboursement intégral, allocation multiligne et file différée ; événement automatique, partage d'une ligne, extourne partielle et autres sources ouverts."
+      "residual": "V30 ajoute file transactionnelle et worker réservé au service, contrôle des droits, recette de reprise ; scheduler hébergé non activé, partage d'une ligne, extourne partielle et sources sans rendez-vous encore ouverts."
     },
     {
       "id": "B4-05",

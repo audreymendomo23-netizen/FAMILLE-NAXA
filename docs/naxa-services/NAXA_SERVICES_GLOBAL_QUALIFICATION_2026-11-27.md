@@ -66,3 +66,6 @@ Clôture : preuve terminale par ID et périmètre, aucun succès par association
 Aucun PASS automatique. Voir le registre d'exécution distinct.
 
 - B4-03 : recette SQL étendue aux quatre dimensions, règle absente et refus explicite du chevauchement ; résultat terminal et parité native restent requis.
+
+- B4-04 : V30 file événementielle et worker service-only en recette ; pas de scheduler hébergé ni règles de partage/extourne inventées.
+- B3-07 : V31 notification d'archive in-app et questions déterministes sur bilan, voix locale facultative ; pas de preuve micro physique ni de couverture exhaustive.

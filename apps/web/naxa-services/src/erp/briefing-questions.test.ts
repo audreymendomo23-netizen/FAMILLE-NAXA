@@ -1,0 +1,4 @@
+import {it,expect} from "vitest";import {metricAnswer,matchMetric} from "./briefing-questions";
+const report={scope:"site" as const,appointments:4,completed:2,revenue:0,sales:3,uncosted:1,clocks:null};
+it("does not disclose finance to personal scope even when supplied",()=>{const r={...report,scope:"personal" as const};for(const m of ["revenue","sales","uncosted"] as const)expect(metricAnswer(r,m,"en")).toBeNull();expect(matchMetric("Revenue","en","personal")).toBeNull();});
+it("distinguishes real zero from absent values and rejects arbitrary questions",()=>{expect(metricAnswer(report,"revenue","en")).toBe("Revenue: 0 XAF");expect(metricAnswer(report,"clocks","en")).toBeNull();expect(matchMetric(" appointments? ","en","personal")).toBe("appointments");expect(matchMetric("Show customer names","en","site")).toBeNull();});

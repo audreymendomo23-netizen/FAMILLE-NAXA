@@ -202,7 +202,7 @@ const evidence={
       "job": "replay",
       "markers": [
         "PASS real scoped partial briefing text and language selection",
-        "PASS B3 private server report archive: create, read, cross-member denial and delete"
+        "PASS B3 private server report archive: create, read, cross-member denial and delete","PASS B3 scoped period questions: exact completed count and no personal finance","PASS B3 private archive notification: one owner inbox record, redacted payload"
       ]
     }
   ],
@@ -251,7 +251,7 @@ const evidence={
     }
   ],
   "B4-03": [{"job":"finance","markers":["# fail 0"]},{"job":"sql","markers":["PASS: automatic commission configuration, promoter scope, default disabled, explicit rates, exact retry, overlap, retirement and no ledger mutation","PASS: commission scope site member service activity, no applicable policy, overlap rejection and exact scoped calculation"]},{"job":"replay","markers":["PASS B4 real browser commission configuration: default disabled, promoter approval, employee denied, retirement and disable"]}],
-  "B4-04": [{"job":"sql","markers":["PASS: transverse operational cockpit, commission approval, exact replay and confirmed full refund adjustment","PASS: explicit multiline commission allocation, two executors, exact replay, scoped approval and no duplicate","PASS: deferred explicit commission plan, unpaid wait, completion and payment recheck, one pending entry and exact replay"]},{"job":"finance","markers":["# fail 0"]}],
+  "B4-04": [{"job":"sql","markers":["PASS: transverse operational cockpit, commission approval, exact replay and confirmed full refund adjustment","PASS: explicit multiline commission allocation, two executors, exact replay, scoped approval and no duplicate","PASS: deferred explicit commission plan, unpaid wait, completion and payment recheck, one pending entry and exact replay","PASS: commission event worker, unpaid wait, completion and payment wakeup, one pending entry and idempotent drain","PASS: commission event reservation and revoked promoter block without ledger mutation"]},{"job":"finance","markers":["# fail 0"]}],
   "B4-05": [
     {
       "job": "web",
