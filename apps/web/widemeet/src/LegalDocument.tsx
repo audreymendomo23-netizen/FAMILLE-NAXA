@@ -1,0 +1,2 @@
+import React from "react";import docs from "./legal-commercial.json";export const LEGAL_VERSION=docs.version;
+export function LegalDocument({locale,kind,onBack}){const d=docs[locale==="en"?"en":"fr"][kind];return <section className="card wm-signin wm-signup" aria-label={d.title}><h1>{d.title}</h1>{d.sections.map(([title,body])=><article key={title}><h2>{title}</h2><p>{body}</p></article>)}<button type="button" onClick={onBack}>{locale==="en"?"Retour".replace("Retour","Back"):"Retour"}</button></section>}

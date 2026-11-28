@@ -26,7 +26,7 @@ class AuthGateway(private val context:Context,private val base:String){
  private fun endpoint(action:String):URI{
   val u=URI(base)
   require(u.scheme=="https" && !u.host.isNullOrBlank() && u.userInfo==null && u.query==null && u.fragment==null && u.path.trimEnd('/').endsWith("/widemeet-auth"))
-  require(action in setOf("login","logout","switch-workspace","request-recovery","change-password","identity","register","refresh","recovery-enroll","recover-key","chat-media","push"))
+  require(action in setOf("login","logout","switch-workspace","request-recovery","change-password","identity","register","registration-policy","refresh","recovery-enroll","recover-key","chat-media","push"))
   return URI(base.trimEnd('/')+"/"+action)
  }
  private fun installation():String{
@@ -120,9 +120,10 @@ class AuthGateway(private val context:Context,private val base:String){
   require(activeWorkspace(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())!=null)
   request("identity",JSONObject().put("app_id","WIDEMEET").put("action",action).put("data",data),s.accessToken)
  }
+ suspend fun registrationPolicy():Boolean=withContext(Dispatchers.IO){val j=request("registration-policy",JSONObject().put("app_id","WIDEMEET"));j.optBoolean("available")&&j.optString("terms_version")==COMMERCIAL_LEGAL_VERSION&&j.optString("privacy_version")==COMMERCIAL_LEGAL_VERSION}
  suspend fun register(kind:String,display:String,workspace:String,password:String,requestId:String):String=withContext(Dispatchers.IO){
   require(kind in setOf("individual","enterprise")&&display.isNotBlank()&&workspace.isNotBlank()&&password.length in 12..256)
-  val j=request("register",JSONObject().put("app_id","WIDEMEET").put("installation_id",installation()).put("request_id",requestId).put("kind",kind).put("display_name",display.trim()).put("workspace_name",workspace.trim()).put("password",password).put("accepted_terms",true).put("terms_version","wm-replay-draft-20261126").put("privacy_version","wm-replay-draft-20261126"))
+  val j=request("register",JSONObject().put("app_id","WIDEMEET").put("installation_id",installation()).put("request_id",requestId).put("kind",kind).put("display_name",display.trim()).put("workspace_name",workspace.trim()).put("password",password).put("accepted_terms",true).put("accepted_privacy",true).put("terms_version",COMMERCIAL_LEGAL_VERSION).put("privacy_version",COMMERCIAL_LEGAL_VERSION))
   require(j.optString("kind")==kind)
   j.getString("login_id").also{require(Regex("^WM-[A-Z0-9]{8,24}$").matches(it))}
  }

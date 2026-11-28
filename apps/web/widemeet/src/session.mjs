@@ -67,9 +67,14 @@ export async function identityAction(base,session,action,data={},fetcher=fetch){
  if(!workspaceAccess(session,session.active_workspace_id))throw Error("FORBIDDEN_SCOPE");
  return authorizedRequest(base,"identity",{action,data},session.access_token,fetcher);
 }
+export const COMMERCIAL_LEGAL_VERSION="wm-commercial-20261128-v1";
+export async function registrationPolicy(base,fetcher=fetch){
+ const r=await fetcher(endpoint(base,"registration-policy"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"WIDEMEET"}),cache:"no-store",redirect:"error",credentials:"omit"});
+ if(!r.ok)return false;const d=await r.json();return d.available===true&&d.terms_version===COMMERCIAL_LEGAL_VERSION&&d.privacy_version===COMMERCIAL_LEGAL_VERSION;
+}
 export async function registerAccount(base,form,fetcher=fetch,device=installationId){
- if(!["individual","enterprise"].includes(form.kind)||!form.display_name?.trim()||!form.workspace_name?.trim()||typeof form.password!=="string"||form.password.length<12||form.password.length>256||form.accepted_terms!==true||!UUID.test(form.request_id??""))throw Error("INVALID_REGISTRATION");
- const res=await fetcher(endpoint(base,"register"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,app_id:"WIDEMEET",installation_id:device(),terms_version:"wm-replay-draft-20261126",privacy_version:"wm-replay-draft-20261126"}),cache:"no-store",redirect:"error",credentials:"omit"});
+ if(!["individual","enterprise"].includes(form.kind)||!form.display_name?.trim()||!form.workspace_name?.trim()||typeof form.password!=="string"||form.password.length<12||form.password.length>256||form.accepted_terms!==true||form.accepted_privacy!==true||!UUID.test(form.request_id??""))throw Error("INVALID_REGISTRATION");
+ const res=await fetcher(endpoint(base,"register"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,app_id:"WIDEMEET",installation_id:device(),terms_version:COMMERCIAL_LEGAL_VERSION,privacy_version:COMMERCIAL_LEGAL_VERSION}),cache:"no-store",redirect:"error",credentials:"omit"});
  if(!res.ok)throw Error("REGISTRATION_REJECTED");const data=await res.json();if(!/^WM-[A-Z0-9]{8,24}$/.test(data.login_id??"")||data.kind!==form.kind)throw Error("REGISTRATION_UNCONFIRMED");return data;
 }
 

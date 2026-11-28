@@ -171,7 +171,7 @@ create function public.wm_register_account(p_installation uuid,p_request uuid,p_
 returns text language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare receipt public.wm_registration_receipts%rowtype; aid uuid; wid uuid; result text;
 begin
- if p_installation is null or p_request is null or p_auth_user is null or p_kind is null or p_kind not in ('individual','enterprise') or p_display is null or length(trim(p_display)) not between 1 and 120 or p_workspace is null or length(trim(p_workspace)) not between 1 and 120 or p_terms is distinct from 'wm-replay-draft-20261126' or p_privacy is distinct from 'wm-replay-draft-20261126' then raise exception 'invalid registration';end if;
+ if p_installation is null or p_request is null or p_auth_user is null or p_kind is null or p_kind not in ('individual','enterprise') or p_display is null or length(trim(p_display)) not between 1 and 120 or p_workspace is null or length(trim(p_workspace)) not between 1 and 120 or p_terms is null or p_terms not in ('wm-replay-draft-20261126','wm-commercial-20261128-v1') or p_privacy is distinct from p_terms then raise exception 'invalid registration';end if;
  perform pg_advisory_xact_lock(hashtextextended('wm-register:'||p_installation::text||':'||p_request::text,0));
  select * into receipt from public.wm_registration_receipts x where x.installation_id=p_installation and x.request_id=p_request;
  if found then

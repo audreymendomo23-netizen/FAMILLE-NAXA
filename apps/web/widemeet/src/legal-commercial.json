@@ -1,0 +1,139 @@
+{
+  "version": "wm-commercial-20261128-v1",
+  "fr": {
+    "terms": {
+      "title": "Conditions générales d’utilisation (CGU)",
+      "sections": [
+        [
+          "Objet et accès",
+          "WideMeet est un service de réunion et de collaboration destiné aux particuliers et aux organisations. Certaines fonctionnalités dépendent de votre offre, de vos droits et de la disponibilité du service."
+        ],
+        [
+          "Compte et responsabilité",
+          "Vous devez fournir des informations exactes, protéger votre identifiant et votre mot de passe et signaler tout accès suspect. Le promoteur d’une entreprise administre les habilitations de ses collaborateurs. Ne partagez pas vos identifiants."
+        ],
+        [
+          "Utilisation autorisée",
+          "Respectez les participants, leurs droits, les règles applicables et la confidentialité des échanges. Sont interdits la fraude, le harcèlement, l’accès non autorisé et la diffusion illicite de contenus."
+        ],
+        [
+          "Réunions et contenus",
+          "Vous êtes responsable des contenus que vous partagez. L’enregistrement, la transcription et le partage sont soumis aux autorisations et informations requises. Les contenus générés par IA peuvent comporter des erreurs ; vérifiez-les avant publication."
+        ],
+        [
+          "Offres et paiements",
+          "Les prix, durées et conditions de chaque offre sont présentés avant souscription. Aucun paiement n’est confirmé sans validation effective du règlement. Les conditions propres à une offre sont communiquées avant engagement."
+        ],
+        [
+          "Sécurité et assistance",
+          "Le service peut limiter un accès en cas d’abus ou de risque de sécurité. Contactez le service client NAXA depuis WideMeet pour toute difficulté, contestation ou demande relative à votre compte."
+        ],
+        [
+          "Évolution des conditions",
+          "Les modifications importantes des conditions seront portées à votre connaissance. L’acceptation des CGU est enregistrée avec leur version."
+        ]
+      ]
+    },
+    "privacy": {
+      "title": "Politique de confidentialité",
+      "sections": [
+        [
+          "Données traitées",
+          "WideMeet traite les données nécessaires au compte, à la sécurité, aux espaces de travail, aux réunions, à l’assistance et, le cas échéant, à la gestion des abonnements. Les contenus de réunions dépendent des fonctionnalités utilisées et des autorisations accordées."
+        ],
+        [
+          "Finalités",
+          "Ces données servent à fournir le service, gérer vos droits, protéger les comptes, assurer l’assistance et traiter les opérations liées aux offres souscrites. Les données de support ne donnent pas accès par défaut au contenu des réunions."
+        ],
+        [
+          "Accès et partage",
+          "Les accès sont limités aux personnes et services habilités selon leur rôle. Les prestataires nécessaires à l’hébergement, à la communication et aux fonctionnalités activées peuvent traiter les données dans le cadre de leurs missions."
+        ],
+        [
+          "Enregistrements et intelligence artificielle",
+          "L’audio, les transcriptions et les résumés ne sont traités que lorsque les fonctionnalités concernées sont utilisées conformément aux autorisations applicables. Vérifiez les réglages de confidentialité et informez les participants."
+        ],
+        [
+          "Conservation et sécurité",
+          "Les données sont conservées selon leur finalité et les obligations applicables. Les accès sont contrôlés et les sessions peuvent être révoquées. Les copies déjà exportées par leurs destinataires ne peuvent pas être rappelées automatiquement."
+        ],
+        [
+          "Vos droits et assistance",
+          "Vous pouvez adresser vos demandes d’accès, de rectification, d’effacement ou autres demandes relatives à vos données au service client NAXA depuis Livechat et support. Une vérification d’identité peut être nécessaire. Ne transmettez jamais votre mot de passe ni votre clé de récupération."
+        ],
+        [
+          "Information",
+          "La politique est versionnée. Les informations relatives au responsable du traitement, aux contacts officiels, aux durées détaillées et aux prestataires doivent être complétées et validées avant l’ouverture commerciale."
+        ]
+      ]
+    }
+  },
+  "en": {
+    "terms": {
+      "title": "Terms of use",
+      "sections": [
+        [
+          "Purpose and access",
+          "WideMeet is a meeting and collaboration service for individuals and organizations. Some features depend on your plan, permissions and service availability."
+        ],
+        [
+          "Account and responsibility",
+          "Provide accurate information, protect your ID and password, and report suspicious access. Company owners administer their colleagues’ permissions. Do not share credentials."
+        ],
+        [
+          "Permitted use",
+          "Respect participants, their rights, applicable rules and the confidentiality of communications. Fraud, harassment, unauthorized access and unlawful distribution of content are prohibited."
+        ],
+        [
+          "Meetings and content",
+          "You are responsible for the content you share. Recording, transcription and sharing are subject to required permissions and notices. AI-generated content may contain errors; review it before publishing."
+        ],
+        [
+          "Plans and payments",
+          "Prices, duration and conditions of each plan are presented before subscription. No payment is confirmed without actual settlement verification. Plan-specific terms are provided before commitment."
+        ],
+        [
+          "Security and support",
+          "Access may be restricted in case of abuse or security risk. Contact NAXA customer support from WideMeet for issues, disputes or account requests."
+        ],
+        [
+          "Changes",
+          "Material changes to the terms will be brought to your attention. Acceptance is recorded with the terms version."
+        ]
+      ]
+    },
+    "privacy": {
+      "title": "Privacy policy",
+      "sections": [
+        [
+          "Data processed",
+          "WideMeet processes data necessary for accounts, security, workspaces, meetings, support and, where applicable, subscription management. Meeting content depends on the features used and permissions granted."
+        ],
+        [
+          "Purposes",
+          "Data is used to provide the service, manage permissions, protect accounts, provide support and process subscribed plans. Support access does not by default include meeting content."
+        ],
+        [
+          "Access and sharing",
+          "Access is limited to authorized people and services according to their roles. Providers needed for hosting, communications and enabled features may process data within their assigned duties."
+        ],
+        [
+          "Recording and AI",
+          "Audio, transcripts and summaries are processed when the relevant features are used in accordance with applicable permissions. Check privacy settings and inform participants."
+        ],
+        [
+          "Retention and security",
+          "Data is retained according to purpose and applicable obligations. Access is controlled and sessions can be revoked. Copies already exported by recipients cannot automatically be recalled."
+        ],
+        [
+          "Your rights and support",
+          "You may submit access, correction, erasure or other data-related requests to NAXA customer support through Live chat and support. Identity verification may be required. Never provide your password or recovery key."
+        ],
+        [
+          "Information",
+          "This policy is versioned. Controller details, official contact information, detailed retention periods and service providers must be completed and approved before commercial launch."
+        ]
+      ]
+    }
+  }
+}

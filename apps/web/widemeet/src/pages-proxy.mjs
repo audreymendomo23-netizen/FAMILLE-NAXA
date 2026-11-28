@@ -1,7 +1,7 @@
 // WideMeet only: fixed upstream, no service credentials, no arbitrary destinations.
 const upstream="https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/";
 const actions={
- "widemeet-auth":new Set(["register","recovery-enroll","recover-key","request-recovery","login","refresh","change-password","push","chat-media","identity","switch-workspace","logout"]),
+ "widemeet-auth":new Set(["register","registration-policy","recovery-enroll","recover-key","request-recovery","login","refresh","change-password","push","chat-media","identity","switch-workspace","logout"]),
  "widemeet-room":new Set(["list","contacts","pass-list","read","create","command","media-grant","minutes","tasks","series-create","series-cancel","presence","recordings","recording-download","notices","external-invite","report-xlsx","transcription","connect"])
 };
 const fail=(status)=>new Response(JSON.stringify({error:"request_rejected"}),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});

@@ -778,6 +778,7 @@ try{
  await hp.getByRole("navigation").getByRole("button",{name:"Profil",exact:true}).click();
  const picker=hp.getByLabel("Choisir une photo",{exact:true});
  await picker.waitFor();
+ await hp.waitForFunction(()=>{const el=document.querySelector('input[type="file"][accept*="image/webp"]');return el&&!el.disabled});
  await picker.setInputFiles({name:"synthetic-profile.jpg",mimeType:"image/jpeg",buffer:Buffer.from(photo,"base64")});
  const photoPreview=hp.getByRole("img",{name:"Votre photo de profil",exact:true});
  await photoPreview.waitFor({timeout:15000});
@@ -899,6 +900,7 @@ try{
   await b2owner.getByRole("button",{name:"Signalements du groupe",exact:true}).click();
   await b2owner.getByRole("button",{name:"Clôturer le signalement",exact:true}).click();
   await b2owner.getByRole("button",{name:"Clôturer le signalement",exact:true}).waitFor({state:"detached"});
+ await b2owner.getByRole("region",{name:"Fichiers et messages vocaux",exact:true}).waitFor({timeout:30000});
   pass("B2 browser group reply, mention and report resolution");
   // Real Web file upload/download and microphone recording with explicit user actions.
   const mpanel=p=>p.getByRole("region",{name:"Fichiers et messages vocaux",exact:true});
@@ -944,7 +946,7 @@ try{
  await menuPage("Sécurité");
  await hp.getByRole("heading",{name:"Confidentialité et droits sur les données",exact:true}).waitFor();
  await hp.getByText(/Pour demander accès, rectification ou effacement/).waitFor();
- await hp.getByText(/documents juridiques restent en attente/).waitFor();
+ await hp.getByText(/Les documents déjà téléchargés ne peuvent pas être rappelés/).waitFor();
  await hp.getByText("Le Web ne peut pas bloquer les captures système.",{exact:true}).waitFor();
  pass("B6 real authenticated privacy rights and truthful security notices");
  await menuPage("Livechat et support");
@@ -1004,6 +1006,7 @@ try{
  await hp.getByText("Note enregistrée : 4/5",{exact:true}).waitFor();
  assert.equal((await sk(browserSupportHost.access_token,"read",{ticket_id:browserSupportTicket.id})).feedback,4);
  pass("B5 real browser requester feedback persisted on closed ticket");
+ await hp.waitForFunction(()=>[...document.querySelectorAll("button")].some(x=>x.textContent==="Retour aux demandes"&&!x.disabled));
  await hp.getByRole("button",{name:"Retour aux demandes",exact:true}).click();
  const ticketRow=hp.getByText(/Replay support browser · Clôturée/);
  await ticketRow.waitFor({timeout:20000});

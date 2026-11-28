@@ -123,13 +123,19 @@ Deno.serve(async request=>{
  if(support)v.transport_ready=mediaReady;
  return send(200,v);
  }
+ const commercialVersion="wm-commercial-20261128-v1";
+ const commercialReady=Deno.env.get("WM_SIGNUP_QUALIFIED")==="true"&&Deno.env.get("WM_LEGAL_APPROVED_VERSION")===commercialVersion;
+ // The old contract is strictly confined to the existing disposable loopback Replay.
+ const replayReady=url==="http://127.0.0.1:54321"&&Deno.env.get("WM_SIGNUP_QUALIFIED")==="true";
+ if(action==="registration-policy")return send(200,{available:commercialReady,terms_version:commercialVersion,privacy_version:commercialVersion});
  if(action==="register"){
- if(Deno.env.get("WM_SIGNUP_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ if(!commercialReady&&!replayReady)return send(503,{error:"unavailable"});
  const domain=(Deno.env.get("WM_AUTH_ALIAS_DOMAIN")??"").trim().toLowerCase();
  if(!/^[a-z0-9.-]{3,100}$/.test(domain)||!domain.includes(".")||domain.startsWith(".")||domain.endsWith("."))return send(503,{error:"unavailable"});
  const display=typeof body.display_name==="string"?body.display_name.trim():"",kind=body.kind;
  const workspace=typeof body.workspace_name==="string"?body.workspace_name.trim():"";
- const password=body.password,version="wm-replay-draft-20261126";
+ const password=body.password,version=replayReady&&body.terms_version==="wm-replay-draft-20261126"?"wm-replay-draft-20261126":commercialVersion;
+ if(version===commercialVersion&&(!commercialReady||body.accepted_privacy!==true))return send(400,{error:"invalid_registration"});
  if(!uuid.test(body.installation_id??"")||!uuid.test(body.request_id??"")||!["individual","enterprise"].includes(kind)||!display||display.length>120||!workspace||workspace.length>120||typeof password!=="string"||password.length<12||password.length>256||body.accepted_terms!==true||body.terms_version!==version||body.privacy_version!==version)return send(400,{error:"invalid_registration"});
  const installation=body.installation_id.toLowerCase(),requestId=body.request_id.toLowerCase();
  const key=await digest("wm-registration:"+installation+":"+requestId);
