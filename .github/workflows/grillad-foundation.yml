@@ -51,7 +51,7 @@ jobs:
       - if: matrix.suite == 'unit-build'
         run: npm test --workspace @famille/grillad-web
       - if: matrix.suite == 'unit-build' || matrix.suite == 'demo'
-        run: node scripts/grillad/cloudflare-pages-build.mjs
+        run: VITE_GRILLAD_DEMO=1 node scripts/grillad/cloudflare-pages-build.mjs
       - if: matrix.suite == 'unit-build'
         run: test -s apps/web/grillad/dist/index.html && test -s apps/web/grillad/dist/_headers && test -s apps/web/grillad/dist/manifest.webmanifest && ! grep -q '__GRILLAD_ASSETS__' apps/web/grillad/dist/sw.js
       - if: matrix.suite != 'unit-build'
