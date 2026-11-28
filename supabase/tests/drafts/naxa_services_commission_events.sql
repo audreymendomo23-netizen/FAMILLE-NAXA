@@ -134,3 +134,27 @@ do $qa$ begin
  if exists(select 1 from public.ns_commission_entries c where c.sale_id='83000000-0000-4000-8000-000000000247' and (c.status<>'reversed' or c.commission_xaf<>(select coalesce(sum(-a.amount_delta_xaf),0) from public.ns_commission_adjustments a where a.commission_entry_id=c.id))) then raise exception 'QA_REVERSAL_DOUBLE';end if;
 end $qa$;
 select 'PASS: explicit partial refund allocation, immutable adjustments, exact retry and final balance reversal' as result;
+
+insert into public.ns_pressing_orders(id,org_id,site_id,customer_id,ticket_number,status,total_xaf,created_by_member) values('89000000-0000-4000-8000-000000000249','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','80000000-0000-4000-8000-000000000241','QA-SOURCE-PRESSING','received',6000,'60000000-0000-4000-8000-000000000241');
+set local role authenticated;
+do $qa$ declare o uuid:='20000000-0000-4000-8000-000000000241';s uuid:='30000000-0000-4000-8000-000000000241';p uuid:='86000000-0000-4000-8000-000000000249';r jsonb;begin
+ r:=public.ns_register_source_commission_plan(o,s,p,'pressing','89000000-0000-4000-8000-000000000249',null,'81000000-0000-4000-8000-000000000241','60000000-0000-4000-8000-000000000242',null);
+ if r->>'state'<>'waiting' or r is distinct from public.ns_register_source_commission_plan(o,s,p,'pressing','89000000-0000-4000-8000-000000000249',null,'81000000-0000-4000-8000-000000000241','60000000-0000-4000-8000-000000000242',null) then raise exception 'QA_SOURCE_REGISTER';end if;
+end $qa$;
+reset role;
+set local role service_role;
+do $qa$ begin if public.ns_process_next_commission_event()->>'state'<>'waiting' then raise exception 'QA_SOURCE_EARLY';end if;end $qa$;
+reset role;
+update public.ns_pressing_orders set status='ready' where id='89000000-0000-4000-8000-000000000249';
+insert into public.ns_pressing_status_events(org_id,site_id,order_id,to_status,actor_member_id,occurred_at) values('20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','89000000-0000-4000-8000-000000000249','ready','60000000-0000-4000-8000-000000000242','2026-11-27 11:00+01');
+insert into public.ns_payments(id,org_id,site_id,pressing_order_id,payment_method,amount_xaf,status,confirmed_at,idempotency_key) values('87000000-0000-4000-8000-000000000249','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','89000000-0000-4000-8000-000000000249','cash',6000,'confirmed','2026-11-27 12:00+01',gen_random_uuid());
+set local role service_role;
+do $qa$ declare r jsonb;i integer;done boolean:=false;begin for i in 1..10 loop r:=public.ns_process_next_commission_event();if r->>'state'='processed' then done:=true;end if;exit when r->>'state'='empty';end loop;if not done or r->>'state'<>'empty' then raise exception 'QA_SOURCE_DRAIN';end if;end $qa$;
+reset role;
+set local role authenticated;
+do $qa$ declare e uuid;begin
+ select id into e from public.ns_commission_entries where source_event_id='86000000-0000-4000-8000-000000000249' and sale_id is null and appointment_id is null and status='pending_approval';
+ if e is null or public.ns_review_settled_commission('20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241',e,gen_random_uuid(),'approve','QA pressing completed')->>'status'<>'approved' then raise exception 'QA_SOURCE_APPROVE';end if;
+end $qa$;
+reset role;
+select 'PASS: pressing completion and direct confirmed payment, automatic ledger without fictitious sale or appointment' as result;

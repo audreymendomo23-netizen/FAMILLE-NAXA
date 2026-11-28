@@ -218,6 +218,129 @@ begin
 end $fn$;
 revoke all on function public.ns_prepare_multiline_commissions(uuid,uuid,uuid,uuid,jsonb) from public,anon,authenticated;
 grant execute on function public.ns_prepare_multiline_commissions(uuid,uuid,uuid,uuid,jsonb) to authenticated;
+
+-- Canonical completed service outside appointments. A pressing ticket uses its own confirmed payments.
+alter table public.ns_commission_reconciliation_plans alter column sale_id drop not null;
+alter table public.ns_commission_settlements alter column appointment_id drop not null,alter column sale_id drop not null;
+create table ns_commission_internal.sources(
+ plan_id uuid primary key references public.ns_commission_reconciliation_plans(id) on delete restrict,
+ org_id uuid not null,site_id uuid not null,kind text not null check(kind in ('work','pressing')),
+ source_id uuid not null,service_id uuid not null references public.ns_services(id),
+ member_id uuid not null,shares jsonb,sale_line_id uuid references public.ns_sale_lines(id),
+ unique(kind,source_id),foreign key(site_id,org_id) references public.ns_sites(id,org_id),
+ foreign key(member_id,org_id) references public.ns_members(id,org_id),
+ check((kind='pressing' and sale_line_id is null) or (kind='work' and sale_line_id is not null))
+);
+alter table ns_commission_internal.sources enable row level security;
+revoke all on ns_commission_internal.sources from public,anon,authenticated,service_role;
+alter table public.ns_commission_settlements add column source_plan_id uuid references ns_commission_internal.sources(plan_id);
+alter table public.ns_commission_settlements add constraint ns_commission_source_shape check((appointment_id is not null and source_plan_id is null and sale_id is not null) or (appointment_id is null and source_plan_id is not null));
+create unique index ns_commission_source_member on public.ns_commission_settlements(source_plan_id,allocation_member_id) where source_plan_id is not null;
+create function ns_commission_internal.source_members_valid(p_org uuid,p_site uuid,p_member uuid,p_shares jsonb) returns boolean language sql stable set search_path='' as $fn$
+ select (p_shares is null or exists(select 1 from jsonb_array_elements(p_shares) x where (x->>'member_id')::uuid=p_member))
+ and not exists(select 1 from jsonb_array_elements(coalesce(p_shares,jsonb_build_array(jsonb_build_object('member_id',p_member)))) x where not exists(
+ select 1 from public.ns_members m join public.ns_accounts a on a.id=m.account_id join public.ns_member_scopes sc on sc.org_id=m.org_id and sc.member_id=m.id
+ where m.id=(x->>'member_id')::uuid and m.org_id=p_org and m.status='active' and a.status='active' and not a.password_change_required and (sc.can_operate or sc.can_manage) and (sc.scope_type='organization' or sc.site_id=p_site)));
+$fn$;
+revoke all on function ns_commission_internal.source_members_valid(uuid,uuid,uuid,jsonb) from public,anon,authenticated,service_role;
+create function public.ns_register_source_commission_plan(p_org uuid,p_site uuid,p_id uuid,p_kind text,p_source uuid,p_sale uuid,p_service uuid,p_member uuid,p_shares jsonb default null) returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare actor uuid:=public.ns_current_member_id(p_org); normalized jsonb; t public.ns_commission_reconciliation_plans%rowtype; src ns_commission_internal.sources%rowtype; w public.ns_management_records%rowtype; pr public.ns_pressing_orders%rowtype; s public.ns_sales%rowtype; l public.ns_sale_lines%rowtype; canonical jsonb;
+begin
+ if auth.uid() is null or actor is null or not public.ns_can_manage_org(p_org) or not public.ns_can_manage_site(p_org,p_site) then raise exception 'NS_COMMISSION_SOURCE_FORBIDDEN';end if;
+ if p_kind is null or p_kind not in ('work','pressing') or p_id is null or p_source is null or p_service is null or p_member is null or (p_kind='work' and p_sale is null) or (p_kind='pressing' and p_sale is not null) then raise exception 'NS_COMMISSION_SOURCE_INVALID';end if;
+ if p_shares is not null then normalized:=ns_commission_internal.normalize_shares(p_shares);end if;
+ perform 1 from public.ns_organizations where id=p_org and status='active' for update;
+ if not found or not ns_commission_internal.authorized_actor(p_org,p_site,actor) then raise exception 'NS_COMMISSION_SOURCE_FORBIDDEN';end if;
+ select * into t from public.ns_commission_reconciliation_plans where id=p_id or (p_sale is not null and sale_id=p_sale);
+ if found then
+  select * into src from ns_commission_internal.sources where plan_id=t.id;
+  if not found or t.id<>p_id or t.org_id<>p_org or t.site_id<>p_site or t.actor_id<>actor or t.sale_id is distinct from p_sale or src.kind<>p_kind or src.source_id<>p_source or src.service_id<>p_service or src.member_id<>p_member or src.shares is distinct from normalized then raise exception 'NS_COMMISSION_SOURCE_CONFLICT';end if;
+  return jsonb_build_object('id',t.id,'state',t.state);
+ end if;
+ if not exists(select 1 from public.ns_automatic_commission_settings where org_id=p_org and enabled) then raise exception 'NS_COMMISSION_SOURCE_DISABLED';end if;
+ if not ns_commission_internal.source_members_valid(p_org,p_site,p_member,normalized) or not exists(select 1 from public.ns_services v where v.id=p_service and v.org_id=p_org and (v.site_id is null or v.site_id=p_site) and v.active) then raise exception 'NS_COMMISSION_SOURCE_SCOPE';end if;
+ if exists(select 1 from ns_commission_internal.sources where kind=p_kind and source_id=p_source) then raise exception 'NS_COMMISSION_SOURCE_CONFLICT';end if;
+ if p_kind='work' then
+  select * into w from public.ns_management_records where id=p_source and org_id=p_org and site_id=p_site and record_type in ('work_order','repair_order','service_order') and status not in ('cancelled','rejected') for update;
+  if not found then raise exception 'NS_COMMISSION_SOURCE_SCOPE';end if;
+  select * into s from public.ns_sales where id=p_sale and org_id=p_org and site_id=p_site and status in ('draft','posted') and total_xaf=w.amount_xaf and total_xaf>0 for update;
+  if not found then raise exception 'NS_COMMISSION_SOURCE_SALE';end if;
+  perform 1 from public.ns_sale_lines where sale_id=s.id for update;
+  if (select count(*) from public.ns_sale_lines where sale_id=s.id)<>1 or exists(select 1 from public.ns_commission_entries where sale_id=s.id) or exists(select 1 from public.ns_commission_settlements where sale_id=s.id) or exists(select 1 from public.ns_commission_allocation_batches where sale_id=s.id) then raise exception 'NS_COMMISSION_SOURCE_CONFLICT';end if;
+  select * into l from public.ns_sale_lines where sale_id=s.id and org_id=p_org and site_id=p_site and item_type='service' and quantity=1 and unit_price_xaf-discount_xaf=s.total_xaf;
+  if not found then raise exception 'NS_COMMISSION_SOURCE_SALE';end if;
+ else
+  select * into pr from public.ns_pressing_orders where id=p_source and org_id=p_org and site_id=p_site and status<>'cancelled' and total_xaf>0 for update;
+  if not found then raise exception 'NS_COMMISSION_SOURCE_SCOPE';end if;
+ end if;
+ canonical:=jsonb_build_array(jsonb_build_object('source_kind',p_kind,'source_id',p_source,'service_id',p_service,'member_id',p_member,'shares',normalized,'line_id',l.id));
+ insert into public.ns_commission_reconciliation_plans(id,org_id,site_id,sale_id,actor_id,allocation) values(p_id,p_org,p_site,p_sale,actor,canonical);
+ insert into ns_commission_internal.sources(plan_id,org_id,site_id,kind,source_id,service_id,member_id,shares,sale_line_id) values(p_id,p_org,p_site,p_kind,p_source,p_service,p_member,normalized,l.id);
+ return jsonb_build_object('id',p_id,'state','waiting');
+end $fn$;
+revoke all on function public.ns_register_source_commission_plan(uuid,uuid,uuid,text,uuid,uuid,uuid,uuid,jsonb) from public,anon,authenticated;
+grant execute on function public.ns_register_source_commission_plan(uuid,uuid,uuid,text,uuid,uuid,uuid,uuid,jsonb) to authenticated;
+-- Authoritative facts rechecked on every worker and approval call, under transaction locks.
+create function ns_commission_internal.source_facts(p_id uuid) returns jsonb language plpgsql set search_path='' as $fn$
+declare src ns_commission_internal.sources%rowtype; t public.ns_commission_reconciliation_plans%rowtype; w public.ns_management_records%rowtype; pr public.ns_pressing_orders%rowtype; s public.ns_sales%rowtype; amount bigint; done_at timestamptz; paid numeric; refunded numeric; cancelled boolean:=false; ready boolean:=false; posted boolean:=false;
+begin
+ select * into src from ns_commission_internal.sources where plan_id=p_id;
+ if not found then raise exception 'NS_COMMISSION_SOURCE_SCOPE';end if;
+ select * into t from public.ns_commission_reconciliation_plans where id=p_id and org_id=src.org_id and site_id=src.site_id;
+ if not found then raise exception 'NS_COMMISSION_SOURCE_SCOPE';end if;
+ if src.kind='work' then
+  select * into w from public.ns_management_records where id=src.source_id and org_id=src.org_id and site_id=src.site_id and record_type in ('work_order','repair_order','service_order') for update;
+  if not found then raise exception 'NS_COMMISSION_SOURCE_SCOPE';end if;
+  select * into s from public.ns_sales where id=t.sale_id and org_id=src.org_id and site_id=src.site_id for update;
+  if not found or w.amount_xaf<>s.total_xaf or not exists(select 1 from public.ns_sale_lines l where l.id=src.sale_line_id and l.sale_id=s.id and l.org_id=src.org_id and l.site_id=src.site_id and l.item_type='service' and l.quantity=1 and l.unit_price_xaf-l.discount_xaf=s.total_xaf) or (select count(*) from public.ns_sale_lines where sale_id=s.id)<>1 then raise exception 'NS_COMMISSION_SOURCE_SALE';end if;
+  perform 1 from public.ns_sale_lines where sale_id=s.id for update;
+  amount:=s.total_xaf;cancelled:=w.status in ('cancelled','rejected') or s.status in ('refunded','voided');posted:=s.status='posted';
+  if w.status in ('delivered','closed') then select max(e.occurred_at) into done_at from public.ns_management_record_events e where e.record_id=w.id and e.org_id=src.org_id and e.site_id=src.site_id and e.to_status in ('delivered','closed');end if;
+ else
+  select * into pr from public.ns_pressing_orders where id=src.source_id and org_id=src.org_id and site_id=src.site_id for update;
+  if not found then raise exception 'NS_COMMISSION_SOURCE_SCOPE';end if;
+  amount:=pr.total_xaf;cancelled:=pr.status='cancelled';posted:=not cancelled;
+  if pr.status in ('ready','picked_up') then select max(e.occurred_at) into done_at from public.ns_pressing_status_events e where e.order_id=pr.id and e.org_id=src.org_id and e.site_id=src.site_id and e.to_status in ('ready','picked_up');end if;
+ end if;
+ perform 1 from public.ns_payments p where (src.kind='work' and p.sale_id=t.sale_id) or (src.kind='pressing' and p.pressing_order_id=src.source_id) for update;
+ if exists(select 1 from public.ns_payments p where ((src.kind='work' and p.sale_id=t.sale_id) or (src.kind='pressing' and p.pressing_order_id=src.source_id)) and (p.org_id<>src.org_id or p.site_id<>src.site_id)) then raise exception 'NS_COMMISSION_SOURCE_SCOPE';end if;
+ select coalesce(sum(p.amount_xaf) filter(where p.status='confirmed' and p.confirmed_at is not null),0),coalesce(sum(p.amount_xaf) filter(where p.status in ('refunded','reversed') and p.confirmed_at is not null),0) into paid,refunded from public.ns_payments p where ((src.kind='work' and p.sale_id=t.sale_id) or (src.kind='pressing' and p.pressing_order_id=src.source_id));
+ ready:=posted and not cancelled and done_at is not null and amount>0 and paid=amount and refunded=0;
+ return jsonb_build_object('ready',ready,'cancelled',cancelled,'posted',posted,'amount',amount,'paid',paid,'refunded',refunded,'done_at',done_at);
+end $fn$;
+revoke all on function ns_commission_internal.source_facts(uuid) from public,anon,authenticated,service_role;
+create function ns_commission_internal.prepare_source(p_id uuid,p_actor uuid) returns jsonb language plpgsql set search_path='' as $fn$
+declare src ns_commission_internal.sources%rowtype;t public.ns_commission_reconciliation_plans%rowtype; facts jsonb; rules integer; policy public.ns_commission_policy_versions%rowtype; profile text; d date; amount bigint; commission bigint; allocations jsonb; sh record; eid uuid; entries jsonb:='[]'::jsonb;
+begin
+ select * into src from ns_commission_internal.sources where plan_id=p_id;
+ select * into t from public.ns_commission_reconciliation_plans where id=p_id;
+ if not found or not ns_commission_internal.authorized_actor(t.org_id,t.site_id,p_actor) then raise exception 'NS_COMMISSION_SOURCE_FORBIDDEN';end if;
+ facts:=ns_commission_internal.source_facts(p_id);
+ if (facts->>'cancelled')::boolean or (facts->>'refunded')::numeric>0 then return jsonb_build_object('status','source_cancelled_or_refunded');end if;
+ if not (facts->>'ready')::boolean then return jsonb_build_object('status','awaiting_completed_and_confirmed');end if;
+ if not ns_commission_internal.source_members_valid(t.org_id,t.site_id,src.member_id,src.shares) or not exists(select 1 from public.ns_services v where v.id=src.service_id and v.org_id=t.org_id and (v.site_id is null or v.site_id=t.site_id) and v.active) then raise exception 'NS_COMMISSION_SOURCE_SCOPE';end if;
+ if exists(select 1 from public.ns_commission_settlements where source_plan_id=p_id or (t.sale_id is not null and sale_id=t.sale_id)) then raise exception 'NS_COMMISSION_SOURCE_CONFLICT';end if;
+ select activity_profile into profile from public.ns_organizations where id=t.org_id;
+ d:=((facts->>'done_at')::timestamptz at time zone 'Africa/Douala')::date;amount:=(facts->>'amount')::bigint;
+ allocations:=coalesce(src.shares,jsonb_build_array(jsonb_build_object('member_id',src.member_id,'share_bps',10000)));
+ select count(*) into rules from public.ns_commission_policy_versions v where v.org_id=t.org_id and v.automatic_scope and v.status='approved' and (v.site_id is null or v.site_id=t.site_id) and (v.member_id is null or exists(select 1 from jsonb_array_elements(allocations) a where (a->>'member_id')::uuid=v.member_id)) and (v.service_id is null or v.service_id=src.service_id) and (v.activity_profile is null or v.activity_profile=profile) and d>=v.effective_from and (v.effective_until is null or d<=v.effective_until);
+ if rules=0 then return jsonb_build_object('status','no_applicable_policy');elsif rules>1 then raise exception 'NS_COMMISSION_SOURCE_AMBIGUOUS';end if;
+ select * into policy from public.ns_commission_policy_versions v where v.org_id=t.org_id and v.automatic_scope and v.status='approved' and (v.site_id is null or v.site_id=t.site_id) and (v.member_id is null or exists(select 1 from jsonb_array_elements(allocations) a where (a->>'member_id')::uuid=v.member_id)) and (v.service_id is null or v.service_id=src.service_id) and (v.activity_profile is null or v.activity_profile=profile) and d>=v.effective_from and (v.effective_until is null or d<=v.effective_until);
+ if src.shares is not null and policy.member_id is not null then raise exception 'NS_COMMISSION_SOURCE_AMBIGUOUS';end if;
+ commission:=case when policy.method='percent_bps' then trunc(amount::numeric*policy.rate_bps/10000)::bigint else policy.fixed_amount_xaf end;
+ if commission=0 then return jsonb_build_object('status','no_commission');end if;
+ for sh in with parts as (select (x->>'member_id')::uuid mid,(x->>'share_bps')::integer bps,trunc(amount::numeric*(x->>'share_bps')::numeric/10000)::bigint base_part,trunc(commission::numeric*(x->>'share_bps')::numeric/10000)::bigint comm_part from jsonb_array_elements(allocations) x),ranked as (select parts.*,row_number() over(order by mid) rn,sum(base_part) over() base_sum,sum(comm_part) over() comm_sum from parts)
+ select mid,bps,base_part+case when rn<=amount-base_sum then 1 else 0 end allocated_base,comm_part+case when rn<=commission-comm_sum then 1 else 0 end allocated_commission from ranked order by mid loop
+  eid:=gen_random_uuid();
+  insert into public.ns_commission_entries(id,org_id,site_id,member_id,sale_id,base_amount_xaf,commission_xaf,status,policy_version_id,source_event_id,idempotency_key,calculation_snapshot)
+  values(eid,t.org_id,t.site_id,sh.mid,t.sale_id,sh.allocated_base,sh.allocated_commission,'pending_approval',policy.id,p_id,eid,jsonb_build_object('source',src.kind,'source_id',src.source_id,'line_base_xaf',amount,'share_bps',sh.bps,'completion_day',d,'policy_version',policy.version));
+  insert into public.ns_commission_settlements(org_id,site_id,sale_id,entry_id,created_by,sale_line_id,allocation_member_id,source_plan_id) values(t.org_id,t.site_id,t.sale_id,eid,p_actor,src.sale_line_id,sh.mid,p_id);
+  entries:=entries||jsonb_build_array(jsonb_build_object('entry_id',eid,'member_id',sh.mid,'commission_xaf',sh.allocated_commission));
+ end loop;
+ return jsonb_build_object('status','prepared','entries',entries);
+end $fn$;
+revoke all on function ns_commission_internal.prepare_source(uuid,uuid) from public,anon,authenticated,service_role;
+
 create function ns_commission_internal.ns_process_commission_plan(p_org uuid,p_site uuid,p_id uuid,p_actor uuid)
 returns jsonb language plpgsql security definer set search_path='' as $fn$
 declare t public.ns_commission_reconciliation_plans%rowtype; s public.ns_sales%rowtype; paid numeric; r jsonb; outcome text;
@@ -229,6 +352,18 @@ begin
  if not found then raise exception 'NS_COMMISSION_PLAN_FORBIDDEN';end if;
  if t.state<>'waiting' then return jsonb_build_object('id',t.id,'state',t.state,'receipt',t.receipt);end if;
  if not exists(select 1 from public.ns_automatic_commission_settings where org_id=p_org and enabled) then return jsonb_build_object('id',t.id,'state','waiting','reason','disabled');end if;
+ if exists(select 1 from ns_commission_internal.sources where plan_id=t.id) then
+  begin
+   r:=ns_commission_internal.prepare_source(t.id,p_actor);
+   if r->>'status'='awaiting_completed_and_confirmed' then return jsonb_build_object('id',t.id,'state','waiting','reason',r->>'status');end if;
+   outcome:=case when r->>'status' in ('prepared','no_applicable_policy','no_commission') then 'processed' else 'review_required' end;
+  exception when raise_exception then
+   if sqlerrm not like 'NS_COMMISSION_%' then raise;end if;
+   r:=jsonb_build_object('status','reconciliation_conflict','code',sqlerrm);outcome:='review_required';
+  end;
+  update public.ns_commission_reconciliation_plans set state=outcome,receipt=r,processed_at=now() where id=t.id;
+  return jsonb_build_object('id',t.id,'state',outcome,'receipt',r);
+ end if;
  select * into s from public.ns_sales where id=t.sale_id and org_id=p_org and site_id=p_site for update;
  if not found then raise exception 'NS_COMMISSION_PLAN_SALE';end if;
  if s.status in ('refunded','voided') or exists(select 1 from public.ns_commission_plan_appointments l join public.ns_appointments a on a.id=l.appointment_id where l.plan_id=t.id and a.status in ('cancelled','no_show')) then
@@ -283,6 +418,15 @@ begin
   insert into ns_commission_internal.events(plan_id) select p.id from public.ns_commission_reconciliation_plans p join public.ns_commission_plan_appointments a on a.plan_id=p.id where a.appointment_id=new.appointment_id and p.state='waiting';
  elsif tg_table_name='ns_payments' then
   insert into ns_commission_internal.events(plan_id) select id from public.ns_commission_reconciliation_plans where sale_id=new.sale_id and state='waiting';
+  insert into ns_commission_internal.events(plan_id) select t.id from public.ns_commission_reconciliation_plans t join ns_commission_internal.sources src on src.plan_id=t.id where src.kind='pressing' and src.source_id=new.pressing_order_id and t.state='waiting';
+ elsif tg_table_name='ns_management_records' then
+  insert into ns_commission_internal.events(plan_id) select t.id from public.ns_commission_reconciliation_plans t join ns_commission_internal.sources src on src.plan_id=t.id where src.kind='work' and src.source_id=new.id and t.state='waiting';
+ elsif tg_table_name='ns_management_record_events' then
+  insert into ns_commission_internal.events(plan_id) select t.id from public.ns_commission_reconciliation_plans t join ns_commission_internal.sources src on src.plan_id=t.id where src.kind='work' and src.source_id=new.record_id and t.state='waiting';
+ elsif tg_table_name='ns_pressing_orders' then
+  insert into ns_commission_internal.events(plan_id) select t.id from public.ns_commission_reconciliation_plans t join ns_commission_internal.sources src on src.plan_id=t.id where src.kind='pressing' and src.source_id=new.id and t.state='waiting';
+ elsif tg_table_name='ns_pressing_status_events' then
+  insert into ns_commission_internal.events(plan_id) select t.id from public.ns_commission_reconciliation_plans t join ns_commission_internal.sources src on src.plan_id=t.id where src.kind='pressing' and src.source_id=new.order_id and t.state='waiting';
  elsif tg_table_name='ns_sales' then
   insert into ns_commission_internal.events(plan_id) select id from public.ns_commission_reconciliation_plans where sale_id=new.id and state='waiting';
  elsif tg_table_name='ns_automatic_commission_settings' then
@@ -295,6 +439,10 @@ create trigger ns_commission_wake_registration after insert on public.ns_commiss
 create trigger ns_commission_wake_appointment after update of status on public.ns_appointments for each row when (old.status is distinct from new.status) execute function ns_commission_internal.wake();
 create trigger ns_commission_wake_completion after insert on public.ns_appointment_status_events for each row execute function ns_commission_internal.wake();
 create trigger ns_commission_wake_payment after insert or update of status,confirmed_at on public.ns_payments for each row execute function ns_commission_internal.wake();
+create trigger ns_commission_wake_work after update of status on public.ns_management_records for each row when(old.status is distinct from new.status) execute function ns_commission_internal.wake();
+create trigger ns_commission_wake_work_event after insert on public.ns_management_record_events for each row execute function ns_commission_internal.wake();
+create trigger ns_commission_wake_pressing after update of status on public.ns_pressing_orders for each row when(old.status is distinct from new.status) execute function ns_commission_internal.wake();
+create trigger ns_commission_wake_pressing_event after insert on public.ns_pressing_status_events for each row execute function ns_commission_internal.wake();
 create trigger ns_commission_wake_sale after update of status on public.ns_sales for each row when (old.status is distinct from new.status) execute function ns_commission_internal.wake();
 create trigger ns_commission_wake_settings after insert or update of enabled on public.ns_automatic_commission_settings for each row execute function ns_commission_internal.wake();
 insert into ns_commission_internal.events(plan_id) select id from public.ns_commission_reconciliation_plans where state='waiting';
@@ -326,7 +474,7 @@ grant execute on function public.ns_process_next_commission_event() to service_r
 create or replace function public.ns_review_settled_commission(p_org uuid,p_site uuid,p_entry uuid,p_event uuid,p_decision text,p_reason text)
 returns jsonb language plpgsql security definer set search_path='' as $fn$
 declare actor uuid; e public.ns_commission_entries%rowtype; old_event public.ns_commission_review_events%rowtype;
- s public.ns_sales%rowtype; a public.ns_appointments%rowtype; paid numeric; next_status text; prior text; previous_reversal numeric;
+ s public.ns_sales%rowtype; a public.ns_appointments%rowtype; paid numeric; next_status text; prior text; previous_reversal numeric; source_plan uuid; facts jsonb; eligible boolean; refund_ok boolean;
 begin
  actor:=public.ns_current_member_id(p_org);
  if auth.uid() is null or actor is null or not public.ns_can_manage_org(p_org) or not public.ns_can_manage_site(p_org,p_site) then raise exception 'NS_COMMISSION_REVIEW_FORBIDDEN'; end if;
@@ -340,6 +488,12 @@ begin
  end if;
  select c.* into e from public.ns_commission_entries c join public.ns_commission_settlements t on t.entry_id=c.id and t.org_id=c.org_id and t.site_id=c.site_id where c.id=p_entry and c.org_id=p_org and c.site_id=p_site for update of c;
  if not found then raise exception 'NS_COMMISSION_REVIEW_SCOPE'; end if;
+ select source_plan_id into source_plan from public.ns_commission_settlements where entry_id=e.id;
+ if source_plan is not null then
+  facts:=ns_commission_internal.source_facts(source_plan);
+  eligible:=(facts->>'ready')::boolean and (facts->>'amount')::numeric=(e.calculation_snapshot->>'line_base_xaf')::numeric;
+  refund_ok:=(facts->>'paid')::numeric=0 and (facts->>'refunded')::numeric=(facts->>'amount')::numeric and (facts->>'refunded')::numeric>0;
+ else
  select * into a from public.ns_appointments where id=e.appointment_id and org_id=p_org and site_id=p_site for update;
  if not found then raise exception 'NS_COMMISSION_REVIEW_SCOPE'; end if;
  select * into s from public.ns_sales where id=e.sale_id and org_id=p_org and site_id=p_site for update;
@@ -347,9 +501,12 @@ begin
  perform 1 from public.ns_payments where sale_id=s.id for update;
  if exists(select 1 from public.ns_payments where sale_id=s.id and (org_id<>p_org or site_id<>p_site)) then raise exception 'NS_COMMISSION_REVIEW_SCOPE'; end if;
  select coalesce(sum(amount_xaf),0) into paid from public.ns_payments where sale_id=s.id and org_id=p_org and site_id=p_site and status='confirmed' and confirmed_at is not null;
+  eligible:=not (a.status<>'completed' or s.status<>'posted' or paid<>s.total_xaf or (not exists(select 1 from public.ns_commission_settlements where entry_id=e.id and sale_line_id is not null) and paid<>e.base_amount_xaf) or (exists(select 1 from public.ns_commission_settlements where entry_id=e.id and sale_line_id is not null) and not exists(select 1 from public.ns_commission_settlements t join public.ns_sale_lines l on l.id=t.sale_line_id where t.entry_id=e.id and l.sale_id=s.id and l.org_id=p_org and l.site_id=p_site and l.item_type='service' and l.quantity*l.unit_price_xaf-l.discount_xaf=case when t.allocation_member_id is not null then (e.calculation_snapshot->>'line_base_xaf')::numeric else e.base_amount_xaf end)) or exists(select 1 from public.ns_payments where sale_id=s.id and status in ('refunded','reversed')));
+  refund_ok:=s.status in ('refunded','voided') and paid=0 and exists(select 1 from public.ns_payments where sale_id=s.id and org_id=p_org and site_id=p_site and status in ('refunded','reversed'));
+ end if;
  prior:=e.status;
  if p_decision='approve' then
-  if e.status<>'pending_approval' or a.status<>'completed' or s.status<>'posted' or paid<>s.total_xaf or (not exists(select 1 from public.ns_commission_settlements where entry_id=e.id and sale_line_id is not null) and paid<>e.base_amount_xaf) or (exists(select 1 from public.ns_commission_settlements where entry_id=e.id and sale_line_id is not null) and not exists(select 1 from public.ns_commission_settlements t join public.ns_sale_lines l on l.id=t.sale_line_id where t.entry_id=e.id and l.sale_id=s.id and l.org_id=p_org and l.site_id=p_site and l.item_type='service' and l.quantity*l.unit_price_xaf-l.discount_xaf=case when t.allocation_member_id is not null then (e.calculation_snapshot->>'line_base_xaf')::numeric else e.base_amount_xaf end)) or exists(select 1 from public.ns_payments where sale_id=s.id and status in ('refunded','reversed')) then raise exception 'NS_COMMISSION_REVIEW_NOT_ELIGIBLE'; end if;
+  if e.status<>'pending_approval' or not coalesce(eligible,false) then raise exception 'NS_COMMISSION_REVIEW_NOT_ELIGIBLE';end if;
   next_status:='approved';
   update public.ns_commission_entries set status=next_status,approved_by=actor,approved_at=now() where id=e.id;
  elsif p_decision='reject' then
@@ -359,7 +516,7 @@ begin
  else
   -- Final refund reverses only the balance not already adjusted.
   select coalesce(sum(-amount_delta_xaf),0) into previous_reversal from public.ns_commission_adjustments where commission_entry_id=e.id and adjustment_type='refund_reversal';
-  if e.status not in ('approved','paid') or s.status not in ('refunded','voided') or paid<>0 or not exists(select 1 from public.ns_payments where sale_id=s.id and org_id=p_org and site_id=p_site and status in ('refunded','reversed')) or previous_reversal>e.commission_xaf or exists(select 1 from public.ns_commission_adjustments where commission_entry_id=e.id and (adjustment_type<>'refund_reversal' or amount_delta_xaf>=0)) then raise exception 'NS_COMMISSION_REFUND_PROOF_REQUIRED'; end if;
+  if e.status not in ('approved','paid') or not coalesce(refund_ok,false) or previous_reversal>e.commission_xaf or exists(select 1 from public.ns_commission_adjustments where commission_entry_id=e.id and (adjustment_type<>'refund_reversal' or amount_delta_xaf>=0)) then raise exception 'NS_COMMISSION_REFUND_PROOF_REQUIRED'; end if;
   if e.commission_xaf>previous_reversal then insert into public.ns_commission_adjustments(org_id,site_id,commission_entry_id,source_event_id,idempotency_key,adjustment_type,amount_delta_xaf,reason,created_by)
    values(p_org,p_site,e.id,p_event,p_event,'refund_reversal',-(e.commission_xaf-previous_reversal)::bigint,trim(p_reason),actor);end if;
   next_status:='reversed';
@@ -385,7 +542,7 @@ alter table ns_commission_internal.refund_parts enable row level security;
 revoke all on ns_commission_internal.refund_batches,ns_commission_internal.refund_parts from public,anon,authenticated,service_role;
 create function public.ns_reverse_partial_commissions(p_org uuid,p_site uuid,p_payment uuid,p_event uuid,p_allocations jsonb,p_reason text) returns jsonb language plpgsql security definer set search_path='' as $fn$
 declare actor uuid:=public.ns_current_member_id(p_org); pay public.ns_payments%rowtype; sale public.ns_sales%rowtype; e public.ns_commission_entries%rowtype; old ns_commission_internal.refund_batches%rowtype;
- canonical jsonb; item jsonb; count_items integer; paid numeric; refunded numeric; assigned_base numeric; assigned_delta numeric; prior_base numeric; prior_delta numeric; delta bigint; refund_base bigint; adj uuid; receipt jsonb;
+ canonical jsonb; item jsonb; count_items integer; paid numeric; refunded numeric; assigned_base numeric; assigned_delta numeric; source_plan uuid; facts jsonb; total_amount numeric; prior_base numeric; prior_delta numeric; delta bigint; refund_base bigint; adj uuid; receipt jsonb;
 begin
  if auth.uid() is null or actor is null or not public.ns_can_manage_org(p_org) or not public.ns_can_manage_site(p_org,p_site) then raise exception 'NS_PARTIAL_REFUND_FORBIDDEN';end if;
  if p_payment is null or p_event is null or p_allocations is null or jsonb_typeof(p_allocations)<>'array' or length(trim(coalesce(p_reason,''))) not between 4 and 500 then raise exception 'NS_PARTIAL_REFUND_INVALID';end if;
@@ -400,19 +557,27 @@ begin
   if old.id<>p_event or old.org_id<>p_org or old.site_id<>p_site or old.payment_id<>p_payment or old.actor_id<>actor or old.allocations<>canonical or old.reason<>trim(p_reason) then raise exception 'NS_PARTIAL_REFUND_CONFLICT';end if;
   return old.receipt;
  end if;
- select * into pay from public.ns_payments where id=p_payment and org_id=p_org and site_id=p_site and status in ('refunded','reversed') and confirmed_at is not null and sale_id is not null for update;
+ select * into pay from public.ns_payments where id=p_payment and org_id=p_org and site_id=p_site and status in ('refunded','reversed') and confirmed_at is not null for update;
  if not found then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
+ if pay.pressing_order_id is not null then
+  select src.plan_id into source_plan from ns_commission_internal.sources src where src.kind='pressing' and src.source_id=pay.pressing_order_id and src.org_id=p_org and src.site_id=p_site;
+  if not found then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
+  facts:=ns_commission_internal.source_facts(source_plan);
+  paid:=(facts->>'paid')::numeric;refunded:=(facts->>'refunded')::numeric;total_amount:=(facts->>'amount')::numeric;
+ else
  select * into sale from public.ns_sales where id=pay.sale_id and org_id=p_org and site_id=p_site and status='posted' for update;
  if not found then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
  perform 1 from public.ns_payments where sale_id=sale.id for update;
  if exists(select 1 from public.ns_payments where sale_id=sale.id and (org_id<>p_org or site_id<>p_site)) then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
  select coalesce(sum(amount_xaf) filter(where status='confirmed' and confirmed_at is not null),0),coalesce(sum(amount_xaf) filter(where status in ('refunded','reversed') and confirmed_at is not null),0) into paid,refunded from public.ns_payments where sale_id=sale.id;
- if paid<=0 or refunded<=0 or paid+refunded<>sale.total_xaf or assigned_base>pay.amount_xaf then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
+ total_amount:=sale.total_xaf;
+ end if;
+ if paid<=0 or refunded<=0 or paid+refunded<>total_amount or assigned_base>pay.amount_xaf then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
  -- All entries must be original scoped, approved ledger entries of this exact sale.
  receipt:=jsonb_build_object('id',p_event,'status','recorded','refund_xaf',pay.amount_xaf,'allocated_refund_xaf',assigned_base,'commission_reversed_xaf',assigned_delta);
  insert into ns_commission_internal.refund_batches(id,org_id,site_id,payment_id,actor_id,allocations,reason,receipt) values(p_event,p_org,p_site,p_payment,actor,canonical,trim(p_reason),receipt);
  for item in select value from jsonb_array_elements(canonical) loop
-  select c.* into e from public.ns_commission_entries c join public.ns_commission_settlements t on t.entry_id=c.id and t.org_id=c.org_id and t.site_id=c.site_id where c.id=(item->>'entry_id')::uuid and c.org_id=p_org and c.site_id=p_site and c.sale_id=sale.id and c.status in ('approved','paid') for update of c;
+  select c.* into e from public.ns_commission_entries c join public.ns_commission_settlements t on t.entry_id=c.id and t.org_id=c.org_id and t.site_id=c.site_id where c.id=(item->>'entry_id')::uuid and c.org_id=p_org and c.site_id=p_site and ((source_plan is not null and t.source_plan_id=source_plan) or (source_plan is null and c.sale_id=sale.id)) and c.status in ('approved','paid') for update of c;
   if not found then raise exception 'NS_PARTIAL_REFUND_SCOPE';end if;
   refund_base:=(item->>'refund_base_xaf')::bigint;delta:=(item->>'commission_xaf')::bigint;
   select coalesce(sum(refund_base_xaf),0) into prior_base from ns_commission_internal.refund_parts where entry_id=e.id;
@@ -430,4 +595,22 @@ end $fn$;
 revoke all on function public.ns_reverse_partial_commissions(uuid,uuid,uuid,uuid,jsonb,text) from public,anon,authenticated;
 grant execute on function public.ns_reverse_partial_commissions(uuid,uuid,uuid,uuid,jsonb,text) to authenticated;
 
+create or replace function public.ns_list_commission_plans(p_org uuid,p_site uuid)
+returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+begin
+ if auth.uid() is null or public.ns_current_member_id(p_org) is null or not public.ns_can_manage_org(p_org) or not public.ns_can_manage_site(p_org,p_site) then raise exception 'NS_COMMISSION_PLAN_FORBIDDEN';end if;
+ return coalesce((select jsonb_agg(to_jsonb(q) order by q.created_at desc,q.id) from (select t.id,t.state,t.created_at,t.processed_at,coalesce(s.sale_number,pr.ticket_number) as sale_number,jsonb_array_length(t.allocation) as line_count from public.ns_commission_reconciliation_plans t left join public.ns_sales s on s.id=t.sale_id and s.org_id=t.org_id and s.site_id=t.site_id left join ns_commission_internal.sources src on src.plan_id=t.id left join public.ns_pressing_orders pr on src.kind='pressing' and pr.id=src.source_id and pr.org_id=t.org_id and pr.site_id=t.site_id where t.org_id=p_org and t.site_id=p_site order by (t.state='waiting') desc,t.created_at desc,t.id limit 100) q),'[]'::jsonb);
+end $fn$;
+create or replace function public.ns_settled_commission_queue(p_org uuid,p_site uuid)
+returns jsonb language plpgsql stable security definer set search_path='' as $fn$
+begin
+ if auth.uid() is null or public.ns_current_member_id(p_org) is null or not public.ns_can_manage_org(p_org) or not public.ns_can_manage_site(p_org,p_site) or not exists(select 1 from public.ns_sites where id=p_site and org_id=p_org and status='active') then raise exception 'NS_COMMISSION_REVIEW_FORBIDDEN'; end if;
+ return coalesce((select jsonb_agg(to_jsonb(q) order by q.created_at desc,q.id) from
+ (select c.id,c.status,c.commission_xaf,c.base_amount_xaf,c.created_at,m.display_name as member_name,coalesce(s.sale_number,pr.ticket_number) as sale_number
+ from public.ns_commission_entries c join public.ns_commission_settlements t on t.entry_id=c.id and t.org_id=c.org_id and t.site_id=c.site_id
+ join public.ns_members m on m.id=c.member_id and m.org_id=c.org_id
+ left join public.ns_sales s on s.id=c.sale_id and s.org_id=c.org_id and s.site_id=c.site_id
+ left join ns_commission_internal.sources src on src.plan_id=t.source_plan_id left join public.ns_pressing_orders pr on src.kind='pressing' and pr.id=src.source_id and pr.org_id=c.org_id and pr.site_id=c.site_id
+ where c.org_id=p_org and c.site_id=p_site order by c.created_at desc,c.id limit 100) q),'[]'::jsonb);
+end $fn$;
 rollback;

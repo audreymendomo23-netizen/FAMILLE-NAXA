@@ -57,6 +57,10 @@ internal fun CommissionReconciliationCard(session:AuthSession,siteId:String){
   var enabled by remember{mutableStateOf(false)}
   var plans by remember{mutableStateOf<List<JSONObject>>(emptyList())}
   var entries by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+  var sourceKind by remember{mutableStateOf("appointment")}
+  var sourceId by remember{mutableStateOf("")}
+  var sourceService by remember{mutableStateOf("")}
+  var sourceMember by remember{mutableStateOf("")}
   var sale by remember{mutableStateOf("")}
   var allocation by remember{mutableStateOf("")}
   var reason by remember{mutableStateOf("")}
@@ -65,7 +69,7 @@ internal fun CommissionReconciliationCard(session:AuthSession,siteId:String){
   var pending by remember{mutableStateOf<Pair<String,String>?>(null)}
   var confirmAction by remember{mutableStateOf<Triple<String,String,String>?>(null)}
   fun tr(fr:String,en:String,ff:String)=when(session.account.defaultLocale){"en"->en;"ff-CM"->ff;else->fr}
-  fun clear(){generation++;job?.cancel();job=null;busy=false;failure=false;confirmed=false;enabled=false;plans=emptyList();entries=emptyList();sale="";allocation="";reason="";payment="";refund="";confirmAction=null}
+  fun clear(){generation++;job?.cancel();job=null;busy=false;failure=false;confirmed=false;enabled=false;plans=emptyList();entries=emptyList();sale="";sourceKind="appointment";sourceId="";sourceService="";sourceMember="";allocation="";reason="";payment="";refund="";confirmAction=null}
   DisposableEffect(owner){
    val observer=LifecycleEventObserver{_,event->when(event){Lifecycle.Event.ON_RESUME->foreground=true;Lifecycle.Event.ON_PAUSE,Lifecycle.Event.ON_STOP->{foreground=false;clear()};else->Unit}}
    owner?.lifecycle?.addObserver(observer)
@@ -82,7 +86,7 @@ internal fun CommissionReconciliationCard(session:AuthSession,siteId:String){
      }
      fun event(key:String):String{if(pending?.first!=key)pending=key to UUID.randomUUID().toString();return pending!!.second}
      when(action){
-      "register"->{require(enabled);val saleId=commissionUuid(sale);val rows=nativeCommissionAllocation(allocation);val key="register:"+saleId+":"+rows;val eid=event(key);val r=JSONObject(rpc("ns_register_commission_plan",JSONObject().put("p_sale",saleId).put("p_id",eid).put("p_allocations",rows)));require(r.getString("id")==eid&&r.getString("state") in setOf("waiting","processed","review_required"))}
+      "register"->{require(enabled);if(sourceKind!="appointment"){val source=commissionUuid(sourceId);val service=commissionUuid(sourceService);val member=commissionUuid(sourceMember);val saleId=if(sourceKind=="work")commissionUuid(sale) else null;val shares=if(allocation.isBlank())JSONObject.NULL else nativeCommissionAllocation(source+" "+service+" "+allocation.trim()).getJSONObject(0).getJSONArray("shares");val body=JSONObject().put("p_kind",sourceKind).put("p_source",source).put("p_sale",saleId?:JSONObject.NULL).put("p_service",service).put("p_member",member).put("p_shares",shares);val eid=event("source:"+body);val r=JSONObject(rpc("ns_register_source_commission_plan",body.put("p_id",eid)));require(r.getString("id")==eid&&r.getString("state") in setOf("waiting","processed","review_required"))}else{val saleId=commissionUuid(sale);val rows=nativeCommissionAllocation(allocation);val key="register:"+saleId+":"+rows;val eid=event(key);val r=JSONObject(rpc("ns_register_commission_plan",JSONObject().put("p_sale",saleId).put("p_id",eid).put("p_allocations",rows)));require(r.getString("id")==eid&&r.getString("state") in setOf("waiting","processed","review_required"))}}
       "process"->{require(enabled);val pid=commissionUuid(id);val r=JSONObject(rpc("ns_process_commission_plan",JSONObject().put("p_id",pid)));require(r.getString("id")==pid&&r.getString("state") in setOf("waiting","processed","review_required"))}
       "review"->{require(decision in setOf("approve","reject","reverse_refund")&&reason.trim().length in 4..500);val entry=commissionUuid(id);val eid=event("review:"+entry+":"+decision+":"+reason.trim());val r=JSONObject(rpc("ns_review_settled_commission",JSONObject().put("p_entry",entry).put("p_event",eid).put("p_decision",decision).put("p_reason",reason.trim())));require(r.getString("entry_id")==entry&&r.getString("status")==if(decision=="approve")"approved" else "reversed")}
       "partial"->{require(reason.trim().length in 4..500);val pay=commissionUuid(payment);val rows=nativeCommissionRefund(refund);val eid=event("refund:"+pay+":"+rows+":"+reason.trim());val r=JSONObject(rpc("ns_reverse_partial_commissions",JSONObject().put("p_payment",pay).put("p_event",eid).put("p_allocations",rows).put("p_reason",reason.trim())));require(r.getString("id")==eid&&r.getString("status")=="recorded")}
@@ -104,9 +108,11 @@ internal fun CommissionReconciliationCard(session:AuthSession,siteId:String){
    Text(tr("Rapprochement et décisions comptables, aucun versement automatique.","Reconciliation and accounting decisions only; no automatic payout.","Kawrital e konte tan; alaa njoɓdi otomatik."))
    Button(onClick={run("load")},enabled=foreground&&!busy){Text(tr("Charger","Load","Loow"))}
    if(enabled){
-    OutlinedTextField(sale,{sale=it},Modifier.fillMaxWidth(),enabled=!busy,label={Text(tr("ID de vente","Sale ID","ID jaaygol"))})
-    OutlinedTextField(allocation,{allocation=it},Modifier.fillMaxWidth(),enabled=!busy,minLines=3,label={Text(tr("Ligne UUID, rendez-vous UUID, parts facultatives membre:points (10 000)","Line UUID, appointment UUID, optional member:bps shares (10,000)","ID gorol, ID kawrital, geɗal gollotooɗo"))})
-    OutlinedButton(onClick={run("register")},enabled=!busy&&sale.isNotBlank()&&allocation.isNotBlank()){Text(tr("Enregistrer l'association","Register allocation","Winndin kawrital"))}
+    listOf("appointment" to tr("Rendez-vous","Appointment","Kawrital"),"work" to tr("Ordre de travail","Work order","Golle"),"pressing" to tr("Ticket pressing","Pressing ticket","Tiket")).forEach{(k,l)->TextButton(onClick={sourceKind=k;allocation=""},enabled=!busy){Text((if(k==sourceKind)"✓ " else "")+l)}}
+    if(sourceKind!="appointment"){OutlinedTextField(sourceId,{sourceId=it},Modifier.fillMaxWidth(),enabled=!busy,label={Text(tr("ID du travail ou ticket","Work or ticket ID","ID golle"))});OutlinedTextField(sourceService,{sourceService=it},Modifier.fillMaxWidth(),enabled=!busy,label={Text(tr("ID prestation","Service ID","ID golle"))});OutlinedTextField(sourceMember,{sourceMember=it},Modifier.fillMaxWidth(),enabled=!busy,label={Text(tr("ID exécutant","Executor ID","ID gollotooɗo"))})}
+    if(sourceKind!="pressing")OutlinedTextField(sale,{sale=it},Modifier.fillMaxWidth(),enabled=!busy,label={Text(tr("ID de vente","Sale ID","ID jaaygol"))})
+    OutlinedTextField(allocation,{allocation=it},Modifier.fillMaxWidth(),enabled=!busy,minLines=3,label={Text(if(sourceKind=="appointment")tr("Ligne UUID, rendez-vous UUID, parts facultatives membre:points (10 000)","Line UUID, appointment UUID, optional member:bps shares (10,000)","ID gorol, ID kawrital, geɗal gollotooɗo") else tr("Parts facultatives membre:points (10 000)","Optional member:bps shares (10,000)","Geɗal gollotooɗo"))})
+    OutlinedButton(onClick={run("register")},enabled=!busy&&(if(sourceKind=="appointment")sale.isNotBlank()&&allocation.isNotBlank() else sourceId.isNotBlank()&&sourceService.isNotBlank()&&sourceMember.isNotBlank()&&(sourceKind=="pressing"||sale.isNotBlank()))){Text(tr("Enregistrer l'association","Register allocation","Winndin kawrital"))}
    }
    plans.forEach{p->Text(p.getString("sale_number")+" · "+p.getString("state"));if(enabled&&p.getString("state")=="waiting")TextButton(onClick={run("process",p.getString("id"))},enabled=!busy){Text(tr("Traiter si éligible","Process if eligible","Gollu so jaɓaama"))}}
    OutlinedTextField(reason,{reason=it.take(500)},Modifier.fillMaxWidth(),enabled=!busy,label={Text(tr("Motif","Reason","Dalilu"))})
