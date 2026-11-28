@@ -10,6 +10,6 @@ adb reverse tcp:4182 tcp:4182
 adb install -r apps/android/grillad/build/outputs/apk/debug/grillad-debug.apk
 adb install -r apps/android/grillad/build/outputs/apk/androidTest/debug/grillad-debug-androidTest.apk
 adb shell run-as cm.naxa.grillad mkdir -p files
-adb shell -T run-as cm.naxa.grillad sh -c 'cat > files/grillad-recipe-accounts.json' < "$RUNNER_TEMP/grillad-real-accounts.json"
+adb shell -T "run-as cm.naxa.grillad sh -c 'cat > files/grillad-recipe-accounts.json'" < "$RUNNER_TEMP/grillad-real-accounts.json"
 adb shell am instrument -w -e class cm.naxa.grillad.NativeConnectedRecipeTest cm.naxa.grillad.test/androidx.test.runner.AndroidJUnitRunner | tee "$RUNNER_TEMP/grillad-native-instrumentation.log"
 grep -Eq 'OK \(1 test\)' "$RUNNER_TEMP/grillad-native-instrumentation.log"
