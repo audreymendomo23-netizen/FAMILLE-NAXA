@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {grilladOverview} from '../../../apps/web/admin-console/src/grillad-admin.mjs';
+import test from 'node:test';import assert from 'node:assert/strict';import {grilladOverview} from '../../apps/web/admin-console/src/grillad-admin.mjs';
 const url='https://idupfjbkwjcavyisxteo.supabase.co',key='sb_publishable_test',token='test-token';
 test('GRILLAD central uses only the scoped RPC and drops extra fields',async()=>{const d=await grilladOverview({url,key,token,fetcher:async(u,o)=>{assert.equal(u,url+'/rest/v1/rpc/grillad_central_overview');assert.equal(o.headers.authorization,'Bearer '+token);assert.equal(o.redirect,'error');return new Response(JSON.stringify({app:'grillad',organizations:3,active_subscriptions:2,open_support:1,private:'discard'}))}});assert.deepEqual(d,{organizations:3,active_subscriptions:2,open_support:1})});
 test('GRILLAD central denies foreign origin and absent token before network',async()=>{for(const args of [{url:'https://other.example',token},{url,token:''}])await assert.rejects(grilladOverview({...args,key,fetcher:()=>{assert.fail('network must not run')}}))});
