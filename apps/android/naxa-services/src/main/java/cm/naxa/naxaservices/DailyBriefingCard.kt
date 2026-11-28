@@ -184,6 +184,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   var requestGeneration by remember{mutableStateOf(0)}
   var language by remember{mutableStateOf(session.account.defaultLocale.takeIf{it in briefingLanguages}?:"fr")}
   var date by remember{mutableStateOf(briefingToday())}
+  var moment by remember{mutableStateOf("live")}
   var speed by remember{mutableStateOf(1f)}
   var engine by remember{mutableStateOf<TextToSpeech?>(null)}
   var ready by remember{mutableStateOf(false)}
@@ -240,12 +241,13 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   }
   fun load(andPlay:Boolean){
    if(!foreground||!briefingDateAllowed(date))return
-   val requestedDay=date.toString()
+   val requestedDay=date.toString();val requestedMoment=moment
    loadJob?.cancel();val generation=++requestGeneration
    stop();busy=true;error=false;report=null;period=null;archiveIds=emptyList();notice=false
    loadJob=scope.launch{
     try{
-     val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_daily_briefing",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_day",requestedDay)))
+     val body=JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_day",requestedDay);if(requestedMoment!="live")body.put("p_phase",requestedMoment)
+     val r=JSONObject(StaffRosterApi.call(latest,if(requestedMoment=="live")"rpc/ns_daily_briefing" else "rpc/ns_read_briefing_moment",body));if(requestedMoment!="live")require(r.getString("phase")==requestedMoment&&r.getInt("snapshot_version")==1)
      validateNativeBriefing(r,requestedDay)
      briefingText(r,language)
      if(!foreground||generation!=requestGeneration)return@launch
@@ -302,6 +304,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
      dialog.datePicker.maxDate=today.atStartOfDay(zone).toInstant().toEpochMilli()
      dialog.show()
     },enabled=foreground){Text(briefingDateLabels.getValue(language)+": "+date.toString())}
+    listOf("live" to label("En direct","Live","Jooni","En directo","In diretta","实时"),"morning" to label("Matin","Morning","Subaka","Mañana","Mattina","早间"),"intermediate" to label("Point intermédiaire","Midday","Ñalngu","Mediodía","Mezzogiorno","午间"),"evening" to label("Soir","Evening","Hiirde","Tarde","Sera","晚间")).forEach{(k,l)->TextButton(onClick={stop();report=null;period=null;moment=k;error=false},enabled=!busy&&foreground){Text((if(k==moment)"✓ " else "")+l)}}
     briefingLanguages.forEach{(code,label)->OutlinedButton(onClick={stop();language=code;error=false},enabled=!busy){Text((if(code==language)"✓ " else "")+label)}}
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
      listOf(.8f,1f,1.2f,1.5f).forEach{s->TextButton(onClick={stop();speed=s},enabled=!busy){Text((if(s==speed)"✓ " else "")+s+"×")}}

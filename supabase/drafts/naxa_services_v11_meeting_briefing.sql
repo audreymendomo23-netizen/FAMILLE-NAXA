@@ -76,11 +76,40 @@ end $f$;
 revoke all on function public.ns_schedule_internal_meeting(uuid,uuid,uuid,uuid,text,timestamptz,uuid[]),public.ns_transition_internal_meeting(uuid,integer,text),public.ns_set_meeting_listener(uuid,text,boolean) from public,anon,authenticated;
 grant execute on function public.ns_schedule_internal_meeting(uuid,uuid,uuid,uuid,text,timestamptz,uuid[]),public.ns_transition_internal_meeting(uuid,integer,text),public.ns_set_meeting_listener(uuid,text,boolean) to authenticated;
 -- Report reads only confirmed server facts. Site finance restricted to site managers; other staff see own assignments.
-create function public.ns_daily_briefing(p_org uuid,p_site uuid,p_day date) returns jsonb language plpgsql stable security definer set search_path='' as $f$
-declare actor uuid:=public.ns_current_member_id(p_org); manager boolean; start_at timestamptz; stop_at timestamptz; fin jsonb; appointments jsonb; clocks jsonb; details jsonb:='{}'::jsonb; today date:=(now() at time zone 'Africa/Douala')::date; network_ids uuid[]; post_ids uuid[]; network_count integer; network_revenue numeric; network_sales numeric; current_day boolean; role_name text;
+create schema ns_briefing_internal;
+revoke all on schema ns_briefing_internal from public,anon,authenticated,service_role;
+create function ns_briefing_internal.entitlement(p_org uuid) returns text
+language plpgsql stable security definer set search_path='' as $f$
+declare s public.ns_subscriptions%rowtype; created timestamptz; last_paid timestamptz; first_claim timestamptz; today date:=(now() at time zone 'Africa/Douala')::date;
 begin
- if actor is null or p_day is null or p_day>(now() at time zone 'Africa/Douala')::date or p_day<(now() at time zone 'Africa/Douala')::date-366 or public.ns_erp_access_reason(p_org)='blocked' or not exists(select 1 from public.ns_sites where id=p_site and org_id=p_org and status='active') then raise exception 'NS_BRIEFING_FORBIDDEN'; end if;
- if not public.ns_can_access_site(p_org,p_site) and not exists(select 1 from public.ns_member_scopes s where s.org_id=p_org and s.member_id=actor and s.site_id=p_site and s.scope_type='workstation' and s.can_read) then raise exception 'NS_BRIEFING_FORBIDDEN'; end if;
+ select created_at into created from public.ns_organizations where id=p_org and status='active';
+ if not found then return 'blocked'; end if;
+ select * into s from public.ns_subscriptions where org_id=p_org;
+ if s.status='cancelled' then return 'blocked'; end if;
+ if s.status='active' and s.period_start<=today and s.period_end_exclusive>today then return 'paid'; end if;
+ if s.org_id is null and now()>=created and now()<created+interval '72 hours' then return 'trial'; end if;
+ select max(confirmed_at) into last_paid from public.ns_subscription_intents where org_id=p_org and status='confirmed';
+ select min(submitted_at) into first_claim from public.ns_subscription_intents where org_id=p_org and status<>'confirmed' and submitted_at is not null and submitted_at>=coalesce(last_paid,created);
+ if first_claim is not null and now()>=first_claim and now()<first_claim+interval '24 hours' then return 'provisional'; end if;
+ return 'blocked';
+end $f$;
+revoke all on function ns_briefing_internal.entitlement(uuid) from public,anon,authenticated,service_role;
+create function ns_briefing_internal.can_build(p_org uuid,p_site uuid,p_actor uuid) returns boolean language sql stable set search_path='' as $f$
+ select ns_briefing_internal.entitlement(p_org)<>'blocked' and exists(
+ select 1 from public.ns_members m join public.ns_accounts a on a.id=m.account_id join public.ns_organizations o on o.id=m.org_id join public.ns_sites si on si.org_id=o.id and si.id=p_site
+ where m.id=p_actor and m.org_id=p_org and m.status='active' and a.status='active' and not a.password_change_required and o.status='active' and si.status='active'
+ and exists(select 1 from public.ns_member_scopes sc where sc.org_id=p_org and sc.member_id=m.id and sc.can_read and (sc.scope_type='organization' or (sc.scope_type='site' and sc.site_id=p_site) or (sc.scope_type='workstation' and sc.site_id=p_site and exists(select 1 from public.ns_workstations w where w.id=sc.workstation_id and w.org_id=p_org and w.site_id=p_site and w.status='active')))));
+$f$;
+revoke all on function ns_briefing_internal.can_build(uuid,uuid,uuid) from public,anon,authenticated,service_role;
+-- Fingerprint exact role and delegated scope, including active sites/posts; revoked snapshots are not readable.
+create function ns_briefing_internal.scope_hash(p_org uuid,p_actor uuid) returns text language sql stable set search_path='' as $f$
+ select md5(jsonb_build_object('role',m.role_code,'mode',o.business_mode,'scopes',coalesce((select jsonb_agg(jsonb_build_array(sc.scope_type,sc.scope_id,sc.site_id,sc.workstation_id,sc.can_read,sc.can_operate,sc.can_manage) order by sc.id) from public.ns_member_scopes sc where sc.org_id=p_org and sc.member_id=p_actor),'[]'::jsonb),'sites',coalesce((select jsonb_agg(si.id order by si.id) from public.ns_sites si where si.org_id=p_org and si.status='active' and exists(select 1 from public.ns_member_scopes sc where sc.org_id=p_org and sc.member_id=p_actor and sc.can_read and (sc.scope_type='organization' or sc.site_id=si.id))),'[]'::jsonb),'posts',coalesce((select jsonb_agg(w.id order by w.id) from public.ns_workstations w where w.org_id=p_org and w.status='active' and exists(select 1 from public.ns_member_scopes sc where sc.org_id=p_org and sc.member_id=p_actor and sc.can_read and sc.scope_type='workstation' and sc.workstation_id=w.id)),'[]'::jsonb))::text) from public.ns_members m join public.ns_organizations o on o.id=m.org_id where m.id=p_actor and m.org_id=p_org;
+$f$;
+revoke all on function ns_briefing_internal.scope_hash(uuid,uuid) from public,anon,authenticated,service_role;
+create function ns_briefing_internal.build(p_org uuid,p_site uuid,p_day date,p_actor uuid) returns jsonb language plpgsql stable set search_path='' as $f$
+declare actor uuid:=p_actor; manager boolean; start_at timestamptz; stop_at timestamptz; fin jsonb; appointments jsonb; clocks jsonb; details jsonb:='{}'::jsonb; today date:=(now() at time zone 'Africa/Douala')::date; network_ids uuid[]; post_ids uuid[]; network_count integer; network_revenue numeric; network_sales numeric; current_day boolean; role_name text;
+begin
+ if actor is null or p_day is null or p_day>today or p_day<today-366 or not ns_briefing_internal.can_build(p_org,p_site,actor) then raise exception 'NS_BRIEFING_FORBIDDEN';end if;
  select role_code into role_name from public.ns_members where id=actor and org_id=p_org;
  -- A workstation-only manager is never treated as a whole-site manager.
  manager:=role_name in ('promoter','network_manager','site_manager') and exists(select 1 from public.ns_member_scopes sc where sc.org_id=p_org and sc.member_id=actor and sc.can_read and sc.can_manage and (sc.scope_type='organization' or (sc.scope_type='site' and sc.site_id=p_site)));
@@ -89,14 +118,14 @@ begin
  start_at:=p_day::timestamp at time zone 'Africa/Douala';stop_at:=(p_day+1)::timestamp at time zone 'Africa/Douala';
  if manager then select jsonb_build_object('revenue_xaf',v.revenue_xaf,'confirmed_sales_count',v.confirmed_sales_count,'uncosted_sales_count',v.uncosted_sales_count) into fin from public.ns_performance_daily v where v.org_id=p_org and v.site_id=p_site and v.performance_day=p_day; end if;
  select jsonb_build_object('scheduled_count',count(*),'completed_count',count(*) filter(where a.status='completed')) into appointments from public.ns_appointments a where a.org_id=p_org and a.site_id=p_site and a.starts_at>=start_at and a.starts_at<stop_at and (manager or a.assigned_member_id=actor);
- if public.ns_roster_enabled(p_org) then
+ if exists(select 1 from public.ns_organizations o where o.id=p_org and o.status='active' and o.business_mode in ('single_site_multi_workstation','multi_site_network')) then
   select jsonb_build_object('first_clock_in',min(e.occurred_at) filter(where e.event_type='staff_clock_in'),'last_clock_out',max(e.occurred_at) filter(where e.event_type='staff_clock_out'),'event_count',count(*)) into clocks from public.ns_staff_time_events e where e.org_id=p_org and e.site_id=p_site and e.staff_member_id=actor and e.occurred_at>=start_at and e.occurred_at<stop_at and e.actor_member_id=actor;
  end if;
  -- Personal data only, even if an employee has a broad read grant.
  details:=jsonb_build_object(
  'own_commissions_xaf',(select coalesce(sum(c.commission_xaf),0) from public.ns_commission_entries c where c.org_id=p_org and c.site_id=p_site and c.member_id=actor and c.created_at>=start_at and c.created_at<stop_at and c.status in ('approved','paid')),
  'tomorrow_appointments',case when current_day then (select count(*) from public.ns_appointments a where a.org_id=p_org and a.site_id=p_site and a.starts_at>=stop_at and a.starts_at<stop_at+interval '1 day' and a.status in ('requested','booked','confirmed','arrived') and (manager or a.assigned_member_id=actor)) else null end,
- 'tomorrow_shifts',case when current_day and public.ns_roster_enabled(p_org) then (select count(*) from public.ns_roster_shifts r where r.org_id=p_org and r.site_id=p_site and r.member_id=actor and r.status='published' and r.starts_at>=stop_at and r.starts_at<stop_at+interval '1 day') else null end,
+ 'tomorrow_shifts',case when current_day and exists(select 1 from public.ns_organizations o where o.id=p_org and o.status='active' and o.business_mode in ('single_site_multi_workstation','multi_site_network')) then (select count(*) from public.ns_roster_shifts r where r.org_id=p_org and r.site_id=p_site and r.member_id=actor and r.status='published' and r.starts_at>=stop_at and r.starts_at<stop_at+interval '1 day') else null end,
  'post_appointments',case when post_ids is not null and not manager then (select count(*) from public.ns_appointments a where a.org_id=p_org and a.site_id=p_site and a.workstation_id=any(post_ids) and a.starts_at>=start_at and a.starts_at<stop_at) else null end,
  'post_completed',case when post_ids is not null and not manager then (select count(*) from public.ns_appointments a where a.org_id=p_org and a.site_id=p_site and a.workstation_id=any(post_ids) and a.starts_at>=start_at and a.starts_at<stop_at and a.status='completed') else null end);
  if manager then
@@ -130,6 +159,13 @@ begin
   end if;
  end if;
  return jsonb_build_object('day',p_day,'generated_at',now(),'scope',case when manager then 'site' else 'personal' end,'finance',fin,'appointments',appointments,'personal_clock_events',clocks,'details',details,'coverage','partial_confirmed_server_facts');
+end $f$;
+revoke all on function ns_briefing_internal.build(uuid,uuid,date,uuid) from public,anon,authenticated,service_role;
+create function public.ns_daily_briefing(p_org uuid,p_site uuid,p_day date) returns jsonb language plpgsql stable security definer set search_path='' as $f$
+declare actor uuid:=public.ns_current_member_id(p_org);
+begin
+ if auth.uid() is null or actor is null or public.ns_erp_access_reason(p_org)='blocked' then raise exception 'NS_BRIEFING_FORBIDDEN';end if;
+ return ns_briefing_internal.build(p_org,p_site,p_day,actor);
 end $f$;
 revoke all on function public.ns_daily_briefing(uuid,uuid,date) from public,anon,authenticated;
 grant execute on function public.ns_daily_briefing(uuid,uuid,date) to authenticated;

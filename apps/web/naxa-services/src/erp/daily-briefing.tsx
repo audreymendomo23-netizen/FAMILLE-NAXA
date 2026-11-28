@@ -5,7 +5,7 @@ import {privateRequest} from "./private-request";
 import {downloadLocal} from "./calendar-export";
 import type {WebAuthAccount} from "../auth/session";
 import {rosterApiOrigin} from "./staff-roster";
-export type Report={day:string;generated_at:string;scope:"site"|"personal";finance:{revenue_xaf:number;confirmed_sales_count:number;uncosted_sales_count:number}|null;appointments:{scheduled_count:number;completed_count:number};personal_clock_events:{event_count:number}|null;coverage:string;details?:Record<string,number|null>};
+export type Report={day:string;generated_at:string;scope:"site"|"personal";finance:{revenue_xaf:number;confirmed_sales_count:number;uncosted_sales_count:number}|null;appointments:{scheduled_count:number;completed_count:number};personal_clock_events:{event_count:number}|null;coverage:string;details?:Record<string,number|null>;phase?:'morning'|'intermediate'|'evening';snapshot_version?:number};
 type Lang="fr"|"en"|"ff-CM"|"es"|"it"|"zh-CN";
 const languages:Record<Lang,string>={fr:"Français",en:"English","ff-CM":"Fulfulde",es:"Español",it:"Italiano","zh-CN":"中文"};
 const copy:Record<Lang,{title:string;intro:string;appointments:string;completed:string;finance:string;sales:string;clocks:string;missing:string;play:string;stop:string;unavailable:string;load:string}> = {
@@ -40,7 +40,7 @@ export function validateBriefing(value:unknown,day:string):Report {
  return {day,generated_at:value.generated_at,coverage:value.coverage,scope:value.scope,
   appointments:{scheduled_count:a.scheduled_count as number,completed_count:a.completed_count as number},
   finance:f===null?null:{revenue_xaf:(f as Record<string,unknown>).revenue_xaf as number,confirmed_sales_count:(f as Record<string,unknown>).confirmed_sales_count as number,uncosted_sales_count:(f as Record<string,unknown>).uncosted_sales_count as number},
-  personal_clock_events:p===null?null:{event_count:(p as Record<string,unknown>).event_count as number},...(value.details===undefined?{}:{details:validatedDetails(value.details,value.scope)})};
+  personal_clock_events:p===null?null:{event_count:(p as Record<string,unknown>).event_count as number},...(value.details===undefined?{}:{details:validatedDetails(value.details,value.scope)}),...(value.phase===undefined?{}:(value.phase==='morning'||value.phase==='intermediate'||value.phase==='evening')&&value.snapshot_version===1?{phase:value.phase,snapshot_version:1}:(()=>{throw Error('INVALID_BRIEFING');})())};
 
 }
 export function briefingDateBounds(now=Date.now()){
@@ -162,6 +162,8 @@ export function DailyBriefing(props:Props){
 function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Props){
  const [lang,setLang]=useState<Lang>(account.default_locale);
  const [detailed,setDetailed]=useState(true);
+ const [moment,setMoment]=useState('live');
+ const momentCopy=({fr:['Moment du bilan','En direct','Matin','Point intermédiaire','Soir'],en:['Report moment','Live','Morning','Midday','Evening'],"ff-CM":['Sahaa jaŋtol','Jooni','Subaka','Ñalngu','Hiirde'],es:['Momento del informe','En directo','Mañana','Mediodía','Tarde'],it:['Momento del resoconto','In diretta','Mattina','Mezzogiorno','Sera'],"zh-CN":['报告时段','实时','早间','午间','晚间']})[lang];
  const [day,setDay]=useState(()=>briefingDateBounds().today);
  const bounds=briefingDateBounds();
  const dateLabel=({fr:"Date du bilan",en:"Report date","ff-CM":"Ñalnde jaŋtol",es:"Fecha del informe",it:"Data del resoconto","zh-CN":"报告日期"})[lang];
@@ -174,11 +176,11 @@ function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Prop
  useEffect(()=>{mounted.current=true;const hide=()=>{if(document.visibilityState!=="hidden")return;controller.current?.abort();controller.current=null;stop();setReport(null);setLoading(false);};document.addEventListener("visibilitychange",hide);return()=>{mounted.current=false;document.removeEventListener("visibilitychange",hide);controller.current?.abort();if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}};},[]);
  async function load(){
   stop();controller.current?.abort();const abort=new AbortController();controller.current=abort;setLoading(true);setError(false);setReport(null);
-  const requestedDay=day;
+  const requestedDay=day,requestedMoment=moment;
   try{
    if(!anonKey||!briefingDayAllowed(requestedDay))throw Error("BRIEFING_UNAVAILABLE");
-   const result=await privateRequest<unknown>(abort.signal,()=>mounted.current&&controller.current===abort&&document.visibilityState!=="hidden",getToken,(token,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/ns_daily_briefing",{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_day:requestedDay}),signal,cache:"no-store",credentials:"omit"}));
-   const data=validateBriefing(result,requestedDay);
+   const result=await privateRequest<unknown>(abort.signal,()=>mounted.current&&controller.current===abort&&document.visibilityState!=="hidden",getToken,(token,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/"+(requestedMoment==="live"?"ns_daily_briefing":"ns_read_briefing_moment"),{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_day:requestedDay,...(requestedMoment==="live"?{}:{p_phase:requestedMoment})}),signal,cache:"no-store",credentials:"omit"}));
+   const data=validateBriefing(result,requestedDay);if(requestedMoment!=="live"&&data.phase!==requestedMoment)throw Error("INVALID_BRIEFING_MOMENT");
    if(abort.signal.aborted||!mounted.current||controller.current!==abort||document.visibilityState==="hidden")return;
    setReport(data);
    return {data,abort};
@@ -198,6 +200,7 @@ function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Prop
  if(!siteId)return null;
  return <section className="module-main-card" aria-label={t.title} aria-busy={loading}><h2>{t.title}</h2>
  <label>{dateLabel}<input type="date" aria-label={dateLabel} value={day} min={bounds.earliest} max={bounds.today} required onChange={e=>{stop();controller.current?.abort();controller.current=null;setReport(null);setLoading(false);setError(false);setDay(e.target.value);}}/></label>
+ <label>{momentCopy[0]}<select aria-label={momentCopy[0]} value={moment} disabled={loading} onChange={e=>{stop();controller.current?.abort();controller.current=null;setReport(null);setLoading(false);setError(false);setMoment(e.target.value);}}>{["live","morning","intermediate","evening"].map((m,i)=><option key={m} value={m}>{momentCopy[i+1]}</option>)}</select></label>
  <label>{languageLabel}<select aria-label={languageLabel} disabled={loading} value={lang} onChange={e=>{stop();setLang(e.target.value as Lang);setError(false);}}>{Object.entries(languages).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
  <label>{speedLabel}<select aria-label={speedLabel} disabled={loading} value={speed} onChange={e=>{stop();setSpeed(Number(e.target.value));}}>{[.8,1,1.2,1.5].map(s=><option key={s} value={s}>{s}×</option>)}</select></label>
  <button className="btn primary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>{if(playing){stop();return;}void load().then(r=>{if(r&&mounted.current&&!r.abort.signal.aborted&&controller.current===r.abort)speak(r.data);});}}>{playing?t.stop:t.play}</button>
