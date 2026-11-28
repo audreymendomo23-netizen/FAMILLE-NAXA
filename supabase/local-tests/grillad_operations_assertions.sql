@@ -37,6 +37,11 @@ begin
  if public.grillad_offline_cancel(o,s,e,d,null,l)->>'status'<>'committed' then raise exception 'cancel erased committed batch';end if;
  e:=gen_random_uuid();if public.grillad_offline_cancel(o,s,e,d-1,null,l)->>'status'<>'cancelled' then raise exception 'cancel uncertain batch';end if;
  begin perform public.grillad_offline_batch(o,s,e,d-1,null,l);raise exception 'cancelled batch replayed';exception when invalid_parameter_value then null;end;
+ perform public.grillad_action(o,s,gen_random_uuid(),'open_cash','{"opening":1000}');
+ e:=gen_random_uuid();perform public.grillad_action(o,s,e,'sell',jsonb_build_object('item',i,'qty',1,'price',1000,'received',1000,'method','mtn_momo'));
+ v:=public.grillad_snapshot(o,s,d,d);if (v->'cash'->>'expected')::bigint<>1000 or (v->'finance'->>'mtn_declared')::bigint<>1000 or (v->'finance'->>'encaissements')::bigint<>0 then raise exception 'mobile polluted physical cash';end if;
+ perform public.grillad_action(o,s,gen_random_uuid(),'reconcile_mobile',jsonb_build_object('receipt',e,'source','direct','amount',1000,'reference','FIXTURE-REF-1'));
+ v:=public.grillad_snapshot(o,s,d,d);if (v->'finance'->>'mobile_pending')::bigint<>0 or (v->'cash'->>'expected')::bigint<>1000 then raise exception 'reconciliation changed cash';end if;
  perform public.grillad_action(o,s,'c2000000-0000-0000-0000-000000000002','employee_request','{"phone":"+237699000013","name":"Test vendeur","role":"seller"}');
 end $test$;
 reset role;
