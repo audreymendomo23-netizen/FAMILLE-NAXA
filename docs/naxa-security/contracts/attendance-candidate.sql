@@ -4,7 +4,7 @@ create table public.sec_attendance_drafts (
  id uuid primary key default gen_random_uuid(),
  organization_id uuid not null, site_id uuid not null,
  reporter_id uuid not null references auth.users(id), request_id uuid not null unique,
- action text not null check(action in ('arrival','departure')),
+ action text not null check(action in ('arrival','departure','pause_start','pause_end')),
  lat double precision not null check(lat between -90 and 90),
  lon double precision not null check(lon between -180 and 180),
  accuracy_m double precision not null check(accuracy_m>0 and accuracy_m<=100),
