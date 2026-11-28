@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createControlClient} from './client.mjs';
+const url='https://idupfjbkwjcavyisxteo.supabase.co',key='sb_publishable_fixture';
+test('refuses secret key and alternate project',()=>{assert.throws(()=>createControlClient({url,key:'sb_secret_no'}));assert.throws(()=>createControlClient({url:'https://other.supabase.co',key}))});
+test('role and workspace are obtained only from server',async()=>{const client=createControlClient({url,key,fetcher:async(u,i)=>{assert.equal(u,url+'/rest/v1/rpc/naxa_control_dashboard');assert.equal(i.headers.authorization,'Bearer session');assert.deepEqual(JSON.parse(i.body),{p_app:null});return Response.json({role:'support',applications:[],tickets:[]})}});assert.equal((await client.dashboard('session')).role,'support')});
+test('refuses missing token and server denial',async()=>{const c=createControlClient({url,key,fetcher:async()=>new Response(null,{status:403})});await assert.rejects(c.dashboard(''));await assert.rejects(c.dashboard('session'));await assert.rejects(c.transition('session','ticket','open','in_progress','verified reason'))});
