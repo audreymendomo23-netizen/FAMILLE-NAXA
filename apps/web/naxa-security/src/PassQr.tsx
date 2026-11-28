@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState}from "react";import QRCode from "qrcode";import jsQR from "jsqr";
-const valid=(v:string)=>/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.[a-f0-9]{64}$/.test(v);
+import{isTemporaryQrCode as valid}from "./module-workflows.mjs";
+
 export function PassQr({code}:{code:string}){
  const canvas=useRef<HTMLCanvasElement|null>(null);const [error,setError]=useState(false);
  useEffect(()=>{const c=canvas.current;if(!c||!valid(code))return;let active=true;setError(false);void QRCode.toCanvas(c,code,{errorCorrectionLevel:"M",width:280,margin:4,color:{dark:"#000000",light:"#ffffff"}},(e:Error|null|undefined)=>{if(active&&e)setError(true)});return()=>{active=false;c.width=0;c.height=0}},[code]);

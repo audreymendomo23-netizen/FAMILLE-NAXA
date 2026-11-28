@@ -422,3 +422,5 @@ export function csv(rows){return rows.map(row=>row.map(v=>{let s=String(v??"");i
 function canonical(v){if(!v||typeof v!=="object")return JSON.stringify(v);return JSON.stringify(Object.keys(v).sort().map(k=>[k,v[k]]))}
 export function matchesReceipt(row,body){return !!row&&row.request_id===body.request_id&&row.reporter_id===body.reporter_id&&row.organization_id===body.organization_id&&row.site_id===body.site_id&&row.kind===body.kind&&["requested","reviewed","declined"].includes(row.state)&&canonical(row.payload)===canonical(body.payload)}
 export async function evidenceHash(bytes){if(!(bytes instanceof ArrayBuffer)||bytes.byteLength>20*1024*1024)throw Error("INVALID_FILE");const hash=await crypto.subtle.digest("SHA-256",bytes);return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,"0")).join("")}
+
+export function isTemporaryQrCode(value){return typeof value==="string"&&value.length===101&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.[a-f0-9]{64}$/.test(value)}

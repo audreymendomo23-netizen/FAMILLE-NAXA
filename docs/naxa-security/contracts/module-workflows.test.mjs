@@ -1,4 +1,4 @@
-import test from "node:test";import assert from "node:assert/strict";import{modules,evaluate,summarizeIncidents,csv,matchesReceipt,evidenceHash}from "../../../apps/web/naxa-security/src/module-workflows.mjs";
+import test from "node:test";import assert from "node:assert/strict";import{modules,evaluate,summarizeIncidents,csv,matchesReceipt,evidenceHash,isTemporaryQrCode}from "../../../apps/web/naxa-security/src/module-workflows.mjs";
 const selected=modules.filter(m=>!process.env.SECURITY_BULK||m.bulk===process.env.SECURITY_BULK);
 for(const m of selected){
  const valid=Object.fromEntries(m.fields.map((k,i)=>[k,m.example[i]]));
@@ -16,3 +16,5 @@ if(!process.env.SECURITY_BULK||process.env.SECURITY_BULK==="B5"){
 }
 if(!process.env.SECURITY_BULK||process.env.SECURITY_BULK==="B2")test("no media without consent",()=>assert.throws(()=>evaluate("NS-02",{device:"cam-01",purpose:"inspection",consent:"no"})));
 if(!process.env.SECURITY_BULK||process.env.SECURITY_BULK==="B1")test("negative payment denied",()=>assert.throws(()=>evaluate("NS-24",{reference:"txn",amount:"-1",channel:"bank"})));
+
+if(!process.env.SECURITY_BULK||process.env.SECURITY_BULK==="B4")test("temporary QR shared validator: exact UUID separator and token",()=>{const id="50000000-0000-0000-0000-000000000441",token="a".repeat(64);assert.equal(isTemporaryQrCode(id+"."+token),true);for(const bad of [id+"\\."+token,id+"x"+token,id+"."+token+"\n","-".repeat(36)+"."+token,id+"."+token.slice(1),id+"."+"A".repeat(64),null,123])assert.equal(isTemporaryQrCode(bad),false,String(bad))});
