@@ -141,6 +141,13 @@ jobs:
           node --input-type=module -e 'import { chromium } from "@playwright/test"; const browser=await chromium.launch({headless:true}); await browser.close();'
       - name: Run NAXA SERVICES Web and PWA browser E2E
         run: npx playwright test --config apps/web/naxa-services/playwright.config.ts
+      - name: Build conservative V1.0 commercial PWA candidate (no deploy)
+        env:
+          VITE_NAXA_SERVICES_MEETINGS_ENABLED: "true"
+          VITE_NAXA_SERVICES_BRIEFING_ENABLED: "true"
+          VITE_NAXA_SERVICES_COMMISSION_CONFIG_ENABLED: "true"
+          VITE_NAXA_SERVICES_ATTENDANCE_ENABLED: "true"
+        run: npm run build --workspace @famille/naxa-services-web -- --mode commercial
       - name: Upload NAXA SERVICES browser traces
         if: always()
         uses: actions/upload-artifact@v6
