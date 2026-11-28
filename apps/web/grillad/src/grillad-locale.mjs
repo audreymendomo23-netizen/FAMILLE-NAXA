@@ -1,4 +1,4 @@
-// Common NAXA SERVICES vocabulary and English; missing ff-CM entries fall back to French.
+// Shared NAXA vocabulary and candidate Cameroonian Fulfulde translations; native linguistic review pending.
 export const labels={
   "Accueil": [
     "Home",
@@ -246,332 +246,553 @@ export const labels={
   ],
   "Accès professionnel GRILLAD": [
     "GRILLAD professional access",
-    null
+    "Naatugol e nokkuure golle GRILLAD"
   ],
   "Première connexion avec invitation": [
     "First sign-in with invitation",
-    null
+    "Naatugol aranol e noddaandu"
   ],
   "Référence invitation": [
     "Invitation reference",
-    null
+    "Innol noddaandu"
   ],
   "Code invitation": [
     "Invitation code",
-    null
+    "Kod noddaandu"
   ],
   "Rester connecté sur cet appareil": [
     "Stay signed in on this device",
-    null
+    "Heddo e naatugol e kaɓirgol ngol"
   ],
   "Réinitialiser mon code local après connexion vérifiée": [
     "Reset my local code after verified sign-in",
-    null
+    "Waylu kod kisal am caggal naatugol tabbitinaangol"
   ],
   "Renouvellement uniquement": [
     "Renewal only",
-    null
+    "Hesɗitugol abonman tan"
   ],
   "CA net": [
     "Net revenue",
-    null
+    "Ceede jaaygol caggal ittugol"
   ],
   "Objectif du jour": [
     "Today's target",
-    null
+    "Faandaare hannde"
   ],
   "Objectif CA FCFA": [
     "Revenue target (XAF)",
-    null
+    "Faandaare ceede jaaygol (FCFA)"
   ],
   "Enregistrer l’objectif": [
     "Save target",
-    null
+    "Danndu faandaare"
   ],
   "Exporter le point journalier PDF": [
     "Export daily summary PDF",
-    null
+    "Neltu jaŋtol hannde (PDF)"
   ],
   "Pas de données confirmées.": [
     "No confirmed data.",
-    null
+    "Alaa humpito tabbitinaango."
   ],
   "Nom de l’article": [
     "Item name",
-    null
+    "Innde jawdi"
   ],
   "Coût facultatif": [
     "Optional cost",
-    null
+    "Njoɓdi (so a yiɗi)"
   ],
   "Modifier le prix": [
     "Change price",
-    null
+    "Waylu njoɓdi"
   ],
   "Modifier le prix sélectionné": [
     "Change selected price",
-    null
+    "Waylu njoɓdi cuɓaaɗi"
   ],
   "Actualiser le coût": [
     "Update cost",
-    null
+    "Hesɗitin njoɓdi"
   ],
   "Désactiver": [
     "Disable",
-    null
+    "Dartu"
   ],
   "Désactiver l’article": [
     "Disable item",
-    null
+    "Dartu jaaygol jawdi ndii"
   ],
   "Réactiver": [
     "Reactivate",
-    null
+    "Hurmitin"
   ],
   "Corriger les quantités": [
     "Adjust quantities",
-    null
+    "Feewnu keewal"
   ],
   "Corriger la quantité": [
     "Adjust quantity",
-    null
+    "Feewnu keewal"
   ],
   "Enregistrer la correction": [
     "Save adjustment",
-    null
+    "Danndu feewnugol"
   ],
   "Télécharger le reçu PDF": [
     "Download receipt PDF",
-    null
+    "Heɓ kayit njoɓdi (PDF)"
   ],
   "Annuler cette vente": [
     "Cancel sale",
-    null
+    "Haaytu jaaygol ngol"
   ],
   "Attendu": [
     "Expected",
-    null
+    "Ceede padeteeɗe"
   ],
   "Clôturer": [
     "Close",
-    null
+    "Uddu"
   ],
   "Rapprochement des règlements mobiles": [
     "Mobile payment reconciliation",
-    null
+    "Ƴeewtagol e nanndingol njoɓdi Mobile Money"
   ],
   "Rapprocher le règlement": [
     "Reconcile payment",
-    null
+    "Nanndin njoɓdi e ceede keɓaaɗe"
   ],
   "Clôtures confirmées": [
     "Confirmed closings",
-    null
+    "Uddude keesu tabbitinaaɗe"
   ],
   "Catégorie": [
     "Category",
-    null
+    "Fannu"
   ],
   "Intrants": [
     "Inputs",
-    null
+    "Jawdi golle"
   ],
   "Combustible": [
     "Fuel",
-    null
+    "Ko huutortee ngam yiite"
   ],
   "Emballages": [
     "Packaging",
-    null
+    "Comci suuduɗi jawdi"
   ],
   "Entretien": [
     "Maintenance",
-    null
+    "Feewnugol e reenugol"
   ],
   "Personnel": [
     "Staff",
-    null
+    "Golluɓe"
   ],
   "Autres": [
     "Other",
-    null
+    "Goɗɗe"
   ],
   "Annuler la dépense": [
     "Cancel expense",
-    null
+    "Haaytu njoɓdi"
   ],
   "Service en cours": [
     "Current service",
-    null
+    "Golle ɗe ngoni jooni"
   ],
   "CA estimé au prochain service": [
     "Estimated revenue for next service",
-    null
+    "Ceede jaaygol tanƴaaɗe e golle garooje"
   ],
   "Marquer comme lu": [
     "Mark as read",
-    null
+    "Maanto ko janngaama"
   ],
   "Préférences": [
     "Preferences",
-    null
+    "Cuɓe"
   ],
   "Inscrire cet appareil": [
     "Register device",
-    null
+    "Danndu kaɓirgol ngol"
   ],
   "Désactiver les notifications distantes": [
     "Disable remote notifications",
-    null
+    "Dartu tintine iwɗe woɗɗi"
   ],
   "Équipe du point": [
     "Location team",
-    null
+    "Golluɓe nokkuure"
   ],
   "Affectations au point actif": [
     "Assignments at active location",
-    null
+    "Suɓugol golluɓe nokkuure gollotoonde"
   ],
   "Non affecté": [
     "Unassigned",
-    null
+    "Suɓaaka"
   ],
   "Vendeur": [
     "Seller",
-    null
+    "Jaaytooɗo"
   ],
   "Responsable": [
     "Manager",
-    null
+    "Hooreejo"
   ],
   "Confirmer l’affectation": [
     "Confirm assignment",
-    null
+    "Tabbitin suɓugol nokkuure golle"
   ],
   "Confirmer le statut": [
     "Confirm status",
-    null
+    "Tabbitin ngonka"
   ],
   "Apparence": [
     "Appearance",
-    null
+    "Mbayka hollirgal"
   ],
   "Animation nocturne": [
     "Night animation",
-    null
+    "Dillere hollirgal jemma"
   ],
   "Mode de gestion": [
     "Management mode",
-    null
+    "Mbayka ɗowtugol"
   ],
   "Indépendant": [
     "Independent",
-    null
+    "Keeriiɗol"
   ],
   "Centralisé": [
     "Centralized",
-    null
+    "Ɗowtugol e nokkuure wooto"
   ],
   "Confirmer le mode": [
     "Confirm mode",
-    null
+    "Tabbitin mbayka ɗowtugol"
   ],
   "Configurer le service": [
     "Configure service",
-    null
+    "Teeltu golle"
   ],
   "Horaires futurs": [
     "Future hours",
-    null
+    "Sahaaaji garooji"
   ],
   "Programmer l’horaire futur": [
     "Schedule future hours",
-    null
+    "Teeltu sahaa garoojo"
   ],
   "Sujet assistance": [
     "Support subject",
-    null
+    "Innde ɗaɓɓitannde ballal"
   ],
   "Description assistance": [
     "Support description",
-    null
+    "Ɓatakuru ɗaɓɓitannde ballal"
   ],
   "Réessayer la même demande": [
     "Retry same request",
-    null
+    "Eto ɗaɓɓitannde ndee kadi"
   ],
   "Mes dossiers / Actualiser": [
     "My tickets / Refresh",
-    null
+    "Kayite am / Hesɗitin"
   ],
   "Conversation": [
     "Conversation",
-    null
+    "Yeewtere"
   ],
   "Conversation assistance": [
     "Support conversation",
-    null
+    "Yeewtere ballal"
   ],
   "Actualiser la conversation": [
     "Refresh conversation",
-    null
+    "Hesɗitin yeewtere"
   ],
   "Message assistance": [
     "Support message",
-    null
+    "Ɓatakuru ballal"
   ],
   "Réessayer": [
     "Retry",
-    null
+    "Eto kadi"
   ],
   "Envoyer le message": [
     "Send message",
-    null
+    "Neldu ɓatakuru"
   ],
   "Vous": [
     "You",
-    null
+    "Aan"
   ],
   "Assistant de pilotage": [
     "Management assistant",
-    null
+    "Ballal ɗowtugol golle"
   ],
   "Libellé": [
     "Label",
-    null
+    "Innde"
   ],
   "Montant": [
     "Amount",
-    null
+    "Ceede"
   ],
   "Motif de correction": [
     "Correction reason",
-    null
+    "Daliilu feewnugol"
   ],
   "Motif d’annulation": [
     "Cancellation reason",
-    null
+    "Daliilu haaytugol"
   ],
   "Motif de réactivation": [
     "Reactivation reason",
-    null
+    "Daliilu hurmitingol"
   ],
   "Motif de création": [
     "Creation reason",
-    null
+    "Daliilu sosugol"
   ],
   "Nom du nouveau point": [
     "New location name",
-    null
+    "Innde nokkuure hesere"
   ],
   "Verrouiller": [
     "Lock",
-    null
+    "Uddu e kisal"
   ],
   "Reconnexion et vérification": [
     "Reconnect and verify",
-    null
+    "Naatu kadi e ƴeewtagol"
+  ],
+  "Comment enregistrer un règlement ?": [
+    "How do I record a payment?",
+    "Hol no mi danndata njoɓdi?"
+  ],
+  "Déclarez le montant réellement reçu en espèces, MTN MoMo ou Orange Money. GRILLAD ne prélève pas les fonds du client.": [
+    "Record only the amount actually received in cash, MTN MoMo or Orange Money. GRILLAD does not debit customer funds.",
+    "Danndu ceede keɓaaɗe goonga e juuɗe, MTN MoMo walla Orange Money tan. GRILLAD ittataa ceede e konte soottotooɗo."
+  ],
+  "Que faire sans Internet ?": [
+    "What if I lose internet access?",
+    "Hol ko mi waɗata so Internet alaa?"
+  ],
+  "Conservez le lot chiffré. Réessayez la même demande après reconnexion, sans doubler les ventes.": [
+    "Keep the encrypted batch. Retry the same request after reconnecting, without duplicating sales.",
+    "Danndu golle mooftaaɗe e kisal. Eto ɗaɓɓitannde ndee kadi so Internet ruttinii. Hoto danndu jaaygol ngol laabi ɗiɗi."
+  ],
+  "Comment renouveler ?": [
+    "How do I renew?",
+    "Hol no mi hesɗitinta abonman?"
+  ],
+  "Le promoteur ouvre Abonnement et suit les instructions de paiement externe. Attendez la validation centrale.": [
+    "The owner opens Subscription and follows the external payment instructions. Wait for central confirmation.",
+    "Jom golle uddita Abonman, rewina yamirooje njoɓdi boowal GRILLAD. Fad tabbitinol hooreeɓe Famille NAXA."
+  ],
+  "Comment protéger mon compte ?": [
+    "How do I protect my account?",
+    "Hol no mi reenata konte am?"
+  ],
+  "Ne transmettez jamais votre code PIN, OTP ou mot de passe à un agent.": [
+    "Never share your PIN, OTP or password with an agent.",
+    "Hoto hokku hay gooto kod PIN maa, OTP maa walla finnde maa."
+  ],
+  "Assistance indisponible.": [
+    "Support unavailable.",
+    "Ballal alaa jooni."
+  ],
+  "Confirmation non obtenue. Réessayez la même demande.": [
+    "Confirmation not received. Retry the same request.",
+    "Tabbitinol heɓaaka. Eto ɗaɓɓitannde ndee kadi."
+  ],
+  "Dossier enregistré": [
+    "Ticket saved",
+    "Kayit danndaama"
+  ],
+  "Vérifier / réessayer la même demande": [
+    "Verify / retry the same request",
+    "Ƴeewto / eto ɗaɓɓitannde ndee kadi"
+  ],
+  "Vérifier / réessayer la même requête": [
+    "Verify / retry the same request",
+    "Ƴeewto / eto ɗaɓɓitannde ndee kadi"
+  ],
+  "Vérifier la même requête": [
+    "Verify the same request",
+    "Ƴeewto ɗaɓɓitannde ndee"
+  ],
+  "Vérifier puis annuler le lot": [
+    "Verify then cancel batch",
+    "Ƴeewto, caggal ɗum haaytu golle ɗee"
+  ],
+  "Vérifier et annuler": [
+    "Verify and cancel",
+    "Ƴeewto e haaytu"
+  ],
+  "Aucune synthèse disponible.": [
+    "No summary available.",
+    "Alaa jaŋtol jooni."
+  ],
+  "Aucune synthèse de service disponible.": [
+    "No service summary available.",
+    "Alaa jaŋtol golle jooni."
+  ],
+  "Déclarer le règlement reçu hors application. Aucun débit ni paiement en ligne.": [
+    "Record payment received outside the app. No debit or online payment.",
+    "Danndu ceede keɓaaɗe boowal GRILLAD. Alaa ittugol ceede walla yoɓugol e Internet."
+  ],
+  "Déclarer le règlement reçu hors application.": [
+    "Record payment received outside the app.",
+    "Danndu ceede keɓaaɗe boowal GRILLAD."
+  ],
+  "Transport": [
+    "Transport",
+    "Ƴettugol jawdi"
+  ],
+  "Aucune notification disponible.": [
+    "No notifications available.",
+    "Alaa tintine jooni."
+  ],
+  "ACCÈS : un seul point de vente.": [
+    "ACCESS: one location only.",
+    "ACCÈS: nokkuure jaaygol wooto tan."
+  ],
+  "Heure de début du service": [
+    "Service start time",
+    "Sahaa fuɗɗugol golle"
+  ],
+  "Configuration GRILLAD invalide. Aucun accès.": [
+    "Invalid GRILLAD configuration. Access denied.",
+    "Teelte GRILLAD feewaani. Naatugol yamiraaka."
+  ],
+  "Catalogue expiré. Reconnectez-vous.": [
+    "Catalogue expired. Sign in again.",
+    "Sahaa doggol timmii. Naatu kadi."
+  ],
+  "Confirmation de renouvellement incertaine.": [
+    "Renewal confirmation uncertain.",
+    "Tabbitinol hesɗitugol abonman heɓaaka."
+  ],
+  "Annuler le lot non enregistré ?": [
+    "Cancel the unconfirmed batch?",
+    "Haaytu golle ɗe tabbitinaaka?"
+  ],
+  "Services clôturés — données serveur uniquement": [
+    "Completed services — server data only",
+    "Golle timmuɗe — humpito sarworde tan"
+  ],
+  "Motif de changement du prix": [
+    "Reason for price change",
+    "Daliilu waylugol njoɓdi"
+  ],
+  "Nouveau coût unitaire (vide = inconnu)": [
+    "New unit cost (empty = unknown)",
+    "Njoɓdi hesɗi gootal (meho = anndaaka)"
+  ],
+  "Montant net déclaré (FCFA)": [
+    "Declared net amount (XAF)",
+    "Ceede kollitaaɗe caggal ittugol (FCFA)"
+  ],
+  "Annulée": [
+    "Cancelled",
+    "Haaytaama"
+  ],
+  "Justification si écart": [
+    "Reason if there is a discrepancy",
+    "Daliilu so seertugol woodi"
+  ],
+  "Montant crédit vérifié": [
+    "Verified credited amount",
+    "Ceede keɓaaɗe ƴeewtaaɗe"
+  ],
+  "Référence de transaction vérifiée": [
+    "Verified transaction reference",
+    "Innol dirtugol ceede ƴeewtaaɗol"
+  ],
+  "Référence du justificatif": [
+    "Evidence reference",
+    "Innol seedamfaagu"
+  ],
+  "Motif d’annulation de dépense": [
+    "Expense cancellation reason",
+    "Daliilu haaytugol njoɓdi"
+  ],
+  "Estimation sur services clôturés, non garantie.": [
+    "Estimate based on completed services, not guaranteed.",
+    "Tanƴitagol tugnaangol e golle timmuɗe, wonaa alkawal."
+  ],
+  "Collaborateurs GRILLAD déjà activés.": [
+    "Existing activated GRILLAD team members.",
+    "Golluɓe GRILLAD yamiraaɓe kisa."
+  ],
+  "Motif d’affectation": [
+    "Assignment reason",
+    "Daliilu suɓugol nokkuure golle"
+  ],
+  "Commandes et règlements GRILLAD séparés.": [
+    "Separate GRILLAD orders and payments.",
+    "Ɗaɓɓitanɗe e njoɓdi GRILLAD seertii."
+  ],
+  "Montant net déclaré Connect": [
+    "Declared net Connect amount",
+    "Ceede Connect kollitaaɗe caggal ittugol"
+  ],
+  "Motif si refus/annulation": [
+    "Reason for rejection/cancellation",
+    "Daliilu salaagol / haaytugol"
+  ],
+  "Motif de changement de site": [
+    "Reason for location change",
+    "Daliilu waylugol nokkuure"
+  ],
+  "Motif du changement": [
+    "Reason for change",
+    "Daliilu waylugol"
+  ],
+  "Modification historique protégée.": [
+    "Historical changes are protected.",
+    "Waylugol jaŋtol ena reenete."
+  ],
+  "Heure de début (HH:mm)": [
+    "Start time (HH:mm)",
+    "Sahaa fuɗɗugol (HH:mm)"
+  ],
+  "Date d’effet AAAA-MM-JJ": [
+    "Effective date YYYY-MM-DD",
+    "Ñalngu fuɗɗugol AAAA-MM-JJ"
+  ],
+  "Historique incomplet : aucun conseil chiffré sans données suffisantes.": [
+    "Incomplete history: no numerical advice without sufficient data.",
+    "Jaŋtol timmaani: alaa wasiya limooje so humpito heƴaani."
+  ],
+  "Ruptures possibles : vérifier le stock et les coûts.": [
+    "Possible shortages: check stock and costs.",
+    "Jawdi ena waawi gasde: ƴeewto jawdi heddiiɗi e njoɓdi."
+  ],
+  "Aucun besoin supplémentaire confirmé parmi les prévisions disponibles.": [
+    "No additional need confirmed by available forecasts.",
+    "Alaa ɓeydital tabbitinaangal e ƴeewtagol yeeso."
+  ],
+  "Conseils calculés à partir des prévisions serveur, à confirmer. Aucune action automatique.": [
+    "Advice based on server forecasts, to be confirmed. No automatic action.",
+    "Wasiya tugnaango e ƴeewtagol yeeso sarworde, foti tabbitineede. Alaa golle waɗeteeɗe e hoore mum."
+  ],
+  "Centre de surveillance": [
+    "Security center",
+    "Nokkuure kisal"
+  ],
+  "Sauvegarde et restauration": [
+    "Backup and recovery",
+    "Danndugol e heɓtugol humpito"
   ]
 };
 export function localeOf(x){return x==='en'||x==='ff-CM'?x:'fr'}
 export function translate(key,locale){return localeOf(locale)==='fr'?key:labels[key]?.[locale==='en'?0:1]??key}
+export const faqKeys=["Comment enregistrer un règlement ?","Déclarez le montant réellement reçu en espèces, MTN MoMo ou Orange Money. GRILLAD ne prélève pas les fonds du client.","Que faire sans Internet ?","Conservez le lot chiffré. Réessayez la même demande après reconnexion, sans doubler les ventes.","Comment renouveler ?","Le promoteur ouvre Abonnement et suit les instructions de paiement externe. Attendez la validation centrale.","Comment protéger mon compte ?","Ne transmettez jamais votre code PIN, OTP ou mot de passe à un agent."];

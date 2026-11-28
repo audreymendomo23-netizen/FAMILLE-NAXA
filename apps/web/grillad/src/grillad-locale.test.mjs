@@ -6,3 +6,6 @@ test('English price and back labels do not silently fall back to French',()=>{as
 test('sign-in and common operational labels use shared vocabulary and unsupported locale stays French',()=>{for(const k of ['Connexion','Connexion professionnelle','Téléphone (+237…)','Mot de passe oublié','Ajouter l’article','Ouvrir la caisse','Points de vente']){assert.ok(labels[k],k);assert.notEqual(translate(k,'en'),k);assert.ok(translate(k,'ff-CM'))}assert.equal(translate('Accueil','invalid'),'Accueil')});
 
 test('extended labels have English and explicit French fallback for missing Fulfulde',()=>{for(const k of ['Assistant de pilotage','Conversation assistance','Animation nocturne'])assert.notEqual(translate(k,'en'),k);for(const [k,v] of Object.entries(labels))if(v[1]===null)assert.equal(translate(k,'ff-CM'),k)});
+
+import {readFileSync} from 'node:fs';
+test('every registered key has two nonempty translations and Android uses the same mapping',()=>{const kotlin=readFileSync(new URL('../../../android/grillad/src/main/java/cm/naxa/grillad/GrilladLocale.kt',import.meta.url),'utf8');for(const [k,[en,ff]] of Object.entries(labels)){assert.ok(en?.trim(),k);assert.ok(ff?.trim(),k);assert.ok(kotlin.includes(' '+JSON.stringify(k)+' -> if(locale=="en")'+JSON.stringify(en)+' else '+JSON.stringify(ff)),k);assert.equal(translate(k,'en'),en);assert.equal(translate(k,'ff-CM'),ff)}});

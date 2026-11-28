@@ -1,5 +1,5 @@
 package cm.naxa.grillad
-// Shared presentation keys; missing Fulfulde retains French source.
+// Shared presentation keys; candidate ff-CM translations require native linguistic review.
 internal fun grilladLabel(key:String,locale:String):String=if(locale!="en"&&locale!="ff-CM")key else when(key){
  "Accueil" -> if(locale=="en")"Home" else "Jaɓɓorgo"
  "Vente" -> if(locale=="en")"Sale" else "Jaaygol"
@@ -62,87 +62,142 @@ internal fun grilladLabel(key:String,locale:String):String=if(locale!="en"&&loca
  "Article" -> if(locale=="en")"Item" else "Jawdi"
  "Période" -> if(locale=="en")"Period" else "Sahaa"
  "Catégorie de dépense" -> if(locale=="en")"Expense category" else "Fannu njoɓdi"
- "Accès professionnel GRILLAD" -> if(locale=="en")"GRILLAD professional access" else key
- "Première connexion avec invitation" -> if(locale=="en")"First sign-in with invitation" else key
- "Référence invitation" -> if(locale=="en")"Invitation reference" else key
- "Code invitation" -> if(locale=="en")"Invitation code" else key
- "Rester connecté sur cet appareil" -> if(locale=="en")"Stay signed in on this device" else key
- "Réinitialiser mon code local après connexion vérifiée" -> if(locale=="en")"Reset my local code after verified sign-in" else key
- "Renouvellement uniquement" -> if(locale=="en")"Renewal only" else key
- "CA net" -> if(locale=="en")"Net revenue" else key
- "Objectif du jour" -> if(locale=="en")"Today's target" else key
- "Objectif CA FCFA" -> if(locale=="en")"Revenue target (XAF)" else key
- "Enregistrer l’objectif" -> if(locale=="en")"Save target" else key
- "Exporter le point journalier PDF" -> if(locale=="en")"Export daily summary PDF" else key
- "Pas de données confirmées." -> if(locale=="en")"No confirmed data." else key
- "Nom de l’article" -> if(locale=="en")"Item name" else key
- "Coût facultatif" -> if(locale=="en")"Optional cost" else key
- "Modifier le prix" -> if(locale=="en")"Change price" else key
- "Modifier le prix sélectionné" -> if(locale=="en")"Change selected price" else key
- "Actualiser le coût" -> if(locale=="en")"Update cost" else key
- "Désactiver" -> if(locale=="en")"Disable" else key
- "Désactiver l’article" -> if(locale=="en")"Disable item" else key
- "Réactiver" -> if(locale=="en")"Reactivate" else key
- "Corriger les quantités" -> if(locale=="en")"Adjust quantities" else key
- "Corriger la quantité" -> if(locale=="en")"Adjust quantity" else key
- "Enregistrer la correction" -> if(locale=="en")"Save adjustment" else key
- "Télécharger le reçu PDF" -> if(locale=="en")"Download receipt PDF" else key
- "Annuler cette vente" -> if(locale=="en")"Cancel sale" else key
- "Attendu" -> if(locale=="en")"Expected" else key
- "Clôturer" -> if(locale=="en")"Close" else key
- "Rapprochement des règlements mobiles" -> if(locale=="en")"Mobile payment reconciliation" else key
- "Rapprocher le règlement" -> if(locale=="en")"Reconcile payment" else key
- "Clôtures confirmées" -> if(locale=="en")"Confirmed closings" else key
- "Catégorie" -> if(locale=="en")"Category" else key
- "Intrants" -> if(locale=="en")"Inputs" else key
- "Combustible" -> if(locale=="en")"Fuel" else key
- "Emballages" -> if(locale=="en")"Packaging" else key
- "Entretien" -> if(locale=="en")"Maintenance" else key
- "Personnel" -> if(locale=="en")"Staff" else key
- "Autres" -> if(locale=="en")"Other" else key
- "Annuler la dépense" -> if(locale=="en")"Cancel expense" else key
- "Service en cours" -> if(locale=="en")"Current service" else key
- "CA estimé au prochain service" -> if(locale=="en")"Estimated revenue for next service" else key
- "Marquer comme lu" -> if(locale=="en")"Mark as read" else key
- "Préférences" -> if(locale=="en")"Preferences" else key
- "Inscrire cet appareil" -> if(locale=="en")"Register device" else key
- "Désactiver les notifications distantes" -> if(locale=="en")"Disable remote notifications" else key
- "Équipe du point" -> if(locale=="en")"Location team" else key
- "Affectations au point actif" -> if(locale=="en")"Assignments at active location" else key
- "Non affecté" -> if(locale=="en")"Unassigned" else key
- "Vendeur" -> if(locale=="en")"Seller" else key
- "Responsable" -> if(locale=="en")"Manager" else key
- "Confirmer l’affectation" -> if(locale=="en")"Confirm assignment" else key
- "Confirmer le statut" -> if(locale=="en")"Confirm status" else key
- "Apparence" -> if(locale=="en")"Appearance" else key
- "Animation nocturne" -> if(locale=="en")"Night animation" else key
- "Mode de gestion" -> if(locale=="en")"Management mode" else key
- "Indépendant" -> if(locale=="en")"Independent" else key
- "Centralisé" -> if(locale=="en")"Centralized" else key
- "Confirmer le mode" -> if(locale=="en")"Confirm mode" else key
- "Configurer le service" -> if(locale=="en")"Configure service" else key
- "Horaires futurs" -> if(locale=="en")"Future hours" else key
- "Programmer l’horaire futur" -> if(locale=="en")"Schedule future hours" else key
- "Sujet assistance" -> if(locale=="en")"Support subject" else key
- "Description assistance" -> if(locale=="en")"Support description" else key
- "Réessayer la même demande" -> if(locale=="en")"Retry same request" else key
- "Mes dossiers / Actualiser" -> if(locale=="en")"My tickets / Refresh" else key
- "Conversation" -> if(locale=="en")"Conversation" else key
- "Conversation assistance" -> if(locale=="en")"Support conversation" else key
- "Actualiser la conversation" -> if(locale=="en")"Refresh conversation" else key
- "Message assistance" -> if(locale=="en")"Support message" else key
- "Réessayer" -> if(locale=="en")"Retry" else key
- "Envoyer le message" -> if(locale=="en")"Send message" else key
- "Vous" -> if(locale=="en")"You" else key
- "Assistant de pilotage" -> if(locale=="en")"Management assistant" else key
- "Libellé" -> if(locale=="en")"Label" else key
- "Montant" -> if(locale=="en")"Amount" else key
- "Motif de correction" -> if(locale=="en")"Correction reason" else key
- "Motif d’annulation" -> if(locale=="en")"Cancellation reason" else key
- "Motif de réactivation" -> if(locale=="en")"Reactivation reason" else key
- "Motif de création" -> if(locale=="en")"Creation reason" else key
- "Nom du nouveau point" -> if(locale=="en")"New location name" else key
- "Verrouiller" -> if(locale=="en")"Lock" else key
- "Reconnexion et vérification" -> if(locale=="en")"Reconnect and verify" else key
+ "Accès professionnel GRILLAD" -> if(locale=="en")"GRILLAD professional access" else "Naatugol e nokkuure golle GRILLAD"
+ "Première connexion avec invitation" -> if(locale=="en")"First sign-in with invitation" else "Naatugol aranol e noddaandu"
+ "Référence invitation" -> if(locale=="en")"Invitation reference" else "Innol noddaandu"
+ "Code invitation" -> if(locale=="en")"Invitation code" else "Kod noddaandu"
+ "Rester connecté sur cet appareil" -> if(locale=="en")"Stay signed in on this device" else "Heddo e naatugol e kaɓirgol ngol"
+ "Réinitialiser mon code local après connexion vérifiée" -> if(locale=="en")"Reset my local code after verified sign-in" else "Waylu kod kisal am caggal naatugol tabbitinaangol"
+ "Renouvellement uniquement" -> if(locale=="en")"Renewal only" else "Hesɗitugol abonman tan"
+ "CA net" -> if(locale=="en")"Net revenue" else "Ceede jaaygol caggal ittugol"
+ "Objectif du jour" -> if(locale=="en")"Today's target" else "Faandaare hannde"
+ "Objectif CA FCFA" -> if(locale=="en")"Revenue target (XAF)" else "Faandaare ceede jaaygol (FCFA)"
+ "Enregistrer l’objectif" -> if(locale=="en")"Save target" else "Danndu faandaare"
+ "Exporter le point journalier PDF" -> if(locale=="en")"Export daily summary PDF" else "Neltu jaŋtol hannde (PDF)"
+ "Pas de données confirmées." -> if(locale=="en")"No confirmed data." else "Alaa humpito tabbitinaango."
+ "Nom de l’article" -> if(locale=="en")"Item name" else "Innde jawdi"
+ "Coût facultatif" -> if(locale=="en")"Optional cost" else "Njoɓdi (so a yiɗi)"
+ "Modifier le prix" -> if(locale=="en")"Change price" else "Waylu njoɓdi"
+ "Modifier le prix sélectionné" -> if(locale=="en")"Change selected price" else "Waylu njoɓdi cuɓaaɗi"
+ "Actualiser le coût" -> if(locale=="en")"Update cost" else "Hesɗitin njoɓdi"
+ "Désactiver" -> if(locale=="en")"Disable" else "Dartu"
+ "Désactiver l’article" -> if(locale=="en")"Disable item" else "Dartu jaaygol jawdi ndii"
+ "Réactiver" -> if(locale=="en")"Reactivate" else "Hurmitin"
+ "Corriger les quantités" -> if(locale=="en")"Adjust quantities" else "Feewnu keewal"
+ "Corriger la quantité" -> if(locale=="en")"Adjust quantity" else "Feewnu keewal"
+ "Enregistrer la correction" -> if(locale=="en")"Save adjustment" else "Danndu feewnugol"
+ "Télécharger le reçu PDF" -> if(locale=="en")"Download receipt PDF" else "Heɓ kayit njoɓdi (PDF)"
+ "Annuler cette vente" -> if(locale=="en")"Cancel sale" else "Haaytu jaaygol ngol"
+ "Attendu" -> if(locale=="en")"Expected" else "Ceede padeteeɗe"
+ "Clôturer" -> if(locale=="en")"Close" else "Uddu"
+ "Rapprochement des règlements mobiles" -> if(locale=="en")"Mobile payment reconciliation" else "Ƴeewtagol e nanndingol njoɓdi Mobile Money"
+ "Rapprocher le règlement" -> if(locale=="en")"Reconcile payment" else "Nanndin njoɓdi e ceede keɓaaɗe"
+ "Clôtures confirmées" -> if(locale=="en")"Confirmed closings" else "Uddude keesu tabbitinaaɗe"
+ "Catégorie" -> if(locale=="en")"Category" else "Fannu"
+ "Intrants" -> if(locale=="en")"Inputs" else "Jawdi golle"
+ "Combustible" -> if(locale=="en")"Fuel" else "Ko huutortee ngam yiite"
+ "Emballages" -> if(locale=="en")"Packaging" else "Comci suuduɗi jawdi"
+ "Entretien" -> if(locale=="en")"Maintenance" else "Feewnugol e reenugol"
+ "Personnel" -> if(locale=="en")"Staff" else "Golluɓe"
+ "Autres" -> if(locale=="en")"Other" else "Goɗɗe"
+ "Annuler la dépense" -> if(locale=="en")"Cancel expense" else "Haaytu njoɓdi"
+ "Service en cours" -> if(locale=="en")"Current service" else "Golle ɗe ngoni jooni"
+ "CA estimé au prochain service" -> if(locale=="en")"Estimated revenue for next service" else "Ceede jaaygol tanƴaaɗe e golle garooje"
+ "Marquer comme lu" -> if(locale=="en")"Mark as read" else "Maanto ko janngaama"
+ "Préférences" -> if(locale=="en")"Preferences" else "Cuɓe"
+ "Inscrire cet appareil" -> if(locale=="en")"Register device" else "Danndu kaɓirgol ngol"
+ "Désactiver les notifications distantes" -> if(locale=="en")"Disable remote notifications" else "Dartu tintine iwɗe woɗɗi"
+ "Équipe du point" -> if(locale=="en")"Location team" else "Golluɓe nokkuure"
+ "Affectations au point actif" -> if(locale=="en")"Assignments at active location" else "Suɓugol golluɓe nokkuure gollotoonde"
+ "Non affecté" -> if(locale=="en")"Unassigned" else "Suɓaaka"
+ "Vendeur" -> if(locale=="en")"Seller" else "Jaaytooɗo"
+ "Responsable" -> if(locale=="en")"Manager" else "Hooreejo"
+ "Confirmer l’affectation" -> if(locale=="en")"Confirm assignment" else "Tabbitin suɓugol nokkuure golle"
+ "Confirmer le statut" -> if(locale=="en")"Confirm status" else "Tabbitin ngonka"
+ "Apparence" -> if(locale=="en")"Appearance" else "Mbayka hollirgal"
+ "Animation nocturne" -> if(locale=="en")"Night animation" else "Dillere hollirgal jemma"
+ "Mode de gestion" -> if(locale=="en")"Management mode" else "Mbayka ɗowtugol"
+ "Indépendant" -> if(locale=="en")"Independent" else "Keeriiɗol"
+ "Centralisé" -> if(locale=="en")"Centralized" else "Ɗowtugol e nokkuure wooto"
+ "Confirmer le mode" -> if(locale=="en")"Confirm mode" else "Tabbitin mbayka ɗowtugol"
+ "Configurer le service" -> if(locale=="en")"Configure service" else "Teeltu golle"
+ "Horaires futurs" -> if(locale=="en")"Future hours" else "Sahaaaji garooji"
+ "Programmer l’horaire futur" -> if(locale=="en")"Schedule future hours" else "Teeltu sahaa garoojo"
+ "Sujet assistance" -> if(locale=="en")"Support subject" else "Innde ɗaɓɓitannde ballal"
+ "Description assistance" -> if(locale=="en")"Support description" else "Ɓatakuru ɗaɓɓitannde ballal"
+ "Réessayer la même demande" -> if(locale=="en")"Retry same request" else "Eto ɗaɓɓitannde ndee kadi"
+ "Mes dossiers / Actualiser" -> if(locale=="en")"My tickets / Refresh" else "Kayite am / Hesɗitin"
+ "Conversation" -> if(locale=="en")"Conversation" else "Yeewtere"
+ "Conversation assistance" -> if(locale=="en")"Support conversation" else "Yeewtere ballal"
+ "Actualiser la conversation" -> if(locale=="en")"Refresh conversation" else "Hesɗitin yeewtere"
+ "Message assistance" -> if(locale=="en")"Support message" else "Ɓatakuru ballal"
+ "Réessayer" -> if(locale=="en")"Retry" else "Eto kadi"
+ "Envoyer le message" -> if(locale=="en")"Send message" else "Neldu ɓatakuru"
+ "Vous" -> if(locale=="en")"You" else "Aan"
+ "Assistant de pilotage" -> if(locale=="en")"Management assistant" else "Ballal ɗowtugol golle"
+ "Libellé" -> if(locale=="en")"Label" else "Innde"
+ "Montant" -> if(locale=="en")"Amount" else "Ceede"
+ "Motif de correction" -> if(locale=="en")"Correction reason" else "Daliilu feewnugol"
+ "Motif d’annulation" -> if(locale=="en")"Cancellation reason" else "Daliilu haaytugol"
+ "Motif de réactivation" -> if(locale=="en")"Reactivation reason" else "Daliilu hurmitingol"
+ "Motif de création" -> if(locale=="en")"Creation reason" else "Daliilu sosugol"
+ "Nom du nouveau point" -> if(locale=="en")"New location name" else "Innde nokkuure hesere"
+ "Verrouiller" -> if(locale=="en")"Lock" else "Uddu e kisal"
+ "Reconnexion et vérification" -> if(locale=="en")"Reconnect and verify" else "Naatu kadi e ƴeewtagol"
+ "Comment enregistrer un règlement ?" -> if(locale=="en")"How do I record a payment?" else "Hol no mi danndata njoɓdi?"
+ "Déclarez le montant réellement reçu en espèces, MTN MoMo ou Orange Money. GRILLAD ne prélève pas les fonds du client." -> if(locale=="en")"Record only the amount actually received in cash, MTN MoMo or Orange Money. GRILLAD does not debit customer funds." else "Danndu ceede keɓaaɗe goonga e juuɗe, MTN MoMo walla Orange Money tan. GRILLAD ittataa ceede e konte soottotooɗo."
+ "Que faire sans Internet ?" -> if(locale=="en")"What if I lose internet access?" else "Hol ko mi waɗata so Internet alaa?"
+ "Conservez le lot chiffré. Réessayez la même demande après reconnexion, sans doubler les ventes." -> if(locale=="en")"Keep the encrypted batch. Retry the same request after reconnecting, without duplicating sales." else "Danndu golle mooftaaɗe e kisal. Eto ɗaɓɓitannde ndee kadi so Internet ruttinii. Hoto danndu jaaygol ngol laabi ɗiɗi."
+ "Comment renouveler ?" -> if(locale=="en")"How do I renew?" else "Hol no mi hesɗitinta abonman?"
+ "Le promoteur ouvre Abonnement et suit les instructions de paiement externe. Attendez la validation centrale." -> if(locale=="en")"The owner opens Subscription and follows the external payment instructions. Wait for central confirmation." else "Jom golle uddita Abonman, rewina yamirooje njoɓdi boowal GRILLAD. Fad tabbitinol hooreeɓe Famille NAXA."
+ "Comment protéger mon compte ?" -> if(locale=="en")"How do I protect my account?" else "Hol no mi reenata konte am?"
+ "Ne transmettez jamais votre code PIN, OTP ou mot de passe à un agent." -> if(locale=="en")"Never share your PIN, OTP or password with an agent." else "Hoto hokku hay gooto kod PIN maa, OTP maa walla finnde maa."
+ "Assistance indisponible." -> if(locale=="en")"Support unavailable." else "Ballal alaa jooni."
+ "Confirmation non obtenue. Réessayez la même demande." -> if(locale=="en")"Confirmation not received. Retry the same request." else "Tabbitinol heɓaaka. Eto ɗaɓɓitannde ndee kadi."
+ "Dossier enregistré" -> if(locale=="en")"Ticket saved" else "Kayit danndaama"
+ "Vérifier / réessayer la même demande" -> if(locale=="en")"Verify / retry the same request" else "Ƴeewto / eto ɗaɓɓitannde ndee kadi"
+ "Vérifier / réessayer la même requête" -> if(locale=="en")"Verify / retry the same request" else "Ƴeewto / eto ɗaɓɓitannde ndee kadi"
+ "Vérifier la même requête" -> if(locale=="en")"Verify the same request" else "Ƴeewto ɗaɓɓitannde ndee"
+ "Vérifier puis annuler le lot" -> if(locale=="en")"Verify then cancel batch" else "Ƴeewto, caggal ɗum haaytu golle ɗee"
+ "Vérifier et annuler" -> if(locale=="en")"Verify and cancel" else "Ƴeewto e haaytu"
+ "Aucune synthèse disponible." -> if(locale=="en")"No summary available." else "Alaa jaŋtol jooni."
+ "Aucune synthèse de service disponible." -> if(locale=="en")"No service summary available." else "Alaa jaŋtol golle jooni."
+ "Déclarer le règlement reçu hors application. Aucun débit ni paiement en ligne." -> if(locale=="en")"Record payment received outside the app. No debit or online payment." else "Danndu ceede keɓaaɗe boowal GRILLAD. Alaa ittugol ceede walla yoɓugol e Internet."
+ "Déclarer le règlement reçu hors application." -> if(locale=="en")"Record payment received outside the app." else "Danndu ceede keɓaaɗe boowal GRILLAD."
+ "Transport" -> if(locale=="en")"Transport" else "Ƴettugol jawdi"
+ "Aucune notification disponible." -> if(locale=="en")"No notifications available." else "Alaa tintine jooni."
+ "ACCÈS : un seul point de vente." -> if(locale=="en")"ACCESS: one location only." else "ACCÈS: nokkuure jaaygol wooto tan."
+ "Heure de début du service" -> if(locale=="en")"Service start time" else "Sahaa fuɗɗugol golle"
+ "Configuration GRILLAD invalide. Aucun accès." -> if(locale=="en")"Invalid GRILLAD configuration. Access denied." else "Teelte GRILLAD feewaani. Naatugol yamiraaka."
+ "Catalogue expiré. Reconnectez-vous." -> if(locale=="en")"Catalogue expired. Sign in again." else "Sahaa doggol timmii. Naatu kadi."
+ "Confirmation de renouvellement incertaine." -> if(locale=="en")"Renewal confirmation uncertain." else "Tabbitinol hesɗitugol abonman heɓaaka."
+ "Annuler le lot non enregistré ?" -> if(locale=="en")"Cancel the unconfirmed batch?" else "Haaytu golle ɗe tabbitinaaka?"
+ "Services clôturés — données serveur uniquement" -> if(locale=="en")"Completed services — server data only" else "Golle timmuɗe — humpito sarworde tan"
+ "Motif de changement du prix" -> if(locale=="en")"Reason for price change" else "Daliilu waylugol njoɓdi"
+ "Nouveau coût unitaire (vide = inconnu)" -> if(locale=="en")"New unit cost (empty = unknown)" else "Njoɓdi hesɗi gootal (meho = anndaaka)"
+ "Montant net déclaré (FCFA)" -> if(locale=="en")"Declared net amount (XAF)" else "Ceede kollitaaɗe caggal ittugol (FCFA)"
+ "Annulée" -> if(locale=="en")"Cancelled" else "Haaytaama"
+ "Justification si écart" -> if(locale=="en")"Reason if there is a discrepancy" else "Daliilu so seertugol woodi"
+ "Montant crédit vérifié" -> if(locale=="en")"Verified credited amount" else "Ceede keɓaaɗe ƴeewtaaɗe"
+ "Référence de transaction vérifiée" -> if(locale=="en")"Verified transaction reference" else "Innol dirtugol ceede ƴeewtaaɗol"
+ "Référence du justificatif" -> if(locale=="en")"Evidence reference" else "Innol seedamfaagu"
+ "Motif d’annulation de dépense" -> if(locale=="en")"Expense cancellation reason" else "Daliilu haaytugol njoɓdi"
+ "Estimation sur services clôturés, non garantie." -> if(locale=="en")"Estimate based on completed services, not guaranteed." else "Tanƴitagol tugnaangol e golle timmuɗe, wonaa alkawal."
+ "Collaborateurs GRILLAD déjà activés." -> if(locale=="en")"Existing activated GRILLAD team members." else "Golluɓe GRILLAD yamiraaɓe kisa."
+ "Motif d’affectation" -> if(locale=="en")"Assignment reason" else "Daliilu suɓugol nokkuure golle"
+ "Commandes et règlements GRILLAD séparés." -> if(locale=="en")"Separate GRILLAD orders and payments." else "Ɗaɓɓitanɗe e njoɓdi GRILLAD seertii."
+ "Montant net déclaré Connect" -> if(locale=="en")"Declared net Connect amount" else "Ceede Connect kollitaaɗe caggal ittugol"
+ "Motif si refus/annulation" -> if(locale=="en")"Reason for rejection/cancellation" else "Daliilu salaagol / haaytugol"
+ "Motif de changement de site" -> if(locale=="en")"Reason for location change" else "Daliilu waylugol nokkuure"
+ "Motif du changement" -> if(locale=="en")"Reason for change" else "Daliilu waylugol"
+ "Modification historique protégée." -> if(locale=="en")"Historical changes are protected." else "Waylugol jaŋtol ena reenete."
+ "Heure de début (HH:mm)" -> if(locale=="en")"Start time (HH:mm)" else "Sahaa fuɗɗugol (HH:mm)"
+ "Date d’effet AAAA-MM-JJ" -> if(locale=="en")"Effective date YYYY-MM-DD" else "Ñalngu fuɗɗugol AAAA-MM-JJ"
+ "Historique incomplet : aucun conseil chiffré sans données suffisantes." -> if(locale=="en")"Incomplete history: no numerical advice without sufficient data." else "Jaŋtol timmaani: alaa wasiya limooje so humpito heƴaani."
+ "Ruptures possibles : vérifier le stock et les coûts." -> if(locale=="en")"Possible shortages: check stock and costs." else "Jawdi ena waawi gasde: ƴeewto jawdi heddiiɗi e njoɓdi."
+ "Aucun besoin supplémentaire confirmé parmi les prévisions disponibles." -> if(locale=="en")"No additional need confirmed by available forecasts." else "Alaa ɓeydital tabbitinaangal e ƴeewtagol yeeso."
+ "Conseils calculés à partir des prévisions serveur, à confirmer. Aucune action automatique." -> if(locale=="en")"Advice based on server forecasts, to be confirmed. No automatic action." else "Wasiya tugnaango e ƴeewtagol yeeso sarworde, foti tabbitineede. Alaa golle waɗeteeɗe e hoore mum."
+ "Centre de surveillance" -> if(locale=="en")"Security center" else "Nokkuure kisal"
+ "Sauvegarde et restauration" -> if(locale=="en")"Backup and recovery" else "Danndugol e heɓtugol humpito"
  else -> key
 }
