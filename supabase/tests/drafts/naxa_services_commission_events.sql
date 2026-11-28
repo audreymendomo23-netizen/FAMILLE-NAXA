@@ -64,3 +64,48 @@ do $qa$ begin
  if exists(select 1 from public.ns_commission_entries where sale_id='83000000-0000-4000-8000-000000000246') then raise exception 'QA_REVOKED_LEDGER';end if;
 end $qa$;
 select 'PASS: commission event reservation and revoked promoter block without ledger mutation' as result;
+
+-- Runs after v28 fixtures, isolated.
+insert into public.ns_appointments(id,org_id,site_id,customer_id,service_id,assigned_member_id,starts_at,ends_at,status) values('82000000-0000-4000-8000-000000000247','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','80000000-0000-4000-8000-000000000241','81000000-0000-4000-8000-000000000241','60000000-0000-4000-8000-000000000242','2026-11-27 10:00+01','2026-11-27 11:00+01','booked');
+insert into public.ns_sales(id,org_id,site_id,customer_id,sale_number,subtotal_xaf,total_xaf,created_by) values('83000000-0000-4000-8000-000000000247','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','80000000-0000-4000-8000-000000000241','QA-SHARED',7000,7000,'60000000-0000-4000-8000-000000000241');
+insert into public.ns_sale_lines(id,org_id,site_id,sale_id,item_type,description,quantity,unit_price_xaf,idempotency_key) values('85000000-0000-4000-8000-000000000247','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','83000000-0000-4000-8000-000000000247','service','QA service',1,7000,gen_random_uuid());
+set local role authenticated;
+do $qa$ declare o uuid:='20000000-0000-4000-8000-000000000241';s uuid:='30000000-0000-4000-8000-000000000241';v uuid:='83000000-0000-4000-8000-000000000247';b uuid:='86000000-0000-4000-8000-000000000247';r jsonb;alloc jsonb:='[{"line_id":"85000000-0000-4000-8000-000000000247","appointment_id":"82000000-0000-4000-8000-000000000247","shares":[{"member_id":"60000000-0000-4000-8000-000000000242","share_bps":6000},{"member_id":"60000000-0000-4000-8000-000000000241","share_bps":4000}]}]';begin
+ begin
+  perform public.ns_register_commission_plan(o,s,v,b,jsonb_set(alloc,'{0,shares,0,share_bps}','5999'::jsonb));raise exception 'QA_BAD_SHARES_ACCEPTED';
+ exception when others then if sqlerrm not like '%NS_COMMISSION_SHARES_INVALID%' then raise;end if;end;
+ r:=public.ns_register_commission_plan(o,s,v,b,alloc);
+ if r->>'state'<>'waiting' or r is distinct from public.ns_register_commission_plan(o,s,v,b,alloc) then raise exception 'QA_PLAN_REPLAY';end if;
+ begin
+  perform public.ns_prepare_settled_commission(o,s,'82000000-0000-4000-8000-000000000247',v);
+  raise exception 'QA_EVENT_RESERVATION_BYPASS';
+ exception when others then if sqlerrm not like '%NS_COMMISSION_SETTLEMENT_RESERVED%' then raise;end if;end;
+ if has_function_privilege('authenticated','public.ns_process_next_commission_event()','EXECUTE') then raise exception 'QA_EVENT_CLIENT_GRANT';end if;
+end $qa$;
+reset role;
+update public.ns_appointments set status='completed' where id='82000000-0000-4000-8000-000000000247';
+insert into public.ns_appointment_status_events(id,org_id,site_id,appointment_id,to_status,actor_member_id,occurred_at) select gen_random_uuid(),org_id,site_id,id,'completed',assigned_member_id,'2026-11-27 11:00+01' from public.ns_appointments where id='82000000-0000-4000-8000-000000000247';
+insert into public.ns_payments(org_id,site_id,sale_id,payment_method,amount_xaf,status,confirmed_at,idempotency_key) values('20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','83000000-0000-4000-8000-000000000247','mobile_money',7000,'confirmed','2026-11-27 12:00+01',gen_random_uuid());
+set local role service_role;
+do $qa$ declare r jsonb; i int; processed boolean:=false;begin
+ for i in 1..10 loop
+  r:=public.ns_process_next_commission_event();
+  if r->>'state'='processed' then processed:=true;end if;
+  exit when r->>'state'='empty';
+ end loop;
+ if not processed or r->>'state'<>'empty' then raise exception 'QA_EVENT_DRAIN';end if;
+end $qa$;
+reset role;
+do $qa$ begin
+ if (select count(*) from public.ns_commission_entries where sale_id='83000000-0000-4000-8000-000000000247' and status='pending_approval')<>2 then raise exception 'QA_SHARED_COUNT';end if;
+ if (select sum(base_amount_xaf) from public.ns_commission_entries where sale_id='83000000-0000-4000-8000-000000000247')<>7000 then raise exception 'QA_SHARED_BASE';end if;
+ if (select sum(commission_xaf) from public.ns_commission_entries where sale_id='83000000-0000-4000-8000-000000000247')<>(select commission_xaf from public.ns_commission_entries where sale_id='83000000-0000-4000-8000-000000000245') then raise exception 'QA_SHARED_TOTAL';end if;
+end $qa$;
+set local role authenticated;
+do $qa$ declare e uuid;begin
+ for e in select id from public.ns_commission_entries where sale_id='83000000-0000-4000-8000-000000000247' loop
+  if public.ns_review_settled_commission('20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241',e,gen_random_uuid(),'approve','QA shared approved')->>'status'<>'approved' then raise exception 'QA_SHARED_APPROVAL';end if;
+ end loop;
+end $qa$;
+reset role;
+select 'PASS: explicit same-line commission shares, exact sum, worker settlement and scoped approval' as result;
