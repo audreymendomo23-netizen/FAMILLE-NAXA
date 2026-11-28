@@ -26,4 +26,15 @@ do $q$begin
 end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000393',true);
 do $q$begin if not exists(select 1 from public.sec_support_cases where id='30000000-0000-0000-0000-000000000391' and agent_id is null and state='open') then raise exception 'client ticket lost';end if;end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000391',true);
+select public.sec_support_roster('10000000-0000-0000-0000-000000000391','20000000-0000-0000-0000-000000000391','00000000-0000-0000-0000-000000000392',true);
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000392',true);
+select public.sec_support_action('10000000-0000-0000-0000-000000000391','20000000-0000-0000-0000-000000000391','30000000-0000-0000-0000-000000000391',gen_random_uuid(),'claim','{}');
+select public.sec_support_action('10000000-0000-0000-0000-000000000391','20000000-0000-0000-0000-000000000391','30000000-0000-0000-0000-000000000391',gen_random_uuid(),'resolve','{}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000391',true);
+select public.sec_support_roster('10000000-0000-0000-0000-000000000391','20000000-0000-0000-0000-000000000391','00000000-0000-0000-0000-000000000392',false);
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000393',true);
+do $q$begin
+ if public.sec_support_action('10000000-0000-0000-0000-000000000391','20000000-0000-0000-0000-000000000391','30000000-0000-0000-0000-000000000391',gen_random_uuid(),'reopen','{}')->>'state'<>'open' then raise exception 'reopen with revoked agent';end if;
+end $q$;
 reset role;rollback;

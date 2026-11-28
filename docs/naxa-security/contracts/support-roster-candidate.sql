@@ -7,6 +7,7 @@ begin
  if coalesce(r,'')<>'owner' then raise exception 'owner required' using errcode='42501';end if;
  if (p_user is null)<>(p_active is null) then raise exception 'invalid operation' using errcode='22023';end if;
  if p_user is not null then
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,392));
   perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text||':'||p_user::text,391));
   if not exists(select 1 from public.sec_site_memberships sm join public.sec_memberships m using(organization_id,user_id) where sm.organization_id=p_org and sm.site_id=p_site and sm.user_id=p_user and sm.active and m.active and m.role in ('owner','manager','operator')) then raise exception 'member denied' using errcode='42501';end if;
   if p_active then

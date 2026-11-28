@@ -63,6 +63,7 @@ create function sec_private.support_action(p_org uuid,p_site uuid,p_case uuid,p_
 declare c public.sec_support_cases%rowtype;old public.sec_support_events%rowtype;h text;out jsonb;body text;agent boolean;customer boolean;score integer;target_agent uuid;transfer_reason text;
 begin
  if coalesce(sec_private.field_role(p_org,p_site),'') not in ('owner','manager','operator') or p_event is null or p_op is null or jsonb_typeof(p_detail) is distinct from 'object' or octet_length(p_detail::text)>2048 then raise exception 'denied' using errcode='42501';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,392));
  perform pg_advisory_xact_lock(hashtextextended(p_event::text,7));
  select * into c from public.sec_support_cases where id=p_case and organization_id=p_org and site_id=p_site for update;
  if not found then raise exception 'case denied' using errcode='42501';end if;
