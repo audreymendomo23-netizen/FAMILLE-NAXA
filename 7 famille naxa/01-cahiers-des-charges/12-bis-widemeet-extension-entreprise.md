@@ -91,3 +91,7 @@ Référence originale PNG conservée sans modification dans la Bibliothèque Cha
 
 ## 28/11/2026 — Arbitrage propriétaire : Actualités remplace Mon entreprise
 [V] Décision prioritaire sur les anciens libellés : renommer le réseau social interne « Actualités » (EN : News), supprimer le sous-onglet redondant Actualités, ouvrir directement le fil des publications des staffs, conserver Annonces comme rubrique distincte accessible depuis Actualités, avec Retour au fil. Conserver les droits, données, moteur unique et accès Collaborateurs et invitations. Les anciennes occurrences du master et des décisions historiques décrivent la référence d'origine, non la navigation actuelle. Aucun changement du PNG, des couleurs, du périmètre fonctionnel ou des droits. Web et Android alignés, recette Chromium adaptée et enrichie; nouvelle qualification à constater.
+
+
+## 28/11/2026 — Six réactions professionnelles validées
+[V] Actualités : J’aime 👍, Bravo 👏, J’adore ❤️, Instructif 💡, Soutien 🤝, Amusant 😂 ; une réaction active par compte/publication, remplaçable ou retirable. Les commentaires restent libres. FR/EN, contrôles serveur stricts et tests Edge/Chromium des six choix. Android : disposition sur deux colonnes pour éviter le débordement. Pas de changement des droits ni de la production. Qualification du nouveau candidat à vérifier.

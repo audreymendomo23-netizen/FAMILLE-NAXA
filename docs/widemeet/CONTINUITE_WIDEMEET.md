@@ -563,3 +563,7 @@ Raccordement complémentaire : accueil et menu Mon entreprise convergent vers le
 
 ## 28/11/2026 — V2-03.2 interactions Actualités
 Réactions (J’aime, J’adore, Bravo, une par compte), favoris privés et filtre, commentaires textuels avec identifiant idempotent, retrait auteur/promoteur, comptage filtré membres actifs, refus post retiré/annonce/tenant étranger. Tables privées RLS/service_role et RPC existante, Web/Compose FR/EN, recettes Edge et Chromium ajoutées. Choix de trois réactions et 100 derniers commentaires, à confirmer; sondages, médias et ciblage non couverts. Développement non qualifié avant résultat. Aucun déploiement/migration hébergée.
+
+
+## 28/11/2026 — Six réactions professionnelles validées
+[V] Actualités : J’aime 👍, Bravo 👏, J’adore ❤️, Instructif 💡, Soutien 🤝, Amusant 😂 ; une réaction active par compte/publication, remplaçable ou retirable. Les commentaires restent libres. FR/EN, contrôles serveur stricts et tests Edge/Chromium des six choix. Android : disposition sur deux colonnes pour éviter le débordement. Pas de changement des droits ni de la production. Qualification du nouveau candidat à vérifier.

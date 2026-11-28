@@ -471,7 +471,13 @@ try{
  const commentId=randomUUID(),commentPayload={id:newsId,comment_id:commentId,body:"Commentaire synthétique"};
  assert.equal((await identity(hs.access_token,"center-company-reaction",{id:newsId,reaction:"like"})).saved,true);
  assert.equal((await identity(hs.access_token,"center-company-reaction",{id:newsId,reaction:"like"})).saved,true);
- assert.equal((await identity(hs.access_token,"center-company-reaction",{id:newsId,reaction:"celebrate"})).saved,true);
+ for(const reaction of ["like","love","insightful","support","funny","celebrate"]){
+  assert.equal((await identity(hs.access_token,"center-company-reaction",{id:newsId,reaction})).saved,true);
+  const current=(await identity(hs.access_token,"center-company-list",{kind:"news"})).items.find(p=>p.id===newsId);
+  assert.equal(current.my_reaction,reaction);assert.equal(current.reaction_count,1);
+ }
+ assert.equal((await identityRequest(hs.access_token,"center-company-reaction",{id:newsId,reaction:"invalid"})).status,403);
+ console.log("PASS V2 six professional reactions and strict single-reaction constraint");
  assert.equal((await identity(hs.access_token,"center-company-favorite",{id:newsId,enabled:true})).saved,true);
  assert.equal((await identity(hs.access_token,"center-company-comment",commentPayload)).created,true);
  assert.equal((await identity(hs.access_token,"center-company-comment",commentPayload)).created,true);
@@ -929,6 +935,13 @@ try{
   const hPost=hf.locator("article").filter({hasText:"Actualité réelle Chromium"});
   await hPost.getByRole("button",{name:"J’aime",exact:true}).click();
   await hPost.getByRole("button",{name:"J’aime",exact:true,pressed:true}).waitFor();
+  for(const label of ["Bravo","J’adore","Instructif","Soutien","Amusant"]){
+   await hPost.getByRole("button",{name:label,exact:true}).click();
+   await hPost.getByRole("button",{name:label,exact:true,pressed:true}).waitFor();
+   assert.equal(await hPost.getByRole("group",{name:"Réactions"}).getByRole("button",{pressed:true}).count(),1);
+  }
+  await hPost.getByRole("button",{name:"Amusant",exact:true}).click();
+  await hPost.getByRole("button",{name:"Amusant",exact:true,pressed:false}).waitFor();
   await hPost.getByRole("button",{name:"Ajouter aux favoris",exact:true}).click();
   await hPost.getByRole("button",{name:"Retirer des favoris",exact:true,pressed:true}).waitFor();
   await hPost.getByRole("button",{name:/Commentaires \(/}).click();

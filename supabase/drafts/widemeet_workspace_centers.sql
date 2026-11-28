@@ -539,7 +539,7 @@ grant select,insert,update,delete on public.wm_company_posts,public.wm_company_r
 -- V2-03 interactions, private bookmarks and moderated comments.
 create table public.wm_company_reactions(
  post_id uuid not null references public.wm_company_posts(id),account_id uuid not null references public.wm_accounts(id),
- reaction text not null check(reaction in ('like','love','celebrate')),primary key(post_id,account_id)
+ reaction text not null check(reaction in ('like','love','celebrate','insightful','support','funny')),primary key(post_id,account_id)
 );
 create table public.wm_company_favorites(
  post_id uuid not null references public.wm_company_posts(id),account_id uuid not null references public.wm_accounts(id),primary key(post_id,account_id)
@@ -599,7 +599,7 @@ begin
   if p_action='center-company-reaction' then
    if (p_data-'id'-'reaction')<>'{}'::jsonb or not (p_data ? 'reaction') then return null;end if;
    if jsonb_typeof(p_data->'reaction')='null' then delete from public.wm_company_reactions where post_id=pid and account_id=a.account_id;
-   elsif jsonb_typeof(p_data->'reaction')='string' and p_data->>'reaction' in ('like','love','celebrate') then
+   elsif jsonb_typeof(p_data->'reaction')='string' and p_data->>'reaction' in ('like','love','celebrate','insightful','support','funny') then
     insert into public.wm_company_reactions(post_id,account_id,reaction) values(pid,a.account_id,p_data->>'reaction') on conflict(post_id,account_id) do update set reaction=excluded.reaction;
    else return null;end if;
    return jsonb_build_object('saved',true);
