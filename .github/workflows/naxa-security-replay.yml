@@ -7,6 +7,11 @@ on:
       - 'docs/naxa-security/contracts/**'
       - '.github/workflows/naxa-security-replay.yml'
   workflow_dispatch:
+# Keep one active and one latest pending revision per SECURITY workflow/branch.
+# Main and the other products are separate; do not interrupt a running qualification.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
