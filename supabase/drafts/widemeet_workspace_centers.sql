@@ -536,18 +536,41 @@ alter table public.wm_company_posts enable row level security;
 alter table public.wm_company_reads enable row level security;
 revoke all on public.wm_company_posts,public.wm_company_reads from public,anon,authenticated;
 grant select,insert,update,delete on public.wm_company_posts,public.wm_company_reads to service_role;
+-- V2-03 interactions, private bookmarks and moderated comments.
+create table public.wm_company_reactions(
+ post_id uuid not null references public.wm_company_posts(id),account_id uuid not null references public.wm_accounts(id),
+ reaction text not null check(reaction in ('like','love','celebrate')),primary key(post_id,account_id)
+);
+create table public.wm_company_favorites(
+ post_id uuid not null references public.wm_company_posts(id),account_id uuid not null references public.wm_accounts(id),primary key(post_id,account_id)
+);
+create table public.wm_company_comments(
+ id uuid primary key,post_id uuid not null references public.wm_company_posts(id),author_id uuid not null references public.wm_accounts(id),
+ body text not null check(length(btrim(body)) between 1 and 1000),created_at timestamptz not null default clock_timestamp(),removed_at timestamptz
+);
+create index wm_company_comments_post on public.wm_company_comments(post_id,created_at,id) where removed_at is null;
+alter table public.wm_company_reactions enable row level security;
+alter table public.wm_company_favorites enable row level security;
+alter table public.wm_company_comments enable row level security;
+revoke all on public.wm_company_reactions,public.wm_company_favorites,public.wm_company_comments from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_company_reactions,public.wm_company_favorites,public.wm_company_comments to service_role;
 create function public.wm_company_action(p_hash text,p_action text,p_data jsonb) returns jsonb
 language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; item public.wm_company_posts%rowtype; pid uuid; k text; content text; result jsonb;
+declare a record; item public.wm_company_posts%rowtype; pid uuid; cid uuid; k text; content text; result jsonb; comment_row public.wm_company_comments%rowtype; only_favorites boolean;
 begin
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
  select * into a from public.wm_lock_room_actor_for(p_hash,null);
  if not found or not exists(select 1 from public.wm_workspaces w where w.id=a.workspace_id and w.enabled and w.kind='enterprise') or jsonb_typeof(p_data) is distinct from 'object' then return null;end if;
  if p_action='center-company-list' then
-  if (p_data-'kind')<>'{}'::jsonb or jsonb_typeof(p_data->'kind') is distinct from 'string' then return null;end if;
+  if (p_data-'kind'-'favorites')<>'{}'::jsonb or jsonb_typeof(p_data->'kind') is distinct from 'string' or (p_data ? 'favorites' and jsonb_typeof(p_data->'favorites') is distinct from 'boolean') then return null;end if;
   k:=p_data->>'kind';if k not in ('news','announcement') then return null;end if;
+  only_favorites:=coalesce((p_data->>'favorites')::boolean,false);
   select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc,x.id desc),'[]'::jsonb) into result from (
    select p.id,p.kind,p.author_id,ac.display_name,mb.job_title,p.body,p.created_at,
+    exists(select 1 from public.wm_company_favorites f where f.post_id=p.id and f.account_id=a.account_id) as favorite,
+    (select r.reaction from public.wm_company_reactions r where r.post_id=p.id and r.account_id=a.account_id) as my_reaction,
+    (select count(*) from public.wm_company_reactions r join public.wm_memberships m on m.account_id=r.account_id and m.workspace_id=p.workspace_id and m.enabled join public.wm_accounts ca on ca.id=m.account_id and ca.enabled where r.post_id=p.id) as reaction_count,
+    (select count(*) from public.wm_company_comments c join public.wm_memberships m on m.account_id=c.author_id and m.workspace_id=p.workspace_id and m.enabled join public.wm_accounts ca on ca.id=m.account_id and ca.enabled where c.post_id=p.id and c.removed_at is null) as comment_count,
     p.author_id=a.account_id or a.role='promoteur' as can_remove,
     (p.kind='announcement' and p.author_id<>a.account_id) as can_confirm,
     exists(select 1 from public.wm_company_reads cr where cr.post_id=p.id and cr.account_id=a.account_id) as confirmed,
@@ -555,7 +578,7 @@ begin
       (select count(*) from public.wm_company_reads cr join public.wm_memberships cm on cm.account_id=cr.account_id and cm.workspace_id=p.workspace_id and cm.enabled join public.wm_accounts ca on ca.id=cm.account_id and ca.enabled where cr.post_id=p.id) else null end as confirmation_count
    from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled
    join public.wm_accounts ac on ac.id=p.author_id and ac.enabled
-   where p.workspace_id=a.workspace_id and p.kind=k and p.removed_at is null order by p.created_at desc,p.id desc limit 100
+   where p.workspace_id=a.workspace_id and p.kind=k and p.removed_at is null and (not only_favorites or exists(select 1 from public.wm_company_favorites f where f.post_id=p.id and f.account_id=a.account_id)) order by p.created_at desc,p.id desc limit 100
   ) x;
   return jsonb_build_object('items',result,'can_publish',k='news' or a.role in ('promoteur','manager'));
  end if;
@@ -569,9 +592,47 @@ begin
   select * into item from public.wm_company_posts where id=pid and workspace_id=a.workspace_id and author_id=a.account_id and kind=k and body=content and removed_at is null;
   if not found then return null;end if;return jsonb_build_object('id',pid,'published',true);
  end if;
- if (p_data-'id')<>'{}'::jsonb then return null;end if;
  select p.* into item from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=p.author_id and ac.enabled where p.id=pid and p.workspace_id=a.workspace_id;
  if not found then return null;end if;
+ if p_action in ('center-company-reaction','center-company-favorite','center-company-comments','center-company-comment','center-company-comment-remove') then
+  if item.removed_at is not null or item.kind<>'news' then return null;end if;
+  if p_action='center-company-reaction' then
+   if (p_data-'id'-'reaction')<>'{}'::jsonb or not (p_data ? 'reaction') then return null;end if;
+   if jsonb_typeof(p_data->'reaction')='null' then delete from public.wm_company_reactions where post_id=pid and account_id=a.account_id;
+   elsif jsonb_typeof(p_data->'reaction')='string' and p_data->>'reaction' in ('like','love','celebrate') then
+    insert into public.wm_company_reactions(post_id,account_id,reaction) values(pid,a.account_id,p_data->>'reaction') on conflict(post_id,account_id) do update set reaction=excluded.reaction;
+   else return null;end if;
+   return jsonb_build_object('saved',true);
+  elsif p_action='center-company-favorite' then
+   if (p_data-'id'-'enabled')<>'{}'::jsonb or jsonb_typeof(p_data->'enabled') is distinct from 'boolean' then return null;end if;
+   if (p_data->>'enabled')::boolean then insert into public.wm_company_favorites(post_id,account_id) values(pid,a.account_id) on conflict do nothing;
+   else delete from public.wm_company_favorites where post_id=pid and account_id=a.account_id;end if;
+   return jsonb_build_object('saved',true);
+  elsif p_action='center-company-comments' then
+   if (p_data-'id')<>'{}'::jsonb then return null;end if;
+   select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at,x.id),'[]'::jsonb) into result from (
+    select c.id,c.author_id,c.body,c.created_at,ac.display_name,mb.job_title,(c.author_id=a.account_id or a.role='promoteur') as can_remove
+    from public.wm_company_comments c join public.wm_memberships mb on mb.account_id=c.author_id and mb.workspace_id=a.workspace_id and mb.enabled
+    join public.wm_accounts ac on ac.id=c.author_id and ac.enabled
+    where c.post_id=pid and c.removed_at is null order by c.created_at desc,c.id desc limit 100
+   ) x;
+   return jsonb_build_object('items',result);
+  end if;
+  if jsonb_typeof(p_data->'comment_id') is distinct from 'string' or coalesce(p_data->>'comment_id','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then return null;end if;
+  cid:=(p_data->>'comment_id')::uuid;
+  if p_action='center-company-comment' then
+   if (p_data-'id'-'comment_id'-'body')<>'{}'::jsonb or jsonb_typeof(p_data->'body') is distinct from 'string' then return null;end if;
+   content:=btrim(p_data->>'body');if length(content) not between 1 and 1000 then return null;end if;
+   insert into public.wm_company_comments(id,post_id,author_id,body) values(cid,pid,a.account_id,content) on conflict(id) do nothing;
+   select * into comment_row from public.wm_company_comments where id=cid and post_id=pid and author_id=a.account_id and body=content and removed_at is null;
+   if not found then return null;end if;return jsonb_build_object('created',true);
+  else
+   if (p_data-'id'-'comment_id')<>'{}'::jsonb then return null;end if;
+   update public.wm_company_comments set removed_at=coalesce(removed_at,clock_timestamp()) where id=cid and post_id=pid and (author_id=a.account_id or a.role='promoteur');
+   if not found then return null;end if;return jsonb_build_object('removed',true);
+  end if;
+ end if;
+ if (p_data-'id')<>'{}'::jsonb then return null;end if;
  if p_action='center-company-remove' then
   if item.author_id<>a.account_id and a.role<>'promoteur' then return null;end if;
   update public.wm_company_posts set removed_at=coalesce(removed_at,clock_timestamp()) where id=pid and workspace_id=a.workspace_id;

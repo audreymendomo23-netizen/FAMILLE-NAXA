@@ -468,10 +468,36 @@ try{
  assert.equal((await identity(gs.access_token,"center-company-confirm",{id:announcementId})).confirmed,true);
  assert.equal((await identity(hs.access_token,"center-company-list",{kind:"announcement"})).items.find(p=>p.id===announcementId).confirmation_count,1);
  console.log("PASS V2 enterprise feed and official announcement: exact replay, role/tenant denial and explicit read");
+ const commentId=randomUUID(),commentPayload={id:newsId,comment_id:commentId,body:"Commentaire synthétique"};
+ assert.equal((await identity(hs.access_token,"center-company-reaction",{id:newsId,reaction:"like"})).saved,true);
+ assert.equal((await identity(hs.access_token,"center-company-reaction",{id:newsId,reaction:"like"})).saved,true);
+ assert.equal((await identity(hs.access_token,"center-company-reaction",{id:newsId,reaction:"celebrate"})).saved,true);
+ assert.equal((await identity(hs.access_token,"center-company-favorite",{id:newsId,enabled:true})).saved,true);
+ assert.equal((await identity(hs.access_token,"center-company-comment",commentPayload)).created,true);
+ assert.equal((await identity(hs.access_token,"center-company-comment",commentPayload)).created,true);
+ assert.equal((await identityRequest(hs.access_token,"center-company-comment",{...commentPayload,body:"changed"})).status,403);
+ for(const [action,payload] of [["reaction",{id:newsId,reaction:"love"}],["favorite",{id:newsId,enabled:true}],["comments",{id:newsId}],["comment",commentPayload],["comment-remove",{id:newsId,comment_id:commentId}]]){
+  assert.equal((await identityRequest(os.access_token,"center-company-"+action,payload)).status,403);
+ }
+ const hFavorite=(await identity(hs.access_token,"center-company-list",{kind:"news",favorites:true})).items.find(p=>p.id===newsId);
+ assert.equal(hFavorite.favorite,true);assert.equal(hFavorite.reaction_count,1);assert.equal(hFavorite.my_reaction,"celebrate");assert.equal(hFavorite.comment_count,1);
+ assert.ok(!(await identity(gs.access_token,"center-company-list",{kind:"news",favorites:true})).items.some(p=>p.id===newsId));
+ const gPost=(await identity(gs.access_token,"center-company-list",{kind:"news"})).items.find(p=>p.id===newsId);
+ assert.equal(gPost.my_reaction,null);assert.equal(gPost.favorite,false);assert.equal(gPost.reaction_count,1);
+ const gComments=await identity(gs.access_token,"center-company-comments",{id:newsId});assert.equal(gComments.items.length,1);assert.equal(gComments.items[0].body,commentPayload.body);assert.equal(gComments.items[0].can_remove,false);
+ assert.equal((await identityRequest(gs.access_token,"center-company-comment-remove",{id:newsId,comment_id:commentId})).status,403);
+ assert.equal((await identity(hs.access_token,"center-company-comment-remove",{id:newsId,comment_id:commentId})).removed,true);
+ assert.equal((await identity(gs.access_token,"center-company-comments",{id:newsId})).items.length,0);
+ assert.equal((await identity(hs.access_token,"center-company-reaction",{id:newsId,reaction:null})).saved,true);
+ assert.equal((await identity(hs.access_token,"center-company-favorite",{id:newsId,enabled:false})).saved,true);
+ assert.equal((await identity(hs.access_token,"center-company-list",{kind:"news"})).items.find(p=>p.id===newsId).reaction_count,0);
+ assert.equal((await identityRequest(hs.access_token,"center-company-comment",{...commentPayload,id:announcementId})).status,403);
+ console.log("PASS V2 company interactions: private favorites, reaction replacement, idempotent comments, moderation and tenant denial");
  assert.equal((await identity(hs.access_token,"center-company-remove",{id:announcementId})).removed,true);
  assert.equal((await identity(gs.access_token,"center-company-remove",{id:newsId})).removed,true);
  assert.ok(!(await identity(hs.access_token,"center-company-list",{kind:"news"})).items.some(p=>p.id===newsId));
  assert.equal((await identityRequest(gs.access_token,"center-company-confirm",{id:announcementId})).status,403);
+ assert.equal((await identityRequest(hs.access_token,"center-company-comments",{id:newsId})).status,403);
 
  const original=await identity(hs.access_token,"profile");
  const languagePref={interface:"fr",spoken:"ff",listening:"en",subtitles:"original",pdf:"en",rate:"1.25"};
@@ -900,6 +926,21 @@ try{
   await hp.getByRole("button",{name:"Actualités ›",exact:true}).click();
   const hf=hp.getByRole("region",{name:"Actualités",exact:true});
   await hf.getByText("Actualité réelle Chromium",{exact:true}).waitFor();
+  const hPost=hf.locator("article").filter({hasText:"Actualité réelle Chromium"});
+  await hPost.getByRole("button",{name:"J’aime",exact:true}).click();
+  await hPost.getByRole("button",{name:"J’aime",exact:true,pressed:true}).waitFor();
+  await hPost.getByRole("button",{name:"Ajouter aux favoris",exact:true}).click();
+  await hPost.getByRole("button",{name:"Retirer des favoris",exact:true,pressed:true}).waitFor();
+  await hPost.getByRole("button",{name:/Commentaires \(/}).click();
+  await hPost.getByLabel("Votre commentaire").fill("Commentaire réel Chromium");
+  await hPost.getByRole("button",{name:"Commenter",exact:true}).click();
+  await hPost.getByText("Commentaire réel Chromium",{exact:true}).waitFor();
+  await hPost.getByRole("button",{name:/Commentaires \(/}).click();
+  await hf.getByRole("button",{name:"Mes favoris",exact:true}).click();
+  await hf.getByText("Actualité réelle Chromium",{exact:true}).waitFor();
+  await hf.getByRole("button",{name:"Tous les articles",exact:true}).click();
+  await hf.getByText("Actualité réelle Chromium",{exact:true}).waitFor();
+  console.log("PASS V2 Chromium reaction, comment and private favorite controls");
   await hf.getByRole("button",{name:"Annonces",exact:true}).click();
   await hf.getByLabel("Votre annonce").fill("Annonce réelle Chromium");
   await hf.getByRole("button",{name:"Publier",exact:true}).click();

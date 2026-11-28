@@ -11,7 +11,7 @@ const cases=[
 ["02.3",["B2 collective group: three accounts","B2 real private Storage verified deletion"],"Suppression message pour soi/tous et reçus complets"],
 ["02.4",[],"Présence masquable, non-divulgation et filtre En ligne"],
 ["03.1",["PASS V2 enterprise feed and official announcement"],"Ciblage équipe/agence, média et qualification UI"],
-["03.2",["B4 actual Edge majority rules"],"Réactions/commentaires/favoris/sondages dans le fil, modération et vidéos"],
+["03.2",["B4 actual Edge majority rules","PASS V2 company interactions","PASS V2 Chromium reaction"],"Réactions/commentaires/favoris/sondages dans le fil, modération et vidéos"],
 ["03.3",["actual N4 recipient-scoped in-app notice","PASS V2 enterprise feed and official announcement"],"Ciblage, pièces jointes et qualification UI"],
 ["03.4",[],"Navigation et interface Mon entreprise sur Web et Android"],
 ["04.1",[],"Courrier interne, brouillons, destinataires, signature, réponses"],
