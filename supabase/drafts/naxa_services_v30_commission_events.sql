@@ -326,7 +326,7 @@ grant execute on function public.ns_process_next_commission_event() to service_r
 create or replace function public.ns_review_settled_commission(p_org uuid,p_site uuid,p_entry uuid,p_event uuid,p_decision text,p_reason text)
 returns jsonb language plpgsql security definer set search_path='' as $fn$
 declare actor uuid; e public.ns_commission_entries%rowtype; old_event public.ns_commission_review_events%rowtype;
- s public.ns_sales%rowtype; a public.ns_appointments%rowtype; paid numeric; next_status text; prior text;
+ s public.ns_sales%rowtype; a public.ns_appointments%rowtype; paid numeric; next_status text; prior text; previous_reversal numeric;
 begin
  actor:=public.ns_current_member_id(p_org);
  if auth.uid() is null or actor is null or not public.ns_can_manage_org(p_org) or not public.ns_can_manage_site(p_org,p_site) then raise exception 'NS_COMMISSION_REVIEW_FORBIDDEN'; end if;
@@ -357,14 +357,77 @@ begin
   next_status:='reversed';
   update public.ns_commission_entries set status=next_status where id=e.id;
  else
-  -- Full refund only. Partial allocation is a distinct unfinished business rule.
-  if e.status not in ('approved','paid') or s.status not in ('refunded','voided') or paid<>0 or not exists(select 1 from public.ns_payments where sale_id=s.id and org_id=p_org and site_id=p_site and status in ('refunded','reversed')) or exists(select 1 from public.ns_commission_adjustments where commission_entry_id=e.id) then raise exception 'NS_COMMISSION_REFUND_PROOF_REQUIRED'; end if;
-  if e.commission_xaf>0 then insert into public.ns_commission_adjustments(org_id,site_id,commission_entry_id,source_event_id,idempotency_key,adjustment_type,amount_delta_xaf,reason,created_by)
-   values(p_org,p_site,e.id,p_event,p_event,'refund_reversal',-e.commission_xaf,trim(p_reason),actor);end if;
+  -- Final refund reverses only the balance not already adjusted.
+  select coalesce(sum(-amount_delta_xaf),0) into previous_reversal from public.ns_commission_adjustments where commission_entry_id=e.id and adjustment_type='refund_reversal';
+  if e.status not in ('approved','paid') or s.status not in ('refunded','voided') or paid<>0 or not exists(select 1 from public.ns_payments where sale_id=s.id and org_id=p_org and site_id=p_site and status in ('refunded','reversed')) or previous_reversal>e.commission_xaf or exists(select 1 from public.ns_commission_adjustments where commission_entry_id=e.id and (adjustment_type<>'refund_reversal' or amount_delta_xaf>=0)) then raise exception 'NS_COMMISSION_REFUND_PROOF_REQUIRED'; end if;
+  if e.commission_xaf>previous_reversal then insert into public.ns_commission_adjustments(org_id,site_id,commission_entry_id,source_event_id,idempotency_key,adjustment_type,amount_delta_xaf,reason,created_by)
+   values(p_org,p_site,e.id,p_event,p_event,'refund_reversal',-(e.commission_xaf-previous_reversal)::bigint,trim(p_reason),actor);end if;
   next_status:='reversed';
   update public.ns_commission_entries set status=next_status where id=e.id;
  end if;
  insert into public.ns_commission_review_events(id,org_id,site_id,entry_id,actor_id,decision,reason,previous_status,next_status) values(p_event,p_org,p_site,p_entry,actor,p_decision,trim(p_reason),prior,next_status);
  return jsonb_build_object('entry_id',p_entry,'status',next_status,'replayed',false);
 end $fn$;
+-- Confirmed refund proof, explicit approved allocation, append-only ledger.
+create table ns_commission_internal.refund_batches(
+ id uuid primary key,org_id uuid not null,site_id uuid not null,payment_id uuid not null unique references public.ns_payments(id),actor_id uuid not null,
+ allocations jsonb not null,reason text not null,receipt jsonb not null,created_at timestamptz not null default now(),
+ foreign key(site_id,org_id) references public.ns_sites(id,org_id),foreign key(actor_id,org_id) references public.ns_members(id,org_id)
+);
+create table ns_commission_internal.refund_parts(
+ batch_id uuid not null references ns_commission_internal.refund_batches(id),entry_id uuid not null references public.ns_commission_entries(id),
+ refund_base_xaf bigint not null check(refund_base_xaf>0),reversed_commission_xaf bigint not null check(reversed_commission_xaf>=0),
+ adjustment_id uuid unique references public.ns_commission_adjustments(id),primary key(batch_id,entry_id),
+ check((reversed_commission_xaf=0)=(adjustment_id is null))
+);
+alter table ns_commission_internal.refund_batches enable row level security;
+alter table ns_commission_internal.refund_parts enable row level security;
+revoke all on ns_commission_internal.refund_batches,ns_commission_internal.refund_parts from public,anon,authenticated,service_role;
+create function public.ns_reverse_partial_commissions(p_org uuid,p_site uuid,p_payment uuid,p_event uuid,p_allocations jsonb,p_reason text) returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare actor uuid:=public.ns_current_member_id(p_org); pay public.ns_payments%rowtype; sale public.ns_sales%rowtype; e public.ns_commission_entries%rowtype; old ns_commission_internal.refund_batches%rowtype;
+ canonical jsonb; item jsonb; count_items integer; paid numeric; refunded numeric; assigned_base numeric; assigned_delta numeric; prior_base numeric; prior_delta numeric; delta bigint; refund_base bigint; adj uuid; receipt jsonb;
+begin
+ if auth.uid() is null or actor is null or not public.ns_can_manage_org(p_org) or not public.ns_can_manage_site(p_org,p_site) then raise exception 'NS_PARTIAL_REFUND_FORBIDDEN';end if;
+ if p_payment is null or p_event is null or p_allocations is null or jsonb_typeof(p_allocations)<>'array' or length(trim(coalesce(p_reason,''))) not between 4 and 500 then raise exception 'NS_PARTIAL_REFUND_INVALID';end if;
+ count_items:=jsonb_array_length(p_allocations);
+ if count_items not between 1 and 100 or exists(select 1 from jsonb_array_elements(p_allocations) x where jsonb_typeof(x)<>'object' or coalesce(x->>'entry_id','') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' or jsonb_typeof(x->'refund_base_xaf') is distinct from 'number' or jsonb_typeof(x->'commission_xaf') is distinct from 'number' or coalesce(x->>'refund_base_xaf','') !~ '^[0-9]{1,15}$' or coalesce(x->>'commission_xaf','') !~ '^[0-9]{1,15}$') then raise exception 'NS_PARTIAL_REFUND_INVALID';end if;
+ if (select count(distinct (x->>'entry_id')::uuid) from jsonb_array_elements(p_allocations) x)<>count_items or exists(select 1 from jsonb_array_elements(p_allocations) x where (x->>'refund_base_xaf')::bigint<=0) then raise exception 'NS_PARTIAL_REFUND_INVALID';end if;
+ select jsonb_agg(jsonb_build_object('entry_id',(x->>'entry_id')::uuid,'refund_base_xaf',(x->>'refund_base_xaf')::bigint,'commission_xaf',(x->>'commission_xaf')::bigint) order by (x->>'entry_id')::uuid),sum((x->>'refund_base_xaf')::bigint),sum((x->>'commission_xaf')::bigint) into canonical,assigned_base,assigned_delta from jsonb_array_elements(p_allocations) x;
+ perform 1 from public.ns_organizations where id=p_org and status='active' for update;
+ if not found then raise exception 'NS_PARTIAL_REFUND_FORBIDDEN';end if;
+ select * into old from ns_commission_internal.refund_batches where id=p_event or payment_id=p_payment;
+ if found then
+  if old.id<>p_event or old.org_id<>p_org or old.site_id<>p_site or old.payment_id<>p_payment or old.actor_id<>actor or old.allocations<>canonical or old.reason<>trim(p_reason) then raise exception 'NS_PARTIAL_REFUND_CONFLICT';end if;
+  return old.receipt;
+ end if;
+ select * into pay from public.ns_payments where id=p_payment and org_id=p_org and site_id=p_site and status in ('refunded','reversed') and confirmed_at is not null and sale_id is not null for update;
+ if not found then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
+ select * into sale from public.ns_sales where id=pay.sale_id and org_id=p_org and site_id=p_site and status='posted' for update;
+ if not found then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
+ perform 1 from public.ns_payments where sale_id=sale.id for update;
+ if exists(select 1 from public.ns_payments where sale_id=sale.id and (org_id<>p_org or site_id<>p_site)) then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
+ select coalesce(sum(amount_xaf) filter(where status='confirmed' and confirmed_at is not null),0),coalesce(sum(amount_xaf) filter(where status in ('refunded','reversed') and confirmed_at is not null),0) into paid,refunded from public.ns_payments where sale_id=sale.id;
+ if paid<=0 or refunded<=0 or paid+refunded<>sale.total_xaf or assigned_base>pay.amount_xaf then raise exception 'NS_PARTIAL_REFUND_PROOF';end if;
+ -- All entries must be original scoped, approved ledger entries of this exact sale.
+ receipt:=jsonb_build_object('id',p_event,'status','recorded','refund_xaf',pay.amount_xaf,'allocated_refund_xaf',assigned_base,'commission_reversed_xaf',assigned_delta);
+ insert into ns_commission_internal.refund_batches(id,org_id,site_id,payment_id,actor_id,allocations,reason,receipt) values(p_event,p_org,p_site,p_payment,actor,canonical,trim(p_reason),receipt);
+ for item in select value from jsonb_array_elements(canonical) loop
+  select c.* into e from public.ns_commission_entries c join public.ns_commission_settlements t on t.entry_id=c.id and t.org_id=c.org_id and t.site_id=c.site_id where c.id=(item->>'entry_id')::uuid and c.org_id=p_org and c.site_id=p_site and c.sale_id=sale.id and c.status in ('approved','paid') for update of c;
+  if not found then raise exception 'NS_PARTIAL_REFUND_SCOPE';end if;
+  refund_base:=(item->>'refund_base_xaf')::bigint;delta:=(item->>'commission_xaf')::bigint;
+  select coalesce(sum(refund_base_xaf),0) into prior_base from ns_commission_internal.refund_parts where entry_id=e.id;
+  select coalesce(sum(-amount_delta_xaf),0) into prior_delta from public.ns_commission_adjustments where commission_entry_id=e.id and adjustment_type='refund_reversal';
+  if exists(select 1 from public.ns_commission_adjustments where commission_entry_id=e.id and (adjustment_type<>'refund_reversal' or amount_delta_xaf>=0)) or prior_base+refund_base>e.base_amount_xaf or prior_delta+delta>e.commission_xaf then raise exception 'NS_PARTIAL_REFUND_LIMIT';end if;
+  adj:=null;
+  if delta>0 then
+   adj:=gen_random_uuid();
+   insert into public.ns_commission_adjustments(id,org_id,site_id,commission_entry_id,source_event_id,idempotency_key,adjustment_type,amount_delta_xaf,reason,created_by) values(adj,p_org,p_site,e.id,adj,adj,'refund_reversal',-delta,trim(p_reason),actor);
+  end if;
+  insert into ns_commission_internal.refund_parts(batch_id,entry_id,refund_base_xaf,reversed_commission_xaf,adjustment_id) values(p_event,e.id,refund_base,delta,adj);
+ end loop;
+ return receipt;
+end $fn$;
+revoke all on function public.ns_reverse_partial_commissions(uuid,uuid,uuid,uuid,jsonb,text) from public,anon,authenticated;
+grant execute on function public.ns_reverse_partial_commissions(uuid,uuid,uuid,uuid,jsonb,text) to authenticated;
+
 rollback;

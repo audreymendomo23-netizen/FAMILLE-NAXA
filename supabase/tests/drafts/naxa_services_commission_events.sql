@@ -85,7 +85,8 @@ end $qa$;
 reset role;
 update public.ns_appointments set status='completed' where id='82000000-0000-4000-8000-000000000247';
 insert into public.ns_appointment_status_events(id,org_id,site_id,appointment_id,to_status,actor_member_id,occurred_at) select gen_random_uuid(),org_id,site_id,id,'completed',assigned_member_id,'2026-11-27 11:00+01' from public.ns_appointments where id='82000000-0000-4000-8000-000000000247';
-insert into public.ns_payments(org_id,site_id,sale_id,payment_method,amount_xaf,status,confirmed_at,idempotency_key) values('20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','83000000-0000-4000-8000-000000000247','mobile_money',7000,'confirmed','2026-11-27 12:00+01',gen_random_uuid());
+insert into public.ns_payments(id,org_id,site_id,sale_id,payment_method,amount_xaf,status,confirmed_at,idempotency_key) values('87000000-0000-4000-8000-000000000247','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','83000000-0000-4000-8000-000000000247','mobile_money',3000,'confirmed','2026-11-27 12:00+01',gen_random_uuid());
+insert into public.ns_payments(id,org_id,site_id,sale_id,payment_method,amount_xaf,status,confirmed_at,idempotency_key) values('87000000-0000-4000-8000-000000000248','20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241','83000000-0000-4000-8000-000000000247','mobile_money',4000,'confirmed','2026-11-27 12:00+01',gen_random_uuid());
 set local role service_role;
 do $qa$ declare r jsonb; i int; processed boolean:=false;begin
  for i in 1..10 loop
@@ -109,3 +110,27 @@ do $qa$ declare e uuid;begin
 end $qa$;
 reset role;
 select 'PASS: explicit same-line commission shares, exact sum, worker settlement and scoped approval' as result;
+
+update public.ns_payments set status='refunded' where id='87000000-0000-4000-8000-000000000247';
+set local role authenticated;
+do $qa$ declare o uuid:='20000000-0000-4000-8000-000000000241';s uuid:='30000000-0000-4000-8000-000000000241';payment uuid:='87000000-0000-4000-8000-000000000247';event_id uuid:='88000000-0000-4000-8000-000000000247';alloc jsonb;r jsonb;begin
+ select jsonb_agg(jsonb_build_object('entry_id',id,'refund_base_xaf',case when member_id='60000000-0000-4000-8000-000000000241' then 1200 else 1800 end,'commission_xaf',case when member_id='60000000-0000-4000-8000-000000000241' then 50 else 75 end) order by id) into alloc from public.ns_commission_entries where sale_id='83000000-0000-4000-8000-000000000247';
+ begin perform public.ns_reverse_partial_commissions(o,s,payment,event_id,jsonb_set(alloc,'{0,commission_xaf}','999999'::jsonb),'QA excessive');raise exception 'QA_EXCESS_REFUND';exception when others then if sqlerrm not like '%NS_PARTIAL_REFUND_LIMIT%' then raise;end if;end;
+ r:=public.ns_reverse_partial_commissions(o,s,payment,event_id,alloc,'QA approved partial allocation');
+ if r->>'status'<>'recorded' or (r->>'commission_reversed_xaf')::integer<>125 or r is distinct from public.ns_reverse_partial_commissions(o,s,payment,event_id,alloc,'QA approved partial allocation') then raise exception 'QA_PARTIAL_REPLAY';end if;
+ begin perform public.ns_reverse_partial_commissions(o,s,payment,gen_random_uuid(),alloc,'QA duplicate payment');raise exception 'QA_DUPLICATE_REFUND';exception when others then if sqlerrm not like '%NS_PARTIAL_REFUND_CONFLICT%' then raise;end if;end;
+end $qa$;
+reset role;
+update public.ns_payments set status='refunded' where id='87000000-0000-4000-8000-000000000248';
+update public.ns_sales set status='refunded' where id='83000000-0000-4000-8000-000000000247';
+set local role authenticated;
+do $qa$ declare e uuid;begin
+ for e in select id from public.ns_commission_entries where sale_id='83000000-0000-4000-8000-000000000247' loop
+  if public.ns_review_settled_commission('20000000-0000-4000-8000-000000000241','30000000-0000-4000-8000-000000000241',e,gen_random_uuid(),'reverse_refund','QA final refund')->>'status'<>'reversed' then raise exception 'QA_FINAL_REVERSAL';end if;
+ end loop;
+end $qa$;
+reset role;
+do $qa$ begin
+ if exists(select 1 from public.ns_commission_entries c where c.sale_id='83000000-0000-4000-8000-000000000247' and (c.status<>'reversed' or c.commission_xaf<>(select coalesce(sum(-a.amount_delta_xaf),0) from public.ns_commission_adjustments a where a.commission_entry_id=c.id))) then raise exception 'QA_REVERSAL_DOUBLE';end if;
+end $qa$;
+select 'PASS: explicit partial refund allocation, immutable adjustments, exact retry and final balance reversal' as result;
