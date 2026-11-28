@@ -591,3 +591,6 @@ Correction replay 46139133179 : trois échecs HTTP 403 au même appel de la sess
 
 ## 28/11/2026 — Correction bloquante du replay Bulk 3
 Run 46140032720 : quatre échecs (Gate syntaxe et trois replays) dus à une collision de déclaration const targetId avec le scénario B4 existant. Renommage strictement local companyTeamPostId, assertions historiques conservées. Nouvelle qualification requise.
+
+## 28/11/2026 — Bulk 3 : ciblage agence et fiches professionnelles
+Périmètre V2-03.1/03.3/03.4 uniquement. En l'absence d'annuaire d'agences existant, champ agence optionnel sur l'adhésion entreprise, éditable par promoteur depuis la fiche professionnelle existante, pas de module d'organigramme. Clé normalisée insensible à la casse; audience entreprise/équipe/agence exclusive et vérifiée sur toutes projections, fichiers, confirmations et notices. Réaffectation retire accès; promoteur et auteur actif gardent la modération prévue. Web/Android : nom/poste cliquable sur post/commentaire; RPC limitée aux auteurs autorisés du post, expose uniquement nom/poste/agence/entreprise. Recettes de refus et réaffectation ajoutées. Aucun changement hébergé. Qualification à constater.

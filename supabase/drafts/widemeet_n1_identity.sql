@@ -24,6 +24,7 @@ create table public.wm_memberships (
  role text not null check(role in ('owner','promoteur','manager','staff')),
  enabled boolean not null default true,
  job_title text check(job_title is null or length(btrim(job_title)) between 1 and 120),
+ agency_name text check(agency_name is null or length(btrim(agency_name)) between 1 and 80),
  primary key(account_id,workspace_id)
 );
 create unique index wm_one_owner_per_workspace on public.wm_memberships(workspace_id) where role in ('owner','promoteur') and enabled;
@@ -374,7 +375,7 @@ begin
   return jsonb_build_object('step',v_step);
  when 'contacts' then
   select coalesce(jsonb_agg(q order by q->>'display_name',q->>'member_id'),'[]'::jsonb) into v_result from (
-   select jsonb_build_object('member_id',m.account_id,'display_name',c.display_name,'role',m.role,'job_title',case when w.kind='enterprise' then m.job_title else null end,'favorite',f.contact_id is not null,'manager_id',case when v_role='promoteur' or ma.manager_id=a.id then ma.manager_id else null end,'can_revoke',m.role in ('manager','staff') and (v_role='promoteur' or (v_role='manager' and m.role='staff' and ma.manager_id=a.id))) q
+   select jsonb_build_object('member_id',m.account_id,'display_name',c.display_name,'role',m.role,'job_title',case when w.kind='enterprise' then m.job_title else null end,'agency_name',case when w.kind='enterprise' then m.agency_name else null end,'favorite',f.contact_id is not null,'manager_id',case when v_role='promoteur' or ma.manager_id=a.id then ma.manager_id else null end,'can_revoke',m.role in ('manager','staff') and (v_role='promoteur' or (v_role='manager' and m.role='staff' and ma.manager_id=a.id))) q
    from public.wm_memberships m join public.wm_accounts c on c.id=m.account_id and c.enabled
    left join public.wm_favorites f on f.account_id=a.id and f.workspace_id=w.id and f.contact_id=m.account_id
    left join public.wm_manager_assignments ma on ma.workspace_id=m.workspace_id and ma.staff_id=m.account_id
@@ -388,6 +389,14 @@ begin
   v_target:=(p_data->>'member_id')::uuid;v_name:=nullif(btrim(p_data->>'job_title'),'');
   if length(v_name)>120 then return null;end if;
   update public.wm_memberships m set job_title=v_name where m.account_id=v_target and m.workspace_id=w.id and m.enabled and exists(select 1 from public.wm_accounts c where c.id=m.account_id and c.enabled);
+  if not found then return null;end if;
+  return jsonb_build_object('updated',true);
+ when 'professional-agency-update' then
+  if w.kind<>'enterprise' or v_role<>'promoteur' or jsonb_typeof(p_data) is distinct from 'object' then return null;end if;
+  if not (p_data ?& array['member_id','agency_name']) or (select count(*) from jsonb_object_keys(p_data))<>2 or jsonb_typeof(p_data->'member_id') is distinct from 'string' or coalesce(p_data->>'member_id','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' or jsonb_typeof(p_data->'agency_name') not in ('string','null') then return null;end if;
+  v_target:=(p_data->>'member_id')::uuid;v_name:=nullif(btrim(p_data->>'agency_name'),'');
+  if length(v_name)>80 then return null;end if;
+  update public.wm_memberships m set agency_name=v_name where m.account_id=v_target and m.workspace_id=w.id and m.enabled and exists(select 1 from public.wm_accounts c where c.id=m.account_id and c.enabled);
   if not found then return null;end if;
   return jsonb_build_object('updated',true);
  when 'favorite' then
