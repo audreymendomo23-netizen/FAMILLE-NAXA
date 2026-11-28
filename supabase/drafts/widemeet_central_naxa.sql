@@ -42,7 +42,7 @@ create function public.wm_central_dispatch(p_user uuid,p_session uuid,p_exp time
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public,auth,famille_core as $wm$
 declare adm boolean; ag uuid; wid uuid; dev uuid; h text; tid uuid; target uuid; enabled boolean; v jsonb;
 begin
- if p_exp is null or p_exp<=clock_timestamp() or not public.wm_central_auth_live(p_user,p_session) then return null;end if;
+ if p_exp is null or p_exp<=clock_timestamp()+interval '1 second' or not public.wm_central_auth_live(p_user,p_session) then return null;end if;
  select exists(select 1 from famille_core.family_admins f where f.user_id=p_user and f.status='active' and f.revoked_at is null) into adm;
  select l.account_id into ag from public.wm_central_agent_links l join public.wm_support_agents a on a.account_id=l.account_id and a.enabled
  join public.wm_accounts x on x.id=l.account_id and x.enabled and not x.password_change_required

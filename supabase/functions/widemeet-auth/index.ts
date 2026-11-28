@@ -85,6 +85,18 @@ Deno.serve(async request=>{
  const decoder=new TextDecoder();let raw="",size=0;for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit){await reader.cancel().catch(()=>{});return send(413,{error:"request_too_large"})}raw+=decoder.decode(value,{stream:true})}raw+=decoder.decode();
  const body=JSON.parse(raw);
  if(!body||body.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
+ if(action==="central-federated"){
+ if(Deno.env.get("WM_CENTRAL_QUALIFIED")!=="true"||Deno.env.get("WM_NAXA_FEDERATION_QUALIFIED")!=="true"||origin)return send(503,{error:"unavailable"});
+ const secret=Deno.env.get("WM_NAXA_BRIDGE_SECRET")??"",signature=request.headers.get("x-naxa-signature")??"";
+ if(secret.length<32||! /^[a-f0-9]{64}$/.test(signature))return send(403,{error:"scope"});
+ const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
+ const bytes=Uint8Array.from(signature.match(/../g)!,x=>parseInt(x,16));
+ if(!await crypto.subtle.verify("HMAC",key,bytes,new TextEncoder().encode(raw)))return send(403,{error:"scope"});
+ if(body.audience!=="widemeet-central-v1"||!uuid.test(body.legacy_user??"")||!uuid.test(body.legacy_session??"")||!uuid.test(body.nonce??"")||!["admin","agent"].includes(body.role)||!Number.isSafeInteger(body.issued)||!Number.isSafeInteger(body.exp)||body.exp<=Date.now()||body.issued<Date.now()-25000||body.issued>Date.now()+5000||typeof body.action!=="string"||!body.data||typeof body.data!=="object"||Array.isArray(body.data))return send(403,{error:"scope"});
+ if(body.action.startsWith("support-")&&Deno.env.get("WM_SUPPORT_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ const v=await rest("rpc/wm_naxa_federated_dispatch",{method:"POST",body:JSON.stringify({p_legacy_user:body.legacy_user,p_legacy_session:body.legacy_session,p_role:body.role,p_exp:new Date(body.exp).toISOString(),p_nonce:body.nonce,p_issued:new Date(body.issued).toISOString(),p_new_hash:token(),p_action:body.action,p_data:body.data})});
+ return v?send(200,v):send(403,{error:"scope"});
+ }
  if(action==="central"){
  if(Deno.env.get("WM_CENTRAL_QUALIFIED")!=="true"||!origin||origin!==Deno.env.get("WM_CENTRAL_ORIGIN"))return send(503,{error:"unavailable"});
  const jwt=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");

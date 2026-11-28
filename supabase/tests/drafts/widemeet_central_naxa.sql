@@ -56,6 +56,14 @@ begin
  if v->>'state' is distinct from 'idle' then raise exception 'revoked agent call not ended %',v;end if;
  v:=public.wm_central_dispatch(admin,asid,exp,repeat('b',64),'agent-set',jsonb_build_object('operator_id',other,'account_id',oaccount,'enabled',false));
  if v->>'saved' is distinct from 'true' or public.wm_central_dispatch(other,osid,exp,repeat('e',64),'support-queue','{}') is not null then raise exception 'agent revocation';end if;
+ -- Signed federation dispatcher: explicit mapping, role separation, nonce replay rejection and revocation.
+ insert into public.wm_naxa_operator_links(legacy_user,operator_id,operator_role,enabled) values('90000000-0000-4000-8000-000000000001',admin,'admin',true);
+ v:=public.wm_naxa_federated_dispatch('90000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000002','admin',exp,'90000000-0000-4000-8000-000000000003',clock_timestamp(),repeat('1',64),'overview','{}');
+ if v->>'individuals' is distinct from '3' then raise exception 'federated admin failed %',v;end if;
+ if public.wm_naxa_federated_dispatch('90000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000002','admin',exp,'90000000-0000-4000-8000-000000000003',clock_timestamp(),repeat('1',64),'overview','{}') is not null then raise exception 'signed nonce replay accepted';end if;
+ if public.wm_naxa_federated_dispatch('90000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000002','admin',exp,'90000000-0000-4000-8000-000000000004',clock_timestamp(),repeat('1',64),'support-queue','{}') is not null then raise exception 'federated admin got ticket content';end if;
+ update public.wm_naxa_operator_links set enabled=false;
+ if public.wm_naxa_federated_dispatch('90000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000002','admin',exp,'90000000-0000-4000-8000-000000000005',clock_timestamp(),repeat('1',64),'overview','{}') is not null then raise exception 'federated revoked admin accepted';end if;
  update famille_core.family_admins set status='suspended' where user_id=admin;
  if public.wm_central_dispatch(admin,asid,exp,repeat('b',64),'overview','{}') is not null then raise exception 'suspended admin';end if;
  if not exists(select 1 from public.wm_central_audit where actor_id=agent and action='support-reply' and target_id=t) then raise exception 'audit missing';end if;
