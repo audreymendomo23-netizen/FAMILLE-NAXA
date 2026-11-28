@@ -58,10 +58,11 @@ export async function handle(request,env,fetcher=fetch){
    const w=await workspaceFor(s.access_token);if(!w)return reply(403,{error:'NO_WORKSPACE'});
    return reply(200,{result:{user_id:uid,access:s.access_token,refresh:s.refresh_token,...w}});
   }
-  if(['connect_catalog','connect_submit','connect_status'].includes(body.action)){
+  if(['connect_catalog','connect_submit','connect_status','connect_pair'].includes(body.action)){
    if(!env.service||typeof body.qr!=='string'||!/^[A-Za-z0-9_-]{32,128}$/.test(body.qr))return reply(403,{error:'PARTNER_UNAVAILABLE'});
    const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(body.qr));const hash=Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,'0')).join('');
    let rpc='grillad_connect_catalog',params={p_hash:hash};
+   if(body.action==='connect_pair'){if(typeof body.table!=='string'||!/^[0-9a-f]{64}$/.test(body.table))return reply(400,{error:'TABLE_TOKEN'});const raw=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(body.table));rpc='grillad_connect_pair_check';params={...params,p_zipple_hash:Array.from(new Uint8Array(raw),x=>x.toString(16).padStart(2,'0')).join('')}}
    if(body.action==='connect_submit'){if(!uuid.test(body.order)||!Array.isArray(body.lines))return reply(400,{error:'ORDER'});rpc='grillad_connect_submit';params={...params,p_order:body.order,p_lines:body.lines}}
    if(body.action==='connect_status'){if(!uuid.test(body.order))return reply(400,{error:'ORDER'});rpc='grillad_connect_status';params={...params,p_order:body.order}}
    const r=await fetcher(base+'/rest/v1/rpc/'+rpc,{method:'POST',headers:{apikey:env.service,Authorization:'Bearer '+env.service,'Content-Type':'application/json'},body:JSON.stringify(params),redirect:'error',signal:AbortSignal.timeout(15000)});

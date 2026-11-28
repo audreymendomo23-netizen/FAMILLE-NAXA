@@ -86,6 +86,10 @@ do $test$ declare o uuid:=current_setting('grillad.test.org')::uuid;s uuid:=curr
  perform public.grillad_partner_approval('zipple',o,s,zo,zs,op,repeat('a',64),repeat('b',64));
  if not public.grillad_partner_zipple(e,o,s,zo,zs,repeat('c',64),now()+interval '1 day') then raise exception 'zipple link';end if;
  if public.grillad_connect_catalog(repeat('c',64))->>'merchant'<>'GRILLAD' then raise exception 'zipple catalog';end if;
+ begin perform public.grillad_connect_pair_check(repeat('c',64),repeat('9',64));raise exception 'unpaired table accepted';exception when insufficient_privilege then null;end;
+ if not public.grillad_connect_pair_set(e,repeat('9',64),op,repeat('8',64),true) or public.grillad_connect_pair_check(repeat('c',64),repeat('9',64))->>'approved'<>'true' then raise exception 'paired QR';end if;
+ if not public.grillad_connect_pair_set(e,repeat('9',64),op,repeat('8',64),false) then raise exception 'pair revocation';end if;
+ begin perform public.grillad_connect_pair_check(repeat('c',64),repeat('9',64));raise exception 'revoked pair accepted';exception when insufficient_privilege then null;end;
  perform public.grillad_partner_approval('security',o,s,so,ss,op,repeat('d',64),repeat('e',64));
  if not public.grillad_security_bind(o,s,so,ss,so,ss) then raise exception 'security bind';end if;
  v:=public.grillad_security_project(o,s,so,ss);if (v->>'cameras')::int<>1 or (v->>'incidents')::int<>0 or (v->>'live_available')::boolean then raise exception 'security projection';end if;
