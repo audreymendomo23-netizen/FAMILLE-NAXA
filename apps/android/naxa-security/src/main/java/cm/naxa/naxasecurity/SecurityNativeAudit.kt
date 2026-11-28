@@ -26,6 +26,6 @@ import org.json.JSONObject
  Button(enabled=!busy&&rows.isNotEmpty(),onClick={exportRows=null;export.launch("security-audit-page.csv")}){Text("Exporter cette page CSV")}
  listOf(1,7,30,90,365).forEach{d->FilterChip(selected=days==d,enabled=!busy,onClick={days=d},label={Text("$d jours")})}
  Button(enabled=!busy,onClick={busy=true;scope.launch{try{val v=SecurityNativeApi.auditExport(s,site,source,days);val a=v.getJSONArray("rows");if(n.generation==g){exportRows=(0 until a.length()).map{a.getJSONObject(it)};export.launch("security-audit-interval.csv")}}catch(e:CancellationException){throw e}catch(_:Exception){if(n.generation==g)status="Export refusé ou indisponible. Réduisez la période."}finally{if(n.generation==g)busy=false}}}){Text("Exporter toute la période CSV")}
- Text("Maximum 10 000 événements par export, sans troncature.")
+ Text("Maximum 10 000 événements et 7,5 Mo de données par export, sans troncature.")
  Text(status)
 }

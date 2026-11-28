@@ -40,7 +40,7 @@ internal object SecurityNativeApi {
    c.setRequestProperty("Accept","application/json");c.setRequestProperty("Prefer","return=representation")
    if(body!=null){c.requestMethod="POST";c.doOutput=true;c.setRequestProperty("Content-Type","application/json");c.outputStream.use{it.write(body.toString().toByteArray(Charsets.UTF_8))}}
    if(c.responseCode !in 200..299)throw IllegalStateException("SECURITY_HTTP_"+c.responseCode)
-   return c.inputStream.bufferedReader().use{reader->val b=CharArray(4096);val out=StringBuilder();while(true){val n=reader.read(b);if(n<0)break;check(out.length+n<=2_000_000);out.append(b,0,n)};out.toString()}
+   return c.inputStream.bufferedReader().use{reader->val b=CharArray(4096);val out=StringBuilder();while(true){val n=reader.read(b);if(n<0)break;check(out.length+n<=(if(path=="/rest/v1/rpc/sec_audit_export")8_000_000 else 2_000_000));out.append(b,0,n)};out.toString()}
   }finally{c.disconnect()}
  }
  suspend fun login(email:String,password:String):SecurityNativeSession=withContext(Dispatchers.IO){

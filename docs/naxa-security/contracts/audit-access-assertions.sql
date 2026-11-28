@@ -13,7 +13,7 @@ do $q$declare j jsonb;begin
  perform public.sec_integration_list('10000000-0000-0000-0000-000000000261','20000000-0000-0000-0000-000000000261');
  if public.sec_evidence_download('10000000-0000-0000-0000-000000000261','20000000-0000-0000-0000-000000000261','40000000-0000-0000-0000-000000000261') is not null then raise exception 'owner accessed personal file';end if;
  j:=public.sec_audit_page('10000000-0000-0000-0000-000000000261','20000000-0000-0000-0000-000000000261','access',null);
- if jsonb_array_length(j->'rows')<>2 then raise exception 'access journal';end if;
+ if jsonb_array_length(j->'rows')<>3 or not exists(select 1 from jsonb_array_elements(j->'rows') x where x->>'operation'='evidence_download' and x->>'state'='denied' and x->'object_id'='null'::jsonb) then raise exception 'access journal';end if;
  if has_table_privilege(current_user,'public.sec_access_audit','INSERT') or has_table_privilege(current_user,'public.sec_access_audit','UPDATE') or has_table_privilege(current_user,'public.sec_access_audit','DELETE') then raise exception 'audit writable';end if;
 end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000262',true);
@@ -21,6 +21,10 @@ do $q$declare j jsonb;begin
  if public.sec_evidence_download('10000000-0000-0000-0000-000000000261','20000000-0000-0000-0000-000000000261','40000000-0000-0000-0000-000000000261')->>'base64' is distinct from 'YWJj' then raise exception 'file download';end if;
  j:=public.sec_audit_page('10000000-0000-0000-0000-000000000261','20000000-0000-0000-0000-000000000261','access',null);
  if jsonb_array_length(j->'rows')<>1 or j->'rows'->0->>'operation'<>'evidence_download' or j->'rows'->0->>'object_id'<>'40000000-0000-0000-0000-000000000261' or j->'rows'->0->>'origin'<>'access_rpc' or j::text like '%YWJj%' or j::text like '%qa-private%' then raise exception 'access privacy or metadata';end if;
+ perform public.sec_site_members('10000000-0000-0000-0000-000000000261','20000000-0000-0000-0000-000000000261');
+ perform public.sec_integration_list('10000000-0000-0000-0000-000000000261','20000000-0000-0000-0000-000000000261');
+ j:=public.sec_audit_page('10000000-0000-0000-0000-000000000261','20000000-0000-0000-0000-000000000261','access',null);
+ if jsonb_array_length(j->'rows')<>3 or (select count(*) from jsonb_array_elements(j->'rows') x where x->>'state'='denied' and x->'object_id'='null'::jsonb)<>2 then raise exception 'denials not traced safely';end if;
 end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000263',true);
 do $q$begin if exists(select 1 from public.sec_access_audit) then raise exception 'cross site access audit';end if;end $q$;
