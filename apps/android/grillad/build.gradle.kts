@@ -4,6 +4,8 @@ val grilladLocalRecipe=providers.environmentVariable("GRILLAD_LOCAL_RECIPE").orE
 if(grilladLocalRecipe) require(System.getenv("GITHUB_ACTIONS")=="true" && System.getenv("GITHUB_REPOSITORY")=="audreymendomo23-netizen/FAMILLE-NAXA" && System.getenv("GITHUB_REF")=="refs/heads/work/grillad-foundation-20261127" && System.getenv("GRILLAD_CI_LOCAL")=="1")
 val grilladUrl=providers.environmentVariable("GRILLAD_API_URL").orElse("").get()
 val grilladKey=providers.environmentVariable("GRILLAD_PUBLIC_KEY").orElse("").get()
+val grilladDistribution=providers.environmentVariable("GRILLAD_DISTRIBUTION").orElse("").get()=="1"
+if(grilladDistribution) require(!grilladLocalRecipe && grilladUrl.isNotBlank() && grilladKey.isNotBlank()) {"GRILLAD_DISTRIBUTION_REQUIRES_CONNECTED_CLIENT"}
 require(grilladUrl.isEmpty()||Regex("https://[a-z0-9-]+\\.supabase\\.co/functions/v1/grillad").matches(grilladUrl))
 require(grilladKey.isEmpty()||Regex("sb_publishable_[A-Za-z0-9_-]+").matches(grilladKey)||runCatching{val claims=String(PublicKeyBase64.getUrlDecoder().decode(grilladKey.split(".")[1]));Regex("\\\"role\\\"\\s*:\\s*\\\"anon\\\"").containsMatchIn(claims)&&Regex("[A-Za-z0-9_.-]+").matches(grilladKey)}.getOrDefault(false))
 val fcmProject=providers.environmentVariable("GRILLAD_FIREBASE_PROJECT").orElse("").get()

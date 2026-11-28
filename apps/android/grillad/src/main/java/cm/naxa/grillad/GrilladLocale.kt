@@ -62,6 +62,7 @@ internal fun grilladLabel(key:String,locale:String):String=if(locale!="en"&&loca
  "Article" -> if(locale=="en")"Item" else "Jawdi"
  "Période" -> if(locale=="en")"Period" else "Sahaa"
  "Catégorie de dépense" -> if(locale=="en")"Expense category" else "Fannu njoɓdi"
+ "Grillade sur braises" -> if(locale=="en")"Food grilled over embers" else "Teewu dafaaɗum e yiite"
  "Accès professionnel GRILLAD" -> if(locale=="en")"GRILLAD professional access" else "Naatugol e nokkuure golle GRILLAD"
  "Première connexion avec invitation" -> if(locale=="en")"First sign-in with invitation" else "Naatugol aranol e noddaandu"
  "Référence invitation" -> if(locale=="en")"Invitation reference" else "Innol noddaandu"

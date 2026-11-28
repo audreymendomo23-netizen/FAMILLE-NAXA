@@ -14,6 +14,7 @@ on:
       - '.github/workflows/grillad-firebase.yml'
       - 'apps/android/grillad/**'
       - 'scripts/grillad/firebase-android-config.mjs'
+      - 'scripts/grillad/android-distribution-smoke.sh'
   workflow_dispatch:
 permissions:
   contents: read
@@ -56,6 +57,9 @@ jobs:
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compile configured Android client and run unit tests
         env:
+          GRILLAD_DISTRIBUTION: '1'
+          GRILLAD_API_URL: ${{ vars.GRILLAD_API_URL || 'https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/grillad' }}
+          GRILLAD_PUBLIC_KEY: ${{ vars.GRILLAD_PUBLIC_KEY || 'sb_publishable_p-JoZRIngRG0U-4Gb1PnNw_RZirgbo3' }}
           GRILLAD_FIREBASE_PROJECT: ${{ vars.GRILLAD_FIREBASE_PROJECT || secrets.GRILLAD_FIREBASE_PROJECT }}
           GRILLAD_FIREBASE_SENDER: ${{ vars.GRILLAD_FIREBASE_SENDER || secrets.GRILLAD_FIREBASE_SENDER }}
           GRILLAD_FIREBASE_APP_ID: ${{ vars.GRILLAD_FIREBASE_APP_ID || secrets.GRILLAD_FIREBASE_APP_ID }}
@@ -65,6 +69,26 @@ jobs:
           bash scripts/grillad/firebase-gradle-ci.sh
           test -s apps/android/grillad/build/outputs/apk/debug/grillad-debug.apk
           echo 'PASS: configured debug APK built; device token and delivery not tested'
+      - name: Enable KVM for final APK visual startup check
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash scripts/grillad/android-distribution-smoke.sh
+      - name: Upload visual verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GRILLAD-Android-startup-check-${{ github.sha }}
+          path: grillad-startup-check/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Prepare installable GRILLAD debug APK
         run: |
           set -euo pipefail

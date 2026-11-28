@@ -54,7 +54,7 @@ internal fun bounds(period:String):Pair<String,String>{val d=LocalDate.parse(day
   androidx.activity.compose.BackHandler(authStage!="login"&&!busy){switchAuth("login")}
   Box(Modifier.fillMaxSize().imePadding().safeDrawingPadding(),contentAlignment=androidx.compose.ui.Alignment.TopCenter){
    Column(Modifier.widthIn(max=520.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-    if(authStage=="login")GrilladAuthHero(tr("Accès professionnel GRILLAD")) else {TextButton({switchAuth("login")},enabled=!busy){Text("← "+tr("Retour à la connexion"))};GrilladBrandMark()}
+    if(authStage=="login")GrilladAuthHero(tr("Accès professionnel GRILLAD"),tr("Grillade sur braises")) else {TextButton({switchAuth("login")},enabled=!busy){Text("← "+tr("Retour à la connexion"))};GrilladBrandMark()}
     Row(Modifier.horizontalScroll(rememberScrollState())){listOf("fr" to "Français","en" to "English","ff-CM" to "Fulfulde").forEach{(l,n)->FilterChip(selected=grilladLocale==l,onClick={grilladLocale=l;languagePrefs.edit().putString("locale",l).apply()},label={Text(n)})}}
     Text(tr(when(authStage){"invite"->"Première connexion";"recovery"->"Mot de passe oublié";else->"Connexion"}),style=MaterialTheme.typography.headlineMedium,fontWeight=androidx.compose.ui.text.font.FontWeight.Bold)
     Text(tr(when(authStage){"invite"->"Activez votre compte avec les informations reçues de votre administrateur.";"recovery"->"Saisissez votre numéro de téléphone. Votre demande sera examinée par l’administrateur.";else->"Accédez à votre espace de gestion."}),color=MaterialTheme.colorScheme.onSurfaceVariant)
