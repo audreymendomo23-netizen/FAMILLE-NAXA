@@ -19,5 +19,5 @@ do $q$declare e uuid:=gen_random_uuid();v jsonb;d jsonb:=jsonb_build_object('tok
  if has_column_privilege(current_user,'public.sec_attendance_drafts','qr_challenge_id','INSERT') or has_table_privilege(current_user,'sec_private.presence_challenges','SELECT') then raise exception 'QR forgery permission';end if;
 end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000411',true);
-select public.sec_field_action('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411',gen_random_uuid(),'attendance',(select id from public.sec_attendance_drafts where qr_challenge_id='50000000-0000-0000-0000-000000000411'),'{"state":"reviewed","reason":"QA review"}');
+select public.sec_field_action('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411',gen_random_uuid(),'attendance',(select id from public.sec_attendance_drafts where qr_challenge_id='50000000-0000-0000-0000-000000000411'),'{"next":"reviewed","reason":"QA review"}');
 reset role;rollback;
