@@ -78,8 +78,14 @@ jobs:
           export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
           export WM_WORKSPACE_CENTERS_QUALIFIED=true WM_SUPPORT_QUALIFIED=true WM_AUTH_QUALIFIED=true WM_SERIES_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_NOTICES_QUALIFIED=true WM_REPORTS_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_RECOVERY_KEY_QUALIFIED=true WM_BILLING_TEST=true WM_SIGNUP_QUALIFIED=true WM_AUTH_ALIAS_DOMAIN=example.test WM_ROOM_QUALIFIED=true WM_MEDIA_QUALIFIED=false WM_ALLOWED_ORIGINS=https://127.0.0.1:8443
           export WM_REPLAY_KEY="$RUNNER_TEMP/wm-replay.key" WM_REPLAY_CERT="$RUNNER_TEMP/wm-replay.crt"
-          node scripts/widemeet/replay.mjs
+          WM_BULK_RECEIPTS="$RUNNER_TEMP/wm-replay-receipts.jsonl" node scripts/widemeet/product-bulk-capture.mjs replay replay.mjs
       - name: Stop disposable stack
         if: always()
         run: |
           cd "$RUNNER_TEMP/wm-replay" && supabase stop --no-backup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: widemeet-bulk-receipts-replay
+          path: ${{ runner.temp }}/wm-replay-receipts.jsonl
+          if-no-files-found: warn

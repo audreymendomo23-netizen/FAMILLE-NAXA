@@ -1,0 +1,17 @@
+import {spawn} from "node:child_process";
+import {appendFileSync,readFileSync} from "node:fs";
+import {createInterface} from "node:readline";
+import {fileURLToPath} from "node:url";
+import assert from "node:assert/strict";
+const [suite,entry]=process.argv.slice(2);
+assert.ok(({replay:["replay.mjs"],sfu:["media-replay.mjs","media-product-replay.mjs"],audio:["media-replay.mjs","media-product-replay.mjs"]})[suite]?.includes(entry));
+const entries=Array.from({length:7},(_,i)=>JSON.parse(readFileSync(new URL("./qualification-wave-0"+(i+1)+".json",import.meta.url),"utf8")).entries).flat();
+const expected=new Set(entries.flatMap(e=>(e.markers||[]).filter(m=>m.suite===suite).map(m=>m.marker)));
+const out=process.env.WM_BULK_RECEIPTS,sha=process.env.GITHUB_SHA;
+assert.ok(out&&/^[a-f0-9]{40}$/.test(sha||""));
+appendFileSync(out,"",{mode:0o600});
+const child=spawn(process.execPath,[fileURLToPath(new URL(entry,import.meta.url))],{stdio:["inherit","pipe","inherit"],env:process.env});
+const lines=createInterface({input:child.stdout,crlfDelay:Infinity});
+lines.on("line",line=>{console.log(line);if(line.startsWith("PASS ")&&expected.has(line.slice(5)))appendFileSync(out,JSON.stringify({suite,sha,marker:line.slice(5)})+"\n",{mode:0o600});});
+const result=await new Promise((resolve,reject)=>{child.once("error",reject);child.once("close",(code,signal)=>resolve({code,signal}));});
+if(result.code!==0)process.exitCode=result.code??1;

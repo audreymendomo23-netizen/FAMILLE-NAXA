@@ -1,0 +1,84 @@
+name: WideMeet — product bulk B1–B6 and individual evidence
+on:
+  push:
+    branches: [test/widemeet-product-bulk-20261128]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: widemeet-product-bulk-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  registry:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/widemeet/integration-registry.mjs "$RUNNER_TEMP/wm-integration-registry.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: widemeet-integrated-registry-${{ github.sha }}
+          path: ${{ runner.temp }}/wm-integration-registry.json
+          if-no-files-found: error
+  gate:
+    uses: ./.github/workflows/widemeet-gate.yml
+  replay:
+    uses: ./.github/workflows/widemeet-replay-isolated.yml
+  sfu:
+    uses: ./.github/workflows/family-media-replay.yml
+  audio:
+    uses: ./.github/workflows/family-audio-replay.yml
+  b4:
+    uses: ./.github/workflows/widemeet-b4-qualification.yml
+  b5-recovery:
+    uses: ./.github/workflows/widemeet-b5-recovery.yml
+  b5-media:
+    uses: ./.github/workflows/widemeet-b5-support-media.yml
+  b6:
+    uses: ./.github/workflows/widemeet-b6-security.yml
+  central:
+    uses: ./.github/workflows/widemeet-central-naxa.yml
+    with:
+      run_full_regression: false
+  pages:
+    uses: ./.github/workflows/widemeet-cloudflare-pages.yml
+  individual-evidence:
+    if: always()
+    needs: [registry, replay, sfu, audio]
+    strategy:
+      fail-fast: false
+      matrix:
+        bulk: [B1, B2, B3, B4, B5, B6]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: widemeet-bulk-receipts-*
+          path: ${{ runner.temp }}/wm-receipts
+      - run: node scripts/widemeet/product-bulk-report.mjs "${{ matrix.bulk }}" "$RUNNER_TEMP/wm-receipts" "$RUNNER_TEMP/${{ matrix.bulk }}-evidence.json"
+        env:
+          REPLAY: ${{ needs.replay.result }}
+          SFU: ${{ needs.sfu.result }}
+          AUDIO: ${{ needs.audio.result }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: widemeet-bulk-evidence-${{ matrix.bulk }}
+          path: ${{ runner.temp }}/${{ matrix.bulk }}-evidence.json
+          if-no-files-found: error
+  summary:
+    if: always()
+    needs: [registry, gate, replay, sfu, audio, b4, b5-recovery, b5-media, b6, central, pages, individual-evidence]
+    runs-on: ubuntu-24.04
+    env:
+      RESULTS: ${{ toJSON(needs) }}
+    steps:
+      - name: Report isolated qualification outcomes on the same SHA
+        run: |
+          node -e 'const r=JSON.parse(process.env.RESULTS);const rows=Object.entries(r);console.log("SHA",process.env.GITHUB_SHA);for(const [k,v] of rows)console.log(k,v.result);console.log("Suite status does not prove all 269 scenarios.");process.exit(rows.every(([,v])=>v.result==="success")?0:1)'

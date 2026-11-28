@@ -1,5 +1,6 @@
 name: WideMeet — Cloudflare Pages preview build
 on:
+  workflow_call:
   push:
     branches: [work/widemeet-cloudflare-firebase-20261128, work/widemeet-visual-design-20261128]
   workflow_dispatch:

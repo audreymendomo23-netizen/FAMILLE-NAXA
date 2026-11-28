@@ -1,0 +1,20 @@
+import {readFileSync,readdirSync,writeFileSync,appendFileSync} from "node:fs";
+import {join} from "node:path";
+import assert from "node:assert/strict";
+const [bulk,dir,out]=process.argv.slice(2),sha=process.env.GITHUB_SHA;
+assert.match(bulk,/^B[1-6]$/);assert.match(sha,/^[a-f0-9]{40}$/);
+const all=Array.from({length:7},(_,i)=>JSON.parse(readFileSync(new URL("./qualification-wave-0"+(i+1)+".json",import.meta.url),"utf8")).entries).flat();
+assert.equal(all.length,315);assert.equal(new Set(all.map(e=>e.id)).size,315);
+assert.equal(all.filter(e=>e.kind==="recipe").length,269);
+assert.equal(all.filter(e=>e.kind==="action").length,46);
+const canonical=readFileSync(new URL("../../docs/widemeet/REGISTRE_RECETTES_ACTIONS_B1_B6.md",import.meta.url),"utf8");
+assert.deepEqual([...new Set(canonical.match(/B[1-6]\.\d+-[AR]\d+/g)||[])].sort(),all.map(e=>e.id).sort());
+const receipts=[];
+function visit(d){for(const f of readdirSync(d,{withFileTypes:true})){const p=join(d,f.name);if(f.isDirectory())visit(p);else if(f.name.endsWith(".jsonl"))for(const line of readFileSync(p,"utf8").split("\n").filter(Boolean)){const x=JSON.parse(line);assert.equal(x.sha,sha);assert.ok(["replay","sfu","audio"].includes(x.suite));receipts.push(x);}}}
+visit(dir);
+const states={replay:process.env.REPLAY,sfu:process.env.SFU,audio:process.env.AUDIO};
+const entries=all.filter(e=>e.bulk===bulk).map(e=>{const markers=e.markers||[];const observed=markers.filter(m=>receipts.some(x=>x.suite===m.suite&&x.marker===m.marker));const complete=e.complete===true&&observed.length===markers.length&&observed.length>0&&observed.every(m=>states[m.suite]==="success");return {...e,observed,status:e.kind==="action"?"ACTION_NOT_CLOSED":complete?"SUCCESS":observed.length?"PARTIAL_EVIDENCE":markers.length?"NOT_OBSERVED":"NOT_MAPPED"};});
+const counts=Object.fromEntries([...new Set(entries.map(e=>e.status))].map(s=>[s,entries.filter(e=>e.status===s).length]));
+writeFileSync(out,JSON.stringify({sha,bulk,states,counts,entries},null,2)+"\n");
+appendFileSync(process.env.GITHUB_STEP_SUMMARY,"### "+bulk+" — evidence, not closure\n"+Object.entries(counts).map(([k,v])=>"- "+k+": "+v).join("\n")+"\n");
+assert.equal(entries.length,({B1:52,B2:69,B3:44,B4:49,B5:36,B6:65})[bulk]);
