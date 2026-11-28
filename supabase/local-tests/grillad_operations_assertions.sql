@@ -153,4 +153,11 @@ do $test$ declare u uuid:='c1000000-0000-0000-0000-000000000001';op uuid:='c1000
  begin perform public.grillad_identity_review(gen_random_uuid(),op,u,repeat('4',64),repeat('5',64),'owner',null);raise exception 'unverified phone';exception when insufficient_privilege then null;end;
 end $test$;
 reset role;
+set role service_role;
+do $test$ declare d uuid:=gen_random_uuid();op uuid:='c1000000-0000-0000-0000-000000000002';begin
+ if not public.grillad_capture_device_set(d,op,repeat('6',64),'orange_money','FIXTURE-DEST',true) then raise exception 'capture enroll';end if;
+ if not public.grillad_capture_device_set(d,op,repeat('6',64),'orange_money','FIXTURE-DEST',false) then raise exception 'capture revoke';end if;
+ begin perform public.grillad_capture_device_set(d,op,repeat('6',64),'orange_money','FIXTURE-DEST',true);raise exception 'revoked device reenabled';exception when insufficient_privilege then null;end;
+end $test$;
+reset role;
 rollback;
