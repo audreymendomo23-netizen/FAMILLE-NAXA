@@ -1,0 +1,23 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000411'),('00000000-0000-0000-0000-000000000412'),('00000000-0000-0000-0000-000000000413');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000411','QA attendance QR');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000411','00000000-0000-0000-0000-000000000411','manager',true),('10000000-0000-0000-0000-000000000411','00000000-0000-0000-0000-000000000412','operator',true),('10000000-0000-0000-0000-000000000411','00000000-0000-0000-0000-000000000413','operator',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000411','10000000-0000-0000-0000-000000000411','QA');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411','00000000-0000-0000-0000-000000000411',true),('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411','00000000-0000-0000-0000-000000000412',true),('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411','00000000-0000-0000-0000-000000000413',true);
+insert into public.sec_shifts(id,organization_id,site_id,agent_id,created_by,label,starts_at,ends_at,state) values ('40000000-0000-0000-0000-000000000411','10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411','00000000-0000-0000-0000-000000000412','00000000-0000-0000-0000-000000000411','QA active',now()-interval '1 hour',now()+interval '1 hour','accepted');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000411',true);
+select public.sec_presence_qr('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411','50000000-0000-0000-0000-000000000411','issue','40000000-0000-0000-0000-000000000411','{"token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","action":"arrival"}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000413',true);
+do $q$begin begin perform public.sec_presence_qr('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411',gen_random_uuid(),'consume','50000000-0000-0000-0000-000000000411',jsonb_build_object('token','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','lat',4,'lon',9,'accuracy_m',10,'observed_at',now(),'source','browser','mock_reported',null));raise exception 'other worker accepted';exception when insufficient_privilege then null;end;end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000412',true);
+do $q$declare e uuid:=gen_random_uuid();v jsonb;d jsonb:=jsonb_build_object('token','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','lat',4,'lon',9,'accuracy_m',10,'observed_at',now(),'source','browser','mock_reported',null);begin
+ v:=public.sec_presence_qr('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411',e,'consume','50000000-0000-0000-0000-000000000411',d);
+ if v->>'state'<>'pending_review' or v->>'physical_presence_certified'<>'false' or v<>public.sec_presence_qr('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411',e,'consume','50000000-0000-0000-0000-000000000411',d) then raise exception 'receipt';end if;
+ if not exists(select 1 from public.sec_attendance_drafts where id=(v->>'draft_id')::uuid and qr_challenge_id='50000000-0000-0000-0000-000000000411' and state='pending_review') then raise exception 'draft missing';end if;
+ begin perform public.sec_presence_qr('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411',gen_random_uuid(),'consume','50000000-0000-0000-0000-000000000411',d);raise exception 'replay accepted';exception when insufficient_privilege then null;end;
+ if has_column_privilege(current_user,'public.sec_attendance_drafts','qr_challenge_id','INSERT') or has_table_privilege(current_user,'sec_private.presence_challenges','SELECT') then raise exception 'QR forgery permission';end if;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000411',true);
+select public.sec_field_action('10000000-0000-0000-0000-000000000411','20000000-0000-0000-0000-000000000411',gen_random_uuid(),'attendance',(select id from public.sec_attendance_drafts where qr_challenge_id='50000000-0000-0000-0000-000000000411'),'{"state":"reviewed","reason":"QA review"}');
+reset role;rollback;
