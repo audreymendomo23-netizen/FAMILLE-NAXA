@@ -1,3 +1,5 @@
-# GRILLAD gateway candidate (not deployed)
+# GRILLAD gateway — deployed candidate, hosted access checks passed
 Uses shared GoTrue password login and family account lifecycle tables, login guard, binding and active device registry via narrow service-only RPCs. 0004 account lifecycle + business + attendance + auth bridge drafts, matching active memberships, active app grant, explicit site and exact subscription are required. The gateway uses service role only for the auth control plane; all business/attendance RPCs are caller-token scoped. No client service key. Limit adapted to two active devices per individual, not per point; third device denied pending explicit support revocation, no other seller eviction. This is a proposed protection, not a validated commercial limit.
 Set exact GRILLAD_ALLOWED_ORIGINS. Configure gateway JWT verification off only for this function after review; login/recovery/refresh are pre-auth, business calls enforce caller auth. Never expose private schemas. No deployment before real GoTrue, provisioning/recovery and revocation recipes pass. Password change workflow not bypassed.
+
+Hosted on FAMILLE-NAXA since 2026-11-28 (v1). Five negative/access and CORS checks passed; full authenticated hosted journey still pending provisioning and test accounts. See docs/grillad/INFRASTRUCTURE.md §6. No claim of production readiness.
