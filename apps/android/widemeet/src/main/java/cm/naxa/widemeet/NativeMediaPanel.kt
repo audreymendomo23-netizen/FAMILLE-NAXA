@@ -41,7 +41,7 @@ import java.net.URI
  AndroidView(factory={renderer},modifier=Modifier.fillMaxWidth().height(200.dp))
 }
 
-@Composable fun NativeMediaPanel(english:Boolean,gateway:RoomGateway,session:Session,roomId:String,micAllowed:Boolean,screenAllowed:Boolean,isHost:Boolean=false,presentationCeiling:String="high"){
+@Composable fun NativeMediaPanel(english:Boolean,gateway:RoomGateway,session:Session,roomId:String,micAllowed:Boolean,screenAllowed:Boolean,isHost:Boolean=false,presentationCeiling:String="high",authGateway:cm.naxa.widemeet.auth.AuthGateway?=null){
  fun tr(fr:String,en:String)=if(english)en else fr
  val context=LocalContext.current;val scope=rememberCoroutineScope()
  val preferences=remember(context){context.getSharedPreferences("wm-presentation",android.content.Context.MODE_PRIVATE)};val preferenceKey=session.memberId
@@ -54,6 +54,9 @@ import java.net.URI
  var mic by remember{mutableStateOf(false)};var camera by remember{mutableStateOf(false)};var screen by remember{mutableStateOf(false)};var screenRequestGeneration by remember{mutableIntStateOf(-1)}
  var tracks by remember{mutableStateOf<List<VideoTrack>>(emptyList())}
  var generation by remember{mutableIntStateOf(0)}
+ var languagePrefs by remember(roomId,session.deviceId){mutableStateOf<JSONObject?>(null)}
+ LaunchedEffect(roomId,session.accessToken){languagePrefs=null;try{languagePrefs=authGateway?.identity(session,"language-preferences")}catch(e:CancellationException){throw e}catch(e:Exception){languagePrefs=null}}
+ var captionTouched by remember(roomId,session.deviceId){mutableStateOf(false)}
  var captionLanguage by remember(roomId,session.deviceId){mutableStateOf("off")}
  var caption by remember(roomId,session.deviceId,captionLanguage,status){mutableStateOf<JSONObject?>(null)}
  var captionState by remember(roomId,session.deviceId,captionLanguage,status){mutableStateOf("idle")}
@@ -146,15 +149,17 @@ import java.net.URI
  Text(when(status){"connecting"->tr("Connexion…","Connecting…");"connected"->tr("Connecté à la réunion","Connected to meeting");"reconnecting"->tr("Reconnexion…","Reconnecting…");"disconnected"->tr("Connexion terminée","Connection ended");else->tr("Prêt à rejoindre","Ready to join")})
  val r=room;if(r!=null)tracks.forEach{track->key(track){RemoteVideo(r,track)}}
  if(status=="connected"){
+ if(!captionTouched&&languagePrefs!=null)TextButton(onClick={captionTouched=true;captionLanguage=languagePrefs?.optString("subtitles","original")?:"original"}){Text(tr("Utiliser ma langue de sous-titres","Use my preferred subtitle language"))}
  val languages=listOf("off" to tr("Désactivés","Off"),"original" to tr("Original","Original"),"fr" to "Français","en" to "English","ff" to "Fulfulde","es" to "Español","it" to "Italiano","zh" to "中文")
  Text(tr("Sous-titres (audio consenti)","Captions (consented audio)"))
- Box{OutlinedButton(onClick={captionMenu=true}){Text(languages.firstOrNull{it.first==captionLanguage}?.second?:captionLanguage)};DropdownMenu(expanded=captionMenu,onDismissRequest={captionMenu=false}){for((code,name) in languages)DropdownMenuItem(text={Text(name)},onClick={captionLanguage=code;captionMenu=false})}}
+ Box{OutlinedButton(onClick={captionMenu=true}){Text(languages.firstOrNull{it.first==captionLanguage}?.second?:captionLanguage)};DropdownMenu(expanded=captionMenu,onDismissRequest={captionMenu=false}){for((code,name) in languages)DropdownMenuItem(text={Text(name)},onClick={captionTouched=true;captionLanguage=code;captionMenu=false})}}
  if(captionLanguage!="off"){val c=caption
  Text(if(c!=null)c.optString("text").ifBlank{tr("Silence","Silence")}else if(captionState=="unavailable")tr("Sous-titres indisponibles ou consentement absent.","Captions unavailable or consent missing.")else tr("En attente de parole enregistrée avec consentement.","Waiting for consented recorded speech."))
  if(c?.optBoolean("fallback")==true)Text(tr("Traduction indisponible : langue originale.","Translation unavailable: original language."))
  if(c?.optBoolean("uncertain")==true)Text(tr("Texte à vérifier.","Text needs review."))
  if(c!=null&&c.optString("language")!=c.optString("source_language"))Text(c.optString("original"))
  }
+ if(status=="connected")LiveListening(english,gateway,session,roomId,languagePrefs)
  Button(enabled=!busy&&micAllowed,onClick={if(mic||ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)toggle("mic")else micPermission.launch(Manifest.permission.RECORD_AUDIO)}){Text(if(mic)tr("Couper mon micro","Mute my microphone")else tr("Activer mon micro","Enable my microphone"))}
  Button(enabled=!busy,onClick={if(camera||ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)toggle("camera")else cameraPermission.launch(Manifest.permission.CAMERA)}){Text(if(camera)tr("Couper ma caméra","Disable my camera")else tr("Activer ma caméra","Enable my camera"))}
  Text(tr("Qualité de présentation","Presentation quality"));for(level in levels)Row{RadioButton(selected=preferred==level,onClick={preferred=level;preferences.edit().putString(preferenceKey,level).apply()},enabled=screenAllowed&&!busy);Text(when(level){"low"->"Low Quality";"medium"->"Medium Quality";else->"High Quality"})};Text(tr("Qualité adaptée : ","Adapted quality: ")+(when(effective){"low"->"Low Quality";"medium"->"Medium Quality";"high"->"High Quality";else->tr("Indisponible","Unavailable")})+(applied?.let{" · "+tr("Qualité appliquée","Applied quality")+": "+when(it){"low"->"Low Quality";"medium"->"Medium Quality";"high"->"High Quality";else->tr("Indisponible","Unavailable")}}?:"")+(if(screen) " · "+(measured?:tr("Qualité effective indisponible","Actual quality unavailable"))else ""))
