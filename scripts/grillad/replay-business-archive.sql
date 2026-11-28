@@ -1,6 +1,7 @@
 -- Isolated CI recovery utility. No live grant, no hosted deployment.
 -- Included inside the synthetic transaction by grillad_transverse_assertions.sql.
 -- Restores all records in the v1 business archive, but not accounts or partner credentials.
+create temporary table grillad_replay_session_guard(marker boolean) on commit drop;
 create function pg_temp.grillad_replay_business(p jsonb,p_org uuid,p_site uuid) returns jsonb
 language plpgsql security invoker set search_path=pg_catalog as $restore$
 declare t text; cols text; n integer; got jsonb;counts jsonb:='{}'; expected text[]:=array['items','cash','cash_recounts','preparations','stock_adjustments','sales','cash_receipts','expenses','purchases','targets','dimension_targets','service_policy','service_revisions','daily_summary'];
