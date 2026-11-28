@@ -105,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [business, attendance, lifecycle, backup]
+        suite: [business, attendance, lifecycle, backup, product-race]
     name: server (${{ matrix.suite }})
     runs-on: ubuntu-24.04
     services:
@@ -138,6 +138,10 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_business_v1.sql
           if [ '${{ matrix.suite }}' = business ]; then
             psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_business_v1_assertions.sql
+            exit 0
+          fi
+          if [ '${{ matrix.suite }}' = product-race ]; then
+            bash scripts/grillad/product-race.sh
             exit 0
           fi
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_attendance_v1.sql

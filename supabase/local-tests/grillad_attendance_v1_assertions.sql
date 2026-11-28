@@ -81,7 +81,19 @@ do $$declare o uuid:='a2000000-0000-0000-0000-000000000001';s uuid:='a3000000-00
  if public.grillad_attendance_status(o,s)->'settings'->>'radius_m'<>'250' then raise exception 'policy update';end if;
 end $$;
 reset role;
-do $$begin if (select count(*) from grillad_private.attendance_photo_access)<>1 then raise exception 'photo access audit';end if;end $$;
+-- REC-30 deterministic historical midnight fixture: verifies persisted elapsed time,
+-- not the live GPS freshness policy (already exercised above).
+update grillad_private.attendance set captured_at='2026-11-26 23:59:30 Africa/Douala' where id in (select paired_arrival from grillad_private.attendance where kind='departure');
+update grillad_private.attendance set captured_at='2026-11-27 00:00:30 Africa/Douala' where kind='departure';
+set role authenticated;
+do $declare o uuid:='a2000000-0000-0000-0000-000000000001';s uuid:='a3000000-0000-0000-0000-000000000001';v jsonb;
+begin
+ v:=public.grillad_attendance_status(o,s);
+ if not exists(select 1 from jsonb_array_elements(v->'history') x where x->>'kind'='departure' and (x->>'duration_seconds')::int=60 and (x->>'effective_duration_seconds')::int=30) then raise exception 'REC-30 midnight elapsed or correction';end if;
+ begin perform public.grillad_attendance_status(o,gen_random_uuid());raise exception 'REC-30 unauthorized site';exception when insufficient_privilege then null;end;
+end $;
+reset role;
+do $begin if (select count(*) from grillad_private.attendance_photo_access)<>1 then raise exception 'photo access audit';end if;end $$;
 update grillad_private.attendance set photo_until=now()-interval '1 second';
 do $$declare n bigint;begin n:=grillad_private.purge_attendance_photos();if n<>4 then raise exception 'photo retention count %',n;end if;if exists(select 1 from grillad_private.attendance where photo is not null) then raise exception 'photo retention bytes';end if;n:=grillad_private.purge_attendance_photos();if n<>0 then raise exception 'photo retention replay';end if;end $$;
 rollback;
