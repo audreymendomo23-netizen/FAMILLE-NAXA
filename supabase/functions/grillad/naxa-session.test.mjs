@@ -1,0 +1,17 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {establishNaxaSession,federatedAlias} from './naxa-session.mjs';
+const id='10000000-0000-4000-8000-000000000001',local='20000000-0000-4000-8000-000000000001',sid='30000000-0000-4000-8000-000000000001';
+const issuer='https://ykgjfindlgseegmznaog.supabase.co/auth/v1',alias=await federatedAlias({issuer,subject:id});
+function fixture({existing=true,valid=true,metadata=true,grant=true,profile=true,upstream=true}={}){
+ const calls=[];let found=existing;let access=existing;
+ const s={access_token:'a.'+btoa(JSON.stringify({session_id:sid}))+'.b',refresh_token:'refresh-token',user:{id:local,email:alias,app_metadata:{grillad_federated:true,naxa_subject:metadata?id:local}}};
+ const post=async(path,data,token)=>{calls.push(path);if(path.endsWith('auth_begin'))return {ok:true,result:true};if(path.endsWith('federated_identity'))return {ok:true,result:found?{user_id:local,has_access:access}:null};if(path.endsWith('/verify'))return {ok:true,result:s};if(path.endsWith('self_trial')){access=true;return {ok:true,result:{trial_ends_at:'2026-12-01'}}}if(path.endsWith('auth_finish'))return {ok:true,result:grant};throw Error(path)};
+ const fetcher=async(url,init)=>{calls.push(url);if(url.startsWith(issuer))return upstream?Response.json({id,role:'authenticated',is_anonymous:false}):new Response(null,{status:401});if(url.endsWith('/users')){found=true;return Response.json({id:local})}if(url.endsWith('/generate_link'))return Response.json({hashed_token:'a'.repeat(64)});throw Error(url)};
+ const args={body:{naxa_access:valid?'a.b.c':'bad',installation:id,platform:'web'},env:{service:'server-only',naxaPublishableKey:'public'},base:'https://family.example',post,validProfile:()=>profile,workspaceFor:async()=>({sites:[{site:local}],renewal_only:false}),fetcher};
+ return {calls,args};
+}
+test('stable issuer-subject alias, separate namespace',async()=>{assert.match(alias,/^grillad-naxa-[0-9a-f]{48}@accounts\.grillad\.invalid$/);assert.notEqual(alias,await federatedAlias({issuer,subject:local}))});
+test('existing identity receives only a bound FAMILLE session',async()=>{const f=fixture();const r=await establishNaxaSession(f.args);assert.equal(r.status,200);assert.equal(r.body.result.user_id,local);assert.ok(f.calls.some(x=>x.endsWith('auth_finish')));assert.ok(!f.calls.some(x=>x.endsWith('self_trial')))});
+test('new identity without profile does not create user or grant',async()=>{const f=fixture({existing:false,profile:false});const r=await establishNaxaSession(f.args);assert.deepEqual(r.body.result,{onboarding_required:true});assert.ok(!f.calls.some(x=>x.endsWith('/users')))});
+test('new identity provisions trial before binding',async()=>{const f=fixture({existing:false});const r=await establishNaxaSession(f.args);assert.equal(r.status,200);assert.ok(r.body.result.trial_ends_at);assert.ok(f.calls.findIndex(x=>x.endsWith('self_trial'))<f.calls.findIndex(x=>x.endsWith('auth_finish')))});
+test('reject invalid upstream and metadata mismatch',async()=>{for(const config of [{valid:false},{upstream:false},{metadata:false}]){const f=fixture(config);const r=await establishNaxaSession(f.args);assert.ok([401,403].includes(r.status));assert.ok(!f.calls.some(x=>x.endsWith('auth_finish')))}});
+test('reject device denial without returning credentials',async()=>{const f=fixture({grant:false});const r=await establishNaxaSession(f.args);assert.equal(r.status,403);assert.equal(r.body.result,undefined)});

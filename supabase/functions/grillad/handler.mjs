@@ -1,3 +1,4 @@
+import {establishNaxaSession} from './naxa-session.mjs';
 import {start as startDrive} from '../grillad-drive/worker.mjs';
 // Dedicated GRILLAD gateway, adapted from the family accounting bearer/RPC pattern.
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -33,6 +34,7 @@ export async function handle(request,env,fetcher=fetch){
   const aliasOf=async username=>'grillad-'+(await hashOf('internal:'+username)).slice(0,48)+'@accounts.grillad.invalid';
   const validProfile=b=>typeof b.name==='string'&&b.name.trim().length>=2&&b.name.length<=80&&typeof b.organization==='string'&&b.organization.trim().length>=2&&b.organization.length<=160&&typeof b.site_name==='string'&&b.site_name.trim().length>=2&&b.site_name.length<=160&&/^\+[1-9]\d{7,14}$/.test(String(b.phone||''))&&b.terms==='grillad-2026-11-28-v1'&&!/[\x00-\x1f\x7f]/.test(b.name+b.organization+b.site_name);
   const strong=v=>typeof v==='string'&&v.length>=10&&v.length<=128&&/[A-Za-z]/.test(v)&&/\d/.test(v)&&/[^A-Za-z0-9]/.test(v);
+  if(body.action==='naxa_exchange'){const result=await establishNaxaSession({body,env,base,post,validProfile,workspaceFor,fetcher});return reply(result.status,result.body);}
   if(body.action==='signup_internal'){
    const username=usernameOf(body.username);if(!env.service||!username||!strong(body.password)||!validProfile(body)||!uuid.test(body.installation)||!['web','android'].includes(body.platform))return reply(400,{error:'SIGNUP_INPUT'});
    const hash=await hashOf('internal:'+username),email=await aliasOf(username);
