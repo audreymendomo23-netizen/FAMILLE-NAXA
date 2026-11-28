@@ -90,7 +90,167 @@ begin
  if p_action not in ('list','generate','attach') or p_action is null then raise exception 'GRILLAD_REFERRAL_INPUT' using errcode='22023';end if;
  if p_action='generate' then insert into grillad_private.referral_codes(org) values(p_org) on conflict(org) do nothing;
  elsif p_action='attach' then
-  if p_code is null or upper(btrim(p_code))!~'^[0-9A-F]{32} then raise exception 'GRILLAD_REFERRAL_INPUT' using errcode='22023';end if;
+  if p_code is null or upper(btrim(p_code))!~'^[0-9A-F]{32} raise exception 'GRILLAD_REFERRAL_INPUT' using errcode='22023';end if;
+  -- Serialize attachment to reject reciprocal and indirect loops.
+  perform pg_advisory_xact_lock(hashtextextended('grillad-referral-graph',0));
+  select org into r from grillad_private.referral_codes where code=upper(btrim(p_code));
+  if r is null or r=p_org or exists(with recursive ancestors(org) as (select r union select l.referrer_org from grillad_private.referral_links l join ancestors x on l.referred_org=x.org) select 1 from ancestors where org=p_org) then raise exception 'GRILLAD_REFERRAL_DENIED' using errcode='42501';end if;
+  insert into grillad_private.referral_links(referred_org,referrer_org) values(p_org,r) on conflict(referred_org) do nothing;
+  select referrer_org into v from grillad_private.referral_links where referred_org=p_org;
+  if v is distinct from r then raise exception 'GRILLAD_REFERRAL_ALREADY_LINKED' using errcode='22023';end if;
+ end if;
+ select code into c from grillad_private.referral_codes where org=p_org;
+ select jsonb_build_object('code',c,'linked',exists(select 1 from grillad_private.referral_links where referred_org=p_org),'referrals',(select count(*) from grillad_private.referral_links where referrer_org=p_org),'reward_status','pending_policy') into result;
+ return result;
+end $fn$;
+revoke all on function public.grillad_central_clients(),public.grillad_central_client_state(uuid,text,text,text),public.grillad_referral(uuid,uuid,text,text) from public,anon,authenticated;
+grant execute on function public.grillad_central_clients(),public.grillad_central_client_state(uuid,text,text,text),public.grillad_referral(uuid,uuid,text,text) to authenticated;
+
+-- Extend the existing shared ticket registry, not a second customer identity.
+create table grillad_private.support_messages(
+ id uuid primary key,ticket uuid not null references famille_core.support_tickets(id),
+ author uuid not null references auth.users(id),author_kind text not null check(author_kind in ('customer','agent')),
+ body text not null check(length(body) between 1 and 2000),created_at timestamptz not null default now());
+create index grillad_support_messages_ticket on grillad_private.support_messages(ticket,created_at,id);
+create table grillad_private.support_assignments(ticket uuid primary key references famille_core.support_tickets(id),agent uuid not null references auth.users(id),assigned_at timestamptz not null default now());
+create table grillad_private.support_agent_access(agent uuid primary key references auth.users(id),enabled boolean not null default false);
+alter table grillad_private.support_messages enable row level security;
+alter table grillad_private.support_assignments enable row level security;
+alter table grillad_private.support_agent_access enable row level security;
+revoke all on grillad_private.support_messages,grillad_private.support_assignments,grillad_private.support_agent_access from public,anon,authenticated;
+-- Existing NAXA agents only, explicit GRILLAD opt-in, live session, no new agent identity.
+create function grillad_private.agent_allowed(p_permission text) returns boolean
+language plpgsql stable security definer set search_path=pg_catalog as $fn$
+declare u uuid:=auth.uid();sid uuid;ok boolean:=false;
+begin
+ if u is null or coalesce(auth.jwt()->>'is_anonymous','false')='true' or coalesce(auth.jwt()->>'aal','')<>'aal2' or to_regclass('public.support_agents') is null or to_regclass('public.support_agent_permissions') is null then return false;end if;
+ begin sid:=(auth.jwt()->>'session_id')::uuid;exception when invalid_text_representation then return false;end;
+ if sid is null or not exists(select 1 from auth.sessions where id=sid and user_id=u) or not exists(select 1 from grillad_private.support_agent_access where agent=u and enabled) then return false;end if;
+ execute 'select exists(select 1 from public.support_agents a join public.support_agent_permissions p on p.agent_user_id=a.user_id where a.user_id=$1 and a.status=''active'' and p.permission_code=$2 and p.revoked_at is null)' into ok using u,p_permission;
+ return ok;
+end $fn$;
+create function public.grillad_support_thread(p_org uuid,p_site uuid,p_ticket uuid,p_event uuid default null,p_body text default null) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare a uuid;t famille_core.support_tickets%rowtype;m grillad_private.support_messages%rowtype;v jsonb;msg text:=btrim(p_body);
+begin
+ perform grillad_private.scope(p_org,p_site);
+ select id into a from famille_core.applications where code='grillad';
+ select * into t from famille_core.support_tickets where id=p_ticket and app_id=a and organization_id=p_org and user_id=auth.uid() and deleted_at is null for update;
+ if not found then raise exception 'GRILLAD_SUPPORT_DENIED' using errcode='42501';end if;
+ if p_event is not null then
+  if msg is null or length(msg) not between 1 and 2000 or t.status in ('resolved','closed') then raise exception 'GRILLAD_SUPPORT_INPUT' using errcode='22023';end if;
+  select * into m from grillad_private.support_messages where id=p_event;
+  if found then if m.ticket<>p_ticket or m.author<>auth.uid() or m.body<>msg or m.author_kind<>'customer' then raise exception 'GRILLAD_SUPPORT_REPLAY' using errcode='42501';end if;
+  else
+   if (select count(*) from grillad_private.support_messages where author=auth.uid() and created_at>now()-interval '1 minute')>=12 then raise exception 'GRILLAD_SUPPORT_LIMIT' using errcode='22023';end if;
+   insert into grillad_private.support_messages(id,ticket,author,author_kind,body) values(p_event,p_ticket,auth.uid(),'customer',msg);
+   update famille_core.support_tickets set updated_at=now(),status=case when status='waiting_user' then 'in_progress' else status end where id=p_ticket;
+  end if;
+ end if;
+ select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at,q.id),'[]'::jsonb) into v from (select id,author_kind,body,created_at from grillad_private.support_messages where ticket=p_ticket order by created_at desc,id desc limit 100)q;
+ return jsonb_build_object('ticket',p_ticket,'description',t.description,'messages',v);
+end $fn$;
+create function public.grillad_agent_queue() returns jsonb
+language plpgsql stable security definer set search_path=pg_catalog as $fn$
+declare a uuid;v jsonb;
+begin
+ if not grillad_private.agent_allowed('queue_view') or not grillad_private.agent_allowed('ticket_view_assigned') then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ select id into a from famille_core.applications where code='grillad';
+ select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at),'[]'::jsonb) into v from
+ (select t.id,t.subject,t.status,t.created_at,(s.agent=auth.uid()) as mine from famille_core.support_tickets t left join grillad_private.support_assignments s on s.ticket=t.id where t.app_id=a and t.deleted_at is null and t.status not in ('resolved','closed') and (s.agent is null or s.agent=auth.uid()) order by t.created_at limit 50)q;
+ return v;
+end $fn$;
+create function public.grillad_agent_thread(p_ticket uuid,p_action text,p_event uuid default null,p_body text default null) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare a uuid;t famille_core.support_tickets%rowtype;m grillad_private.support_messages%rowtype;v jsonb;msg text:=btrim(p_body);
+begin
+ if not grillad_private.agent_allowed('ticket_view_assigned') or p_action is null or p_action not in ('claim','read','reply') then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ select id into a from famille_core.applications where code='grillad';
+ select * into t from famille_core.support_tickets where id=p_ticket and app_id=a and deleted_at is null and status not in ('resolved','closed') for update;
+ if not found then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ if p_action='claim' then
+  if not grillad_private.agent_allowed('queue_view') then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+  insert into grillad_private.support_assignments(ticket,agent) values(p_ticket,auth.uid()) on conflict(ticket) do nothing;
+ end if;
+ if not exists(select 1 from grillad_private.support_assignments where ticket=p_ticket and agent=auth.uid()) then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ if p_action='reply' then
+  if not grillad_private.agent_allowed('ticket_reply') or p_event is null or msg is null or length(msg) not between 1 and 2000 then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+  select * into m from grillad_private.support_messages where id=p_event;
+  if found then if m.ticket<>p_ticket or m.author<>auth.uid() or m.body<>msg or m.author_kind<>'agent' then raise exception 'GRILLAD_SUPPORT_REPLAY' using errcode='42501';end if;
+  else insert into grillad_private.support_messages(id,ticket,author,author_kind,body) values(p_event,p_ticket,auth.uid(),'agent',msg);
+   update famille_core.support_tickets set status='waiting_user',updated_at=now() where id=p_ticket;
+  end if;
+ elsif p_action='claim' and t.status='open' then update famille_core.support_tickets set status='in_progress',updated_at=now() where id=p_ticket;end if;
+ select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at,q.id),'[]'::jsonb) into v from (select id,author_kind,body,created_at from grillad_private.support_messages where ticket=p_ticket order by created_at desc,id desc limit 100)q;
+ return jsonb_build_object('ticket',p_ticket,'description',t.description,'messages',v);
+end $fn$;
+revoke all on function grillad_private.agent_allowed(text),public.grillad_support_thread(uuid,uuid,uuid,uuid,text),public.grillad_agent_queue(),public.grillad_agent_thread(uuid,text,uuid,text) from public,anon,authenticated;
+grant execute on function public.grillad_support_thread(uuid,uuid,uuid,uuid,text),public.grillad_agent_queue(),public.grillad_agent_thread(uuid,text,uuid,text) to authenticated;
+
+create function public.grillad_central_agent_access(p_agent uuid,p_enabled boolean,p_reason text) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare a uuid;valid boolean:=false;why text:=btrim(p_reason);
+begin
+ perform grillad_private.central_overview();
+ if p_agent is null or p_enabled is null or why is null or length(why) not between 10 and 300 or p_agent=auth.uid() then raise exception 'GRILLAD_AGENT_INPUT' using errcode='22023';end if;
+ if p_enabled then
+  if to_regclass('public.support_agents') is null or to_regclass('public.support_agent_permissions') is null then raise exception 'GRILLAD_AGENT_UNAVAILABLE' using errcode='42501';end if;
+  execute 'select exists(select 1 from public.support_agents a where a.user_id=$1 and a.status=''active'' and (select count(distinct p.permission_code) from public.support_agent_permissions p where p.agent_user_id=a.user_id and p.revoked_at is null and p.permission_code in (''queue_view'',''ticket_view_assigned'',''ticket_reply''))=3)' into valid using p_agent;
+  if not valid then raise exception 'GRILLAD_AGENT_DENIED' using errcode='42501';end if;
+ end if;
+ insert into grillad_private.support_agent_access(agent,enabled) values(p_agent,p_enabled) on conflict(agent) do update set enabled=excluded.enabled;
+ -- Release only GRILLAD assignments if access is revoked; conversation remains intact.
+ if not p_enabled then delete from grillad_private.support_assignments where agent=p_agent;end if;
+ select id into a from famille_core.applications where code='grillad';
+ insert into famille_core.audit_events(app_id,actor_id,action_code,entity_type,entity_id,metadata) values(a,auth.uid(),'grillad.agent_access','support_agent',p_agent::text,jsonb_build_object('enabled',p_enabled,'reason',why));
+ return jsonb_build_object('agent',p_agent,'enabled',p_enabled);
+end $fn$;
+revoke all on function public.grillad_central_agent_access(uuid,boolean,text) from public,anon,authenticated;
+grant execute on function public.grillad_central_agent_access(uuid,boolean,text) to authenticated;
+
+-- Owner-controlled backup preference and bounded, explicit business export.
+-- No OAuth credential, PIN, profile photo, camera or authentication material exported.
+create table grillad_private.backup_preferences(
+ org uuid not null,site uuid not null,actor uuid not null references auth.users(id),
+ frequency text not null check(frequency in ('off','daily','weekly','monthly')),
+ local_minute integer not null check(local_minute between 0 and 1439),
+ weekday integer not null check(weekday between 1 and 7),monthday integer not null check(monthday between 1 and 28),
+ updated_at timestamptz not null default now(),primary key(org,site,actor),
+ foreign key(org,site) references grillad_private.enabled_sites(org,site));
+alter table grillad_private.backup_preferences enable row level security;
+revoke all on grillad_private.backup_preferences from public,anon,authenticated;
+create function public.grillad_backup_preferences(p_org uuid,p_site uuid,p_frequency text default null,p_minute integer default null,p_weekday integer default null,p_monthday integer default null) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v grillad_private.backup_preferences%rowtype;
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_BACKUP_DENIED' using errcode='42501';end if;
+ if p_frequency is not null then
+  if p_frequency not in ('off','daily','weekly','monthly') or p_minute is null or p_minute not between 0 and 1439 or p_weekday is null or p_weekday not between 1 and 7 or p_monthday is null or p_monthday not between 1 and 28 then raise exception 'GRILLAD_BACKUP_INPUT' using errcode='22023';end if;
+  insert into grillad_private.backup_preferences(org,site,actor,frequency,local_minute,weekday,monthday) values(p_org,p_site,auth.uid(),p_frequency,p_minute,p_weekday,p_monthday)
+  on conflict(org,site,actor) do update set frequency=excluded.frequency,local_minute=excluded.local_minute,weekday=excluded.weekday,monthday=excluded.monthday,updated_at=now();
+ end if;
+ select * into v from grillad_private.backup_preferences where org=p_org and site=p_site and actor=auth.uid();
+ return jsonb_build_object('frequency',coalesce(v.frequency,'off'),'minute',coalesce(v.local_minute,360),'weekday',coalesce(v.weekday,1),'monthday',coalesce(v.monthday,1),'timezone','Africa/Douala','destination','google_drive','cloud_status','not_connected','last_success',null);
+end $fn$;
+create function public.grillad_backup_export(p_org uuid,p_site uuid) returns jsonb
+language plpgsql stable security definer set search_path=pg_catalog as $fn$
+declare v jsonb:='{}'::jsonb; t text; a jsonb; n bigint;
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_BACKUP_DENIED' using errcode='42501';end if;
+ foreach t in array array['items','cash','cash_recounts','preparations','stock_adjustments','sales','cash_receipts','expenses','purchases','targets','dimension_targets','service_policy','service_revisions','daily_summary'] loop
+  execute format('select count(*) from grillad_private.%I where org=$1 and site=$2',t) into n using p_org,p_site;
+  if n>10000 then raise exception 'GRILLAD_BACKUP_TOO_LARGE' using errcode='22023';end if;
+  execute format('select coalesce(jsonb_agg(to_jsonb(x) order by to_jsonb(x)::text),''[]''::jsonb) from grillad_private.%I x where org=$1 and site=$2',t) into a using p_org,p_site;
+  v:=v||jsonb_build_object(t,a);
+  if octet_length(v::text)>3000000 then raise exception 'GRILLAD_BACKUP_TOO_LARGE' using errcode='22023';end if;
+ end loop;
+ return jsonb_build_object('format','grillad-business-export-v1','org',p_org,'site',p_site,'generated_at',now(),'coverage','selected_business_tables_only','tables',v);
+end $fn$;
+revoke all on function public.grillad_backup_preferences(uuid,uuid,text,integer,integer,integer),public.grillad_backup_export(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.grillad_backup_preferences(uuid,uuid,text,integer,integer,integer),public.grillad_backup_export(uuid,uuid) to authenticated;
+
+commit;
+ then raise exception 'GRILLAD_REFERRAL_INPUT' using errcode='22023';end if;
   -- Serialize attachment to reject reciprocal and indirect loops.
   perform pg_advisory_xact_lock(hashtextextended('grillad-referral-graph',0));
   select org into r from grillad_private.referral_codes where code=upper(btrim(p_code));
