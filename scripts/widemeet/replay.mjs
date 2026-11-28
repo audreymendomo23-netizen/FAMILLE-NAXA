@@ -417,7 +417,7 @@ try{
  assert.equal((await sr(sbs.access_token,"recovery-review",reviewData)).status,403);
  assert.equal((await sk(sbs.access_token,"recovery-review",{...reviewData,evidence_ref:randomUUID()})).recorded,true);
  assert.equal((await sk(sbs.access_token,"recovery-queue")).items.find(x=>x.id===target).escalations,2);
- assert.equal((await login(h)).member_id,h.id);
+ const independentHost=await login(h);assert.equal(independentHost.member_id,h.id);
  pass("B5 independent supervised recovery triage, separate role, immutable review, distinct references, no credential reset");
  const identity=(token,action,data={})=>ok(auth+"/identity",{action,data},token);
  const identityRequest=(token,action,data={})=>request(auth+"/identity",{action,data},token);
@@ -846,7 +846,7 @@ try{
   await hp.getByRole("button",{name:"Envoyer",exact:true}).click();
   await hp.waitForFunction(()=>document.querySelector("textarea")?.value==="");
   await hp.getByText("B2 lost response fixture",{exact:true}).waitFor();
-  const b2checkSession=await login(h);assert.equal((await centerOk(b2checkSession.access_token,"thread",{peer_id:g.id,query:"B2 lost response fixture"})).items.length,1);
+  const b2checkSession=independentHost;assert.equal((await centerOk(b2checkSession.access_token,"thread",{peer_id:g.id,query:"B2 lost response fixture"})).items.length,1);
   pass("B2 direct chat committed lost response, polling remains active and retry stays idempotent");
  }finally{await hp.unroute(lostPattern)}
  await menuPage("Statistiques");
@@ -861,7 +861,8 @@ try{
  await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&!x.disabled});
  await periodicToggle.click();
  await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&x.checked&&!x.disabled});
- const periodicHost=await login(h);const periodic=await identity(periodicHost.access_token,"center-periodic-list");assert.equal(periodic.timezone,"Africa/Douala");assert.ok(periodic.preferences.some(p=>p.cadence==="weekly"&&p.enabled===true));
+ // Reuse a verified session on a separate installation; hs was explicitly revoked above.
+ const periodicHost=independentHost;const periodic=await identity(periodicHost.access_token,"center-periodic-list");assert.equal(periodic.timezone,"Africa/Douala");assert.ok(periodic.preferences.some(p=>p.cadence==="weekly"&&p.enabled===true));
  await periodicToggle.click();await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&!x.checked&&!x.disabled});
  assert.ok((await identity(periodicHost.access_token,"center-periodic-list")).preferences.some(p=>p.cadence==="weekly"&&p.enabled===false));
  pass("B4 periodic report real browser opt-in, disable and timezone");

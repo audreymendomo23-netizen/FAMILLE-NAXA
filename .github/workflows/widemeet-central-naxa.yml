@@ -1,0 +1,67 @@
+name: WideMeet — Central NAXA administration and support
+on:
+  workflow_call:
+    inputs:
+      run_full_regression:
+        type: boolean
+        default: true
+  push:
+    branches: [work/widemeet-central-naxa-20261128]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  central-sql:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: fixture_password
+        ports: [5432:5432]
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: fixture_password
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_central_fixture.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_central_registry_prerequisite.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_billing.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_support.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_central_naxa.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_naxa_federation.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_central_naxa.sql
+  central-web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build --workspace @famille/admin-console
+        env:
+          VITE_ADMIN_SUPABASE_URL: https://idupfjbkwjcavyisxteo.supabase.co
+          VITE_ADMIN_PUBLIC_KEY: sb_publishable_fixture
+      - run: node --test docs/apps/zipple/n1/admin-client.test.mjs
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
+      - run: npx playwright install chromium
+      - run: node scripts/widemeet/central-admin-browser.mjs
+  central-edge:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check supabase/functions/widemeet-auth/index.ts
+  full-regression:
+    if: github.event_name != 'push' || github.ref_name == 'work/widemeet-central-naxa-20261128' || inputs.run_full_regression == true
+    uses: ./.github/workflows/widemeet-gate.yml

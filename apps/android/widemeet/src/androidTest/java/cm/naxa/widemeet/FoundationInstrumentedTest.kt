@@ -41,6 +41,23 @@ class FoundationInstrumentedTest {
   rule.onNodeWithTag("wm-login").performScrollTo().performClick()
   rule.onNodeWithTag("wm-signin-title").assertTextEquals(if(previousLanguage)"Connexion" else "Sign in").assertIsDisplayed()
   rule.onNodeWithTag("wm-signin-submit").assertIsNotEnabled()
+  rule.onNodeWithTag("wm-photo-signin").assertDoesNotExist()
+  rule.onNodeWithTag("wm-signin-background").assertExists()
+  rule.onNodeWithTag("wm-signin-background-image").assertExists()
+  rule.onNodeWithTag("wm-signin-logo").assertIsDisplayed()
+  rule.onNodeWithTag("wm-tab-0").assertDoesNotExist()
+  rule.onNodeWithTag("wm-menu").assertDoesNotExist()
+  rule.onNodeWithTag("wm-theme").assertExists()
+  rule.onNodeWithTag(if(previousLanguage)"wm-auth-en" else "wm-auth-fr").performClick()
+  rule.onNodeWithTag("wm-signin-title").assertTextEquals(if(previousLanguage)"Sign in" else "Connexion")
+  rule.onNodeWithTag("wm-signup-open").performScrollTo().performClick()
+  rule.onNodeWithTag("wm-signup-title").assertExists()
+  rule.onNodeWithTag("wm-signup-submit").assertIsNotEnabled()
+  rule.onNodeWithTag("wm-signup-back").performScrollTo().performClick()
+  rule.onNodeWithTag("wm-signin-back").performScrollTo().performClick()
+  rule.onNodeWithTag("wm-photo-home").performScrollTo().assertIsDisplayed()
+  rule.onNodeWithTag("wm-signin-background").assertDoesNotExist()
+  rule.onNodeWithTag("wm-tab-0").assertExists()
  }
  @Test fun nativeFaqNavigation(){
   rule.onNodeWithTag("wm-menu").performClick()
@@ -89,5 +106,12 @@ class FoundationInstrumentedTest {
   gate.clear()
   assertFalse(gateway.biometricAvailable())
   assertNull(gateway.prepareBiometric())
+ }
+
+ @Test fun originalPhotoAssetsDecodeAndAppear(){
+  val context=ApplicationProvider.getApplicationContext<Context>()
+  for(name in wideMeetPhotoNames){val b=requireNotNull(context.assets.open("wm-photos/"+name+".jpg").use{android.graphics.BitmapFactory.decodeStream(it)});assertTrue(b.width>0&&b.height>0);b.recycle()}
+  rule.onNodeWithTag("wm-tab-0").performClick()
+  rule.onNodeWithTag("wm-photo-home").performScrollTo().assertIsDisplayed()
  }
 }

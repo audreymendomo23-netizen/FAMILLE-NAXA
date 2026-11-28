@@ -32,6 +32,7 @@ export function createRecoveryClient({url,key,fetcher=fetch}){
    const s=await auth("factors/"+factor+"/verify","POST",{challenge_id:c.id,code},token);
    if(typeof s?.access_token!=="string")throw Error("ACCESS_DENIED");return s.access_token;
   },
+  async widemeet(token,action,data={}){if(!token||typeof action!=="string")throw Error("ACCESS_DENIED");const result=await request("/functions/v1/widemeet-auth/central","POST",{app_id:"WIDEMEET",action,data},token);if(!result||typeof result!=="object")throw Error("ACCESS_DENIED");return result},
   async list(token){const data=await edge("list",{},token);if(!Array.isArray(data?.requests))throw Error("ACCESS_DENIED");return data.requests},
   async complete(token,id,reason,password){
    if(!uuid.test(id)||typeof reason!=="string"||reason.trim().length<10||reason.length>500||typeof password!=="string"||password.length<12||password.length>128)throw Error("INVALID_INPUT");

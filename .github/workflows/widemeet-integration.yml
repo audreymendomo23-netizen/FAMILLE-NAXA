@@ -50,9 +50,13 @@ jobs:
     uses: ./.github/workflows/widemeet-b5-support-media.yml
   b6:
     uses: ./.github/workflows/widemeet-b6-security.yml
+  central:
+    uses: ./.github/workflows/widemeet-central-naxa.yml
+    with:
+      run_full_regression: false
   summary:
     if: always()
-    needs: [registry, gate, replay, sfu, audio, b4, b5-recovery, b5-media, b6]
+    needs: [registry, gate, replay, sfu, audio, b4, b5-recovery, b5-media, b6, central]
     runs-on: ubuntu-24.04
     env:
       RESULTS: ${{ toJSON(needs) }}

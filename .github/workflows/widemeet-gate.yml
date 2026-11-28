@@ -98,6 +98,8 @@ jobs:
             if [ "$attempt" -eq 4 ]; then exit 1; fi
             if grep -Eq 'Received status code (429|502|503) from server' "$RUNNER_TEMP/wm-gradle-build.log"; then
               echo "Retrying transient Maven HTTP failure on alternate official endpoint"
+            elif grep -Eq 'https://(repo\.maven\.apache\.org|repo1\.maven\.org)/maven2/.*Received status code 403 from server' "$RUNNER_TEMP/wm-gradle-build.log"; then
+              echo "Public Maven endpoint returned HTTP 403; retry the same pinned dependencies at the other official endpoint"
             elif grep -Fq "Could not resolve all files for configuration ':widemeet:debugRuntimeClasspath'" "$RUNNER_TEMP/wm-gradle-build.log" && grep -Eq 'Could not find (org\.jetbrains\.kotlin:kotlin-stdlib-jdk8:1\.8\.21|io\.github\.webrtc-sdk:android-prefixed:125\.6422\.06\.1|org\.jetbrains\.kotlinx:kotlinx-serialization-json:1\.5\.0|com\.google\.protobuf:protobuf-javalite:3\.22\.0|com\.google\.dagger:dagger:2\.46|com\.vdurmont:semver4j:3\.1\.0|com\.squareup\.okio:okio:3\.6\.0)\.' "$RUNNER_TEMP/wm-gradle-build.log" && grep -Eq 'https://(repo\.maven\.apache\.org|repo1\.maven\.org)/maven2/' "$RUNNER_TEMP/wm-gradle-build.log"; then
               # Known published fixed versions: refresh cached misses before trying the other official endpoint.
               refresh=(--refresh-dependencies)
