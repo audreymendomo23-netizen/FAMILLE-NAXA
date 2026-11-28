@@ -61,3 +61,5 @@ Complément : 2 tests nommés de la passerelle vidéo (refus non configuré, tic
 Complément : 1 parcours Chromium vente Orange Money déclarée manuellement, ajustement libellés et PDF Android. Total 197 unités (192 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/50.
 
 Requalification : cinq campagnes complètes de cette passe vertes (70/70 jobs). Les campagnes 46087767668 et 46087851364 sont nouvelles et non certifiées au relevé ; voir section 30 de GRILLAD_CONTINUITE.md. Ne pas confondre les 197 unités du registre et les 14 jobs d'une campagne.
+
+Passe challenge : 2 tests unitaires Web catalogue/lot, 2 tests identité centrale, 1 test natif ticket vidéo, 2 tests intake SMS, 1 parcours Chromium de reprise multi-lots. Total 205 unités (200 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/50/8. Les tests existants corrigés ne sont pas comptés deux fois.
