@@ -1,6 +1,6 @@
 # NAXA SERVICES — document de continuité dédié
 
-**Version :** 1.6  
+**Version :** 1.7  
 **Date de mise à jour :** 28 novembre 2026  
 **Dépôt :** `audreymendomo23-netizen/FAMILLE-NAXA`  
 **Branche de travail :** `work/naxa-services-completion-20261120`  
@@ -1958,3 +1958,16 @@ Le pointage probant est réintégré au périmètre commercial V1.0, et non repo
 Réutiliser le parcours existant : prises/fins de service GPS obligatoire pour B/C, pauses selon politique, selfie configurable par responsable habilité, poste/site autorisés, horodatage et fraîcheur, refus si preuve obligatoire manquante, staging opaque et anti-rejeu, historique privé et contrôle du supérieur habilité, aucun suivi GPS permanent. Respecter les règles existantes du solo et ne pas inventer de sanction, biométrie faciale ou nouvelle exigence. Le consentement/information, la minimisation et la rétention des données doivent être vérifiés avant lancement.
 
 Preuves historiques : Gate #781 / Replay #40 (GPS obligatoire v21), Replay #52 (Auth/Storage, GPS/caméra simulés, prise/pause/reprise/fin, revue privée), tests v16/v17 en rollback. Ces preuves ne valent pas qualification physique ou activation hébergée. Les réserves B1-05, B1-06, B1-07 restent ouvertes : politique poste/rôle, nettoyage effectif et preuves sur appareils réels, selon le CDC et la matrice existante. Recette exacte du candidat : Gate, Replay et Android ; vérifier permissions refusées, GPS obligatoire B/C, selfie requis, changement de poste, expiration, anti-rejeu, contrôle de l'accès aux preuves et rejet sans preuve. Les flags ne remplacent ni les droits serveur ni les migrations autorisées. Aucun main, déploiement manuel, migration hébergée, création de compte ni signature réalisés lors de cette décision. Le verdict commercial demeure NO-GO tant que les contrôles indispensables ne sont pas prouvés.
+
+
+### 23.6 — 28 novembre : exceptions V1.0 FAQ, Livechat/support central et NAXA SECURITY
+
+Décision propriétaire : FAQ interactive trilingue, assistance bidirectionnelle avec support central (appel, partage d'écran consenti, notifications et historique), et NAXA SECURITY (caméras, consultation autorisée, alertes, incidents) sont à livrer dans la V1.0 ; ne pas les confondre avec les réunions internes reportées. Conserver les 43 réserves, notamment B5-05, sans nouvelle exigence ni vert par association.
+
+FAQ : Android 58d0e46a et Web/PWA 6f9c1b7c, cinq questions-réponses opérationnelles, accordéons, recherche Web, FR/EN/Fulfulde. Recette Chromium ajoutée ef3b1ab0 (ouverture/fermeture, recherche, langue). Traductions Fulfulde à relire ; pas de preuve terminale revendiquée ni de couverture exhaustive de toutes les questions possibles.
+
+Donneurs : NAXA pharmacie run 44684365620 sur a2bc42b7, job 136115059911 SUCCESS pour parcours professionnels et agents ; parcours client générique skipped. L'API native du support vérifie les identités et profils propres à NAXA ; ne pas lui transmettre un JWT Services en supposant une correspondance. NAXA CONTROL 5c7c1039 contient consultation et transitions des tickets, pas messagerie qualifiée. SECURITY 144e54d5, contrats et gate/replay documentés ; blob backend-candidate.sql 3f437d637cd6efdf9c5f30917a12f580e71e8599 identique au dernier donneur 0724f304. Les preuves matériel/transport réel restent ouvertes.
+
+Contrôle hébergé FAMILLE-NAXA en lecture seule : famille_core.support_tickets et public.ns_support_requests présents ; famille_core.support_messages et RPC naxa_control_dashboard absents. sec_sites, sec_devices, sec_incidents présents ; sec_media_grants et sec_media_open absents. Ne pas interpréter présence d'une table comme une activation ou qualification de bout en bout.
+
+Pont candidat de lecture des appareils/incidents et transmission idempotente d'une demande canonique du demandeur vers le ticket central : NAXA_SERVICES_SUPPORT_SECURITY_BRIDGE_CANDIDATE.sql, rollback par défaut ; rapprochements organisation/site explicitement provisionnés, aucune correspondance implicite ni nouveau droit d'accès à SECURITY ; fonctions invoker, RLS, refus des sessions révoquées, pas de transmission de secrets, aucun streaming simulé. Test isolé avec données synthétiques et donneur épinglé ; workflow naxa-services-support-security-bridge.yml. Ce pont est un candidat SQL non activé, non encore raccordé aux interfaces ; ne pas assimiler transfert de ticket à Livechat bidirectionnel. Restent la qualification du pont, le raccord UI Android/Web/PWA, les messages agents et clients sur compte autorisé, appel/partage et notification réels, consultation vidéo via grant éphémère et matériel/alertes physiques. Aucun déploiement, migration hébergée, création de compte, main ni modification des branches donneuses. Les autres fonctionnalités V1.1 restent reportées.
