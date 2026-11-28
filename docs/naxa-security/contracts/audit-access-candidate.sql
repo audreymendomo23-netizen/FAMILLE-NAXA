@@ -2,7 +2,7 @@
 begin;
 create table public.sec_access_audit(
  id uuid primary key default gen_random_uuid(),organization_id uuid not null,site_id uuid not null,actor_id uuid not null references auth.users(id),
- operation text not null check(operation in ('evidence_download','site_members_read','integration_list_read')),
+ operation text not null check(operation in ('evidence_download','site_members_read','integration_list_read','audit_export')),
  object_id uuid,created_at timestamptz not null default clock_timestamp(),
  foreign key(organization_id,site_id) references public.sec_sites(organization_id,id)
 );

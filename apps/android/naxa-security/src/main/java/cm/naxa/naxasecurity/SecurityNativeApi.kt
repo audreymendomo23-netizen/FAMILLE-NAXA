@@ -89,6 +89,12 @@ internal object SecurityNativeApi {
   val v=JSONObject(call("/rest/v1/rpc/sec_audit_page",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("source")==source)
   val a=v.getJSONArray("rows");check(a.length()<=100&&(0 until a.length()).all{j->val x=a.getJSONObject(j);x.optString("organization_id")==site.organization&&x.optString("site_id")==site.id&&(source=="all"||x.optString("source")==source)});v
  }
+ suspend fun auditExport(s:SecurityNativeSession,site:SecurityNativeSite,source:String,days:Int):JSONObject=withContext(Dispatchers.IO){
+  checkScope(s,site);require(source in setOf("all","field","service","erp","support","fire_ack","admin","access")&&days in setOf(1,7,30,90,365));val end=java.time.Instant.now()
+  val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_source",source).put("p_start",end.minusSeconds(days*86400L).toString()).put("p_end",end.toString())
+  val v=JSONObject(call("/rest/v1/rpc/sec_audit_export",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("source")==source&&v.optString("export_id").isNotBlank())
+  val a=v.getJSONArray("rows");check(a.length()==v.getInt("count")&&a.length()<=10000&&(0 until a.length()).all{j->val x=a.getJSONObject(j);x.optString("organization_id")==site.organization&&x.optString("site_id")==site.id&&(source=="all"||x.optString("source")==source)});v
+ }
  suspend fun report(s:SecurityNativeSession,site:SecurityNativeSite,days:Int,multi:Boolean=false):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);require(days in setOf(1,7,30,90,365));val now=java.time.Instant.now()
   val p=JSONObject().put("p_org",site.organization).put("p_start",now.minusSeconds(days*86400L).toString()).put("p_end",now.toString());if(!multi)p.put("p_site",site.id)

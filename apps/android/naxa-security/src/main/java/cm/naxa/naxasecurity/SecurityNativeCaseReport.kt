@@ -38,7 +38,7 @@ internal fun securityReportCsv(v:JSONObject):String {
   else{val a=SecurityNativeApi.records(s,site,if(cases)"sec_incidents" else "sec_support_cases");val b=SecurityNativeApi.records(s,site,if(cases)"sec_incident_notes" else "sec_support_messages");if(state.generation==generation){rows=a;notes=b}}
   if(state.generation==generation)status="Données autorisées chargées."
  }catch(e:CancellationException){throw e}catch(_:Exception){if(state.generation==generation){rows=emptyList();notes=emptyList();report=null;status="Lecture refusée ou indisponible."}}finally{if(state.generation==generation)busy=false}}}){Text("Actualiser les données")}
- report?.let{v->Text(securityReportCsv(v));Button(enabled=!busy,onClick={export.launch("security-site-report.csv")}){Text("Exporter CSV")}}
+ report?.let{v->Text("Rapport calculé : "+v.optString("generated_at")+" — états des appareils à la génération, pas une garantie de fonctionnement.");Text(securityReportCsv(v));Button(enabled=!busy,onClick={export.launch("security-site-report.csv")}){Text("Exporter CSV")}}
  rows.forEach{r->Text(r.optString(if(cases)"subject" else "category")+" · "+r.optString("state"));TextButton(enabled=!busy,onClick={selected=r.optString("id")}){Text("Ouvrir "+r.optString("id").take(8))}}
  if(current!=null){
   notes.filter{it.optString(if(cases)"incident_id" else "request_id")==selected}.forEach{Text(it.optString(if(cases)"note" else "body"))}
