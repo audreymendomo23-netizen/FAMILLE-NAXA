@@ -57,3 +57,6 @@ insert into sec_private.evidence_content values ('40000000-0000-0000-0000-000000
 -- Deliberately corrupted synthetic evidence; detection must not repair or conceal it.
 insert into public.sec_evidence_files(id,organization_id,site_id,owner_id,reference,digest,size_bytes) values ('40000000-0000-0000-0000-000000000403','10000000-0000-0000-0000-000000000141','20000000-0000-0000-0000-000000000141','00000000-0000-0000-0000-000000000141','QA-corrupted-proof','ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',3);
 insert into sec_private.evidence_content values ('40000000-0000-0000-0000-000000000403',decode('eHl6','base64'));
+
+-- Current shift for the independent synthetic QR attendance journey.
+insert into public.sec_shifts(id,organization_id,site_id,agent_id,created_by,label,starts_at,ends_at,state) values ('40000000-0000-0000-0000-000000000411','10000000-0000-0000-0000-000000000361','20000000-0000-0000-0000-000000000361','00000000-0000-0000-0000-000000000362','00000000-0000-0000-0000-000000000361','QA QR active shift',now()-interval '30 minutes',now()+interval '4 hours','accepted');
