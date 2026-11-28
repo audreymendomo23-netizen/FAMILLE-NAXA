@@ -66,16 +66,16 @@ internal object SecurityNativeApi {
   else listOf("Incidents chargés : "+rows.size,"Clôturés : "+rows.count{it.optString("state")=="closed"},"Ouverts : "+rows.count{it.optString("state")!="closed"})
  }
  suspend fun records(s:SecurityNativeSession,site:SecurityNativeSite,resource:String):List<JSONObject> = withContext(Dispatchers.IO){
-  checkScope(s,site);require(resource in setOf("sec_incidents","sec_incident_notes","sec_support_cases","sec_support_messages","sec_attendance_drafts","sec_patrols","sec_patrol_checks","sec_work_orders","sec_passage_logs","sec_internal_safety","sec_field_events","sec_inbox","sec_service_register","sec_shifts","sec_maintenance_details","sec_visit_passes","sec_audit_timeline"))
-  val order=when(resource){"sec_incidents"->"&order=occurred_at.desc";"sec_incident_notes","sec_support_cases","sec_support_messages","sec_attendance_drafts","sec_patrols","sec_patrol_checks","sec_work_orders","sec_passage_logs","sec_internal_safety","sec_field_events","sec_inbox","sec_audit_timeline"->"&order=created_at.desc";else->""};val a=JSONArray(call(scoped(resource,site,order),s.token))
+  checkScope(s,site);require(resource in setOf("sec_incidents","sec_incident_notes","sec_support_cases","sec_support_messages","sec_attendance_drafts","sec_patrols","sec_patrol_checks","sec_work_orders","sec_passage_logs","sec_internal_safety","sec_field_events","sec_inbox","sec_service_register","sec_shifts","sec_maintenance_details","sec_visit_passes","sec_audit_timeline","sec_activity_notifications"))
+  val order=when(resource){"sec_incidents"->"&order=occurred_at.desc";"sec_incident_notes","sec_support_cases","sec_support_messages","sec_attendance_drafts","sec_patrols","sec_patrol_checks","sec_work_orders","sec_passage_logs","sec_internal_safety","sec_field_events","sec_inbox","sec_audit_timeline","sec_activity_notifications"->"&order=created_at.desc";else->""};val a=JSONArray(call(scoped(resource,site,order),s.token))
   (0 until a.length()).map{a.getJSONObject(it)}.filter{it.optString("organization_id")==site.organization&&it.optString("site_id")==site.id}
  }
  suspend fun action(s:SecurityNativeSession,site:SecurityNativeSite,rpc:String,body:JSONObject):JSONObject=withContext(Dispatchers.IO){
-  checkScope(s,site);require(rpc in setOf("sec_case_action","sec_support_action","sec_field_action","sec_read_inbox","sec_erp_action"))
+  checkScope(s,site);require(rpc in setOf("sec_case_action","sec_support_action","sec_field_action","sec_read_inbox","sec_erp_action","sec_read_activity"))
   val p=JSONObject(body.toString()).put("p_org",site.organization).put("p_site",site.id)
   val v=JSONObject(call("/rest/v1/rpc/"+rpc,s.token,p))
   check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id)
-  if(rpc=="sec_read_inbox"){check(v.optString("id")==p.optString("p_id")&&v.optString("user_id")==s.user&&!v.isNull("read_at"))}
+  if(rpc in setOf("sec_read_inbox","sec_read_activity")){check(v.optString("id")==p.optString("p_id")&&v.optString("user_id")==s.user&&!v.isNull("read_at"))}
   else {check(v.optString("event_id")==p.optString("p_event")&&v.optString("actor_id")==s.user)
    if(rpc=="sec_field_action"){check(v.optString("operation")==p.optString("p_operation")&&(p.isNull("p_target")||v.optString("target_id")==p.optString("p_target")))}
    else if(rpc=="sec_erp_action"){check(v.optString("operation")==p.optString("p_op")&&(p.isNull("p_target")||v.optString("target_id")==p.optString("p_target")))}
