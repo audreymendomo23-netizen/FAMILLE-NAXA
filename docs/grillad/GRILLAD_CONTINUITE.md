@@ -844,3 +844,6 @@ Statut : décision et audit consignés ; implémentation, migrations, déploieme
 
 ### 91.1. Socle serveur candidat
 Inscription e-mail Supabase, preuve de vérification obligatoire avant provisionnement, essai 72 heures via plan Premium existant et registre isolé sans paiement. Login e-mail ou téléphone, récupération e-mail. SQL ajouté à la pile locale réelle ; tests gateway ajoutés. Pas d'application de migration ni de déploiement hébergé, configuration confirmation/SMTP à qualifier. Interfaces et E2E complets à raccorder, pas de statut vert anticipé.
+
+### 91.2. Raccordement Web/Android
+Ajout des interfaces inscription, vérification e-mail, récupération e-mail, confirmation mot de passe, consentement et accès au workspace après activation. Connexion existante compatible e-mail et téléphone, invitation salariés conservée. Traductions EN et ff-CM candidates. Le mot de passe est choisi avant confirmation (contrat Auth), identifiant e-mail, nom complet. Résumé CGU/PC candidat seulement ; validation juridique et configuration SMTP/templates nécessaires. Compteur UI persistant, reprise après confirmation déjà consommée, parité NAXA exhaustive et recette authentifiée hébergée restent non démontrés. Aucun déploiement ni migration hébergée. Ne pas livrer l'APK commercial avant qualification et disponibilité du backend.

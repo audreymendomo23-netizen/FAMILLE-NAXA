@@ -1,6 +1,22 @@
 package cm.naxa.grillad
 // Shared presentation keys; candidate ff-CM translations require native linguistic review.
 internal fun grilladLabel(key:String,locale:String):String=if(locale!="en"&&locale!="ff-CM")key else when(key){
+ "Créer mon compte" -> if(locale=="en")"Create my account" else "Sos konte am"
+ "Vérifier mon adresse e-mail" -> if(locale=="en")"Verify my email" else "Ƴeewto iimeel am"
+ "Créer un nouveau mot de passe" -> if(locale=="en")"Create a new password" else "Sos finnde hesere"
+ "Nom et prénom" -> if(locale=="en")"Full name" else "Innde e yettoode"
+ "Adresse e-mail" -> if(locale=="en")"Email address" else "Iimeel"
+ "Nom de l’entreprise" -> if(locale=="en")"Business name" else "Innde liggeere"
+ "Premier point de vente" -> if(locale=="en")"First outlet" else "Nokku jaaygol aranol"
+ "Code ou lien de vérification" -> if(locale=="en")"Verification code or link" else "Kod walla jokkol ƴeewtagol"
+ "Continuer" -> if(locale=="en")"Continue" else "Jokku"
+ "Démarrer mon essai gratuit" -> if(locale=="en")"Start my free trial" else "Fuɗɗo ƴeewtagol meere"
+ "Enregistrer le nouveau mot de passe" -> if(locale=="en")"Save new password" else "Danndu finnde hesere"
+ "Connexion par e-mail ou téléphone" -> if(locale=="en")"Sign in with email or phone" else "Naatnu iimeel walla telefoŋ"
+ "Récupérer par e-mail" -> if(locale=="en")"Recover by email" else "Heɓtu e iimeel"
+ "72 heures gratuites, sans paiement." -> if(locale=="en")"72 free hours, no payment." else "Waktu 72 meere, alaa yoɓugol."
+ "J’accepte les conditions d’utilisation et la politique de confidentialité" -> if(locale=="en")"I accept the terms and privacy policy" else "Mi jaɓii sarɗiiji e suturo"
+ "Copiez le code ou le lien de vérification reçu par e-mail, sans ouvrir le lien." -> if(locale=="en")"Copy the code or verification link from your email without opening the link." else "Natto kod walla jokkol iimeel."
  "Accueil" -> if(locale=="en")"Home" else "Jaɓɓorgo"
  "Vente" -> if(locale=="en")"Sale" else "Jaaygol"
  "Ventes" -> if(locale=="en")"Sales" else "Jaaygol"
