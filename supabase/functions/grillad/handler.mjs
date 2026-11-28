@@ -92,7 +92,22 @@ export async function handle(request,env,fetcher=fetch){
   if(body.action==='profile_get')return upstream(await post('/rest/v1/rpc/grillad_profile_get',scope,token));
   if(body.action==='profile_set'&&typeof body.name==='string'&&body.name.trim().length>=2&&body.name.length<=80&&Number.isSafeInteger(body.revision)&&body.revision>=0&&body.revision<=2147483647)return upstream(await post('/rest/v1/rpc/grillad_profile_set',{...scope,p_name:body.name,p_revision:body.revision},token));
   if(body.action==='prediction')return upstream(await post('/rest/v1/rpc/grillad_prediction',scope,token));
-  if(body.action==='security_list')return upstream(await post('/rest/v1/rpc/grillad_security_list',scope,token));
+  function videoConfig(){try{const broker=new URL(env.videoBrokerUrl||''),media=new URL(env.videoMediaOrigin||'');if(broker.protocol!=='https:'||media.protocol!=='https:'||broker.username||broker.password||broker.search||broker.hash||media.username||media.password||media.pathname!=='/'||media.search||media.hash||typeof env.videoBrokerSecret!=='string'||env.videoBrokerSecret.length<32)return null;return{broker:broker.href,origin:media.origin}}catch{return null}}
+  if(body.action==='security_list'){const x=await post('/rest/v1/rpc/grillad_security_list',scope,token);return x.ok?reply(200,{result:{...x.result,live_request_available:x.result?.available===true&&!!videoConfig()}}):upstream(x);}
+  if(body.action==='security_live_session'||body.action==='security_live_revoke'){
+   const config=videoConfig();if(!config)return reply(503,{error:'VIDEO_BROKER_NOT_CONFIGURED'});
+   const isRevoke=body.action==='security_live_revoke';
+   if(isRevoke?!uuid.test(body.session):!uuid.test(body.camera))return reply(400,{error:'VIDEO_INPUT'});
+   const identity=await fetcher(base+'/auth/v1/user',{method:'GET',headers:{apikey:env.key,Authorization:bearer},redirect:'error',signal:AbortSignal.timeout(10000)});const user=identity.ok?await identity.json():null;if(!uuid.test(user?.id))return reply(401,{error:'SESSION'});
+   if(!isRevoke){const allowed=await post('/rest/v1/rpc/grillad_security_list',scope,token);if(!allowed.ok||!allowed.result?.available||!Array.isArray(allowed.result.cameras)||!allowed.result.cameras.some(c=>c.id===body.camera))return reply(403,{error:'CAMERA_DENIED'});}
+   const r=await fetcher(config.broker,{method:'POST',headers:{'Content-Type':'application/json','X-Grillad-Video-Secret':env.videoBrokerSecret},body:JSON.stringify({action:isRevoke?'revoke':'issue',app:'grillad',user:user.id,org:body.org,site:body.site,...(isRevoke?{session:body.session}:{camera:body.camera})}),redirect:'error',signal:AbortSignal.timeout(15000)});
+   if(!r.ok)return reply(r.status===403?403:503,{error:'VIDEO_RELAY_REFUSED'});const ticket=await r.json().catch(()=>null);
+   if(isRevoke)return ticket?.revoked===true?reply(200,{result:true}):reply(503,{error:'VIDEO_REVOKE_UNCONFIRMED'});
+   if(!ticket||ticket.user!==user.id||ticket.org!==body.org||ticket.site!==body.site||ticket.camera!==body.camera||!uuid.test(ticket.session)||typeof ticket.authorization!=='string'||!/^Bearer [A-Za-z0-9_-]{43,160}$/.test(ticket.authorization))return reply(503,{error:'VIDEO_TICKET_INVALID'});
+   const expires=Date.parse(ticket.expiresAt),now=Date.now();let whep;try{whep=new URL(ticket.whepUrl)}catch{return reply(503,{error:'VIDEO_TICKET_INVALID'})}
+   if(!Number.isFinite(expires)||expires<=now+10000||expires>now+900000||whep.protocol!=='https:'||whep.origin!==config.origin||whep.username||whep.password||whep.search||whep.hash||!whep.pathname.endsWith('/whep'))return reply(503,{error:'VIDEO_TICKET_INVALID'});
+   return reply(200,{result:{ok:true,session:ticket.session,whepUrl:whep.href,authorization:ticket.authorization,expiresAt:ticket.expiresAt,refreshAfterSeconds:Math.max(1,Math.min(780,Math.floor((expires-now)/1000)-5))}});
+  }
   if(body.action==='pilotage_status')return upstream(await post('/rest/v1/rpc/grillad_pilotage_status',scope,token));
   if(body.action==='report'&&date.test(body.from)&&date.test(body.to)&&typeof body.network==='boolean'&&(body.family==null||['Porc','Poulet','Poisson','Brochettes','Omelettes'].includes(body.family))&&(body.actor==null||uuid.test(body.actor))&&(body.item==null||uuid.test(body.item)))return upstream(await post('/rest/v1/rpc/grillad_report',{...scope,p_from:body.from,p_to:body.to,p_network:body.network,p_family:body.family??null,p_actor:body.actor??null,p_item:body.item??null},token));
   if(body.action==='connect_list')return upstream(await post('/rest/v1/rpc/grillad_connect_list',scope,token));

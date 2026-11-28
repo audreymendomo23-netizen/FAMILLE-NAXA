@@ -55,3 +55,5 @@ Complément démarrage Android : 1 test unitaire nommé (validité cache), asser
 
 Complément réorientation métier : assertions SQL vente MTN/réconciliation/caisse, 1 test nommé de pagination caméra (total 193 unités : 188 tests nommés + 4 suites SQL + 1 drill ; lots 50/50/47/46).
 Complément modèle NAXA : 1 test API nommé d'extraction SMS volontaire sans confirmation et sans transmission du texte brut au RPC. Total 194 unités (189 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/47.
+
+Complément : 2 tests nommés de la passerelle vidéo (refus non configuré, ticket HTTPS et périmètre). Total 196 unités (191 tests nommés + 4 suites SQL + 1 drill), lots 50/50/47/49. Assertions SQL registre de références global enrichies.

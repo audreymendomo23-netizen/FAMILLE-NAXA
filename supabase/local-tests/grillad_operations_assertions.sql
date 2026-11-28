@@ -140,4 +140,11 @@ do $test$ declare q uuid:='c2000000-0000-0000-0000-000000000009';v jsonb;begin
  if v->>'status'<>'processed' then raise exception 'independent proofs not matched';end if;
 end $test$;
 reset role;
+insert into grillad_private.central_requests(id,org,site,actor,kind,details) values('c2000000-0000-0000-0000-000000000010',current_setting('grillad.test.org')::uuid,current_setting('grillad.test.site')::uuid,'c1000000-0000-0000-0000-000000000001','renewal','{"plan":"grillad_premium_month","amount":6000,"currency":"FCFA"}');
+set role authenticated;
+do $test$ declare q uuid:='c2000000-0000-0000-0000-000000000010';o uuid:=current_setting('grillad.test.org')::uuid;s uuid:=current_setting('grillad.test.site')::uuid;begin
+ perform public.grillad_payment_quote(o,s,q,'orange_money');
+ begin perform public.grillad_subscription_declare(o,s,q,'credit.fixture',6000,'699000011',now());raise exception 'cross intent reference reused';exception when unique_violation then null;end;
+end $test$;
+reset role;
 rollback;
