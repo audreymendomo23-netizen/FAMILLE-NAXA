@@ -1,6 +1,6 @@
 // Only public key and short-lived access token supplied by the dedicated SECURITY auth boundary.
 export const SECURITY_URL="https://idupfjbkwjcavyisxteo.supabase.co";
-export const resources=["sec_organizations","sec_sites","sec_devices","sec_incidents","sec_work_orders","sec_attendance_drafts","sec_module_requests","sec_preferences","sec_service_register","sec_inbox","sec_support_messages","sec_payment_receipts","sec_device_observations","sec_media_grants","sec_payment_reconciliation","sec_patrols","sec_patrol_checks","sec_passage_logs","sec_internal_safety","sec_field_events","sec_observation_alerts"] as const;
+export const resources=["sec_organizations","sec_sites","sec_devices","sec_incidents","sec_work_orders","sec_attendance_drafts","sec_module_requests","sec_preferences","sec_service_register","sec_inbox","sec_support_messages","sec_payment_receipts","sec_device_observations","sec_media_grants","sec_payment_reconciliation","sec_patrols","sec_patrol_checks","sec_passage_logs","sec_internal_safety","sec_field_events","sec_observation_alerts","sec_site_admin_log","sec_subscriptions","sec_evidence_files","sec_preference_snapshots","sec_service_action_log"] as const;
 export type Resource=typeof resources[number];
 export type SecuritySession={accessToken:string;publicKey:string;userId:string};
 export async function request(session:SecuritySession,resource:Resource,options:{method?:"GET"|"POST";body?:Record<string,unknown>;site?:string;organization?:string;record?:string;requestId?:string;order?:string}={},transport:typeof fetch=fetch){
@@ -28,7 +28,7 @@ export function browserAttendance(session:SecuritySession,organization_id:string
 }
 
 // Review RPCs are deliberately allowlisted. Authorization is enforced again on the server.
-export async function reviewRpc(session:SecuritySession,name:"sec_module_review_queue"|"sec_review_module_request"|"sec_read_inbox"|"sec_field_action",body:Record<string,unknown>){
- if(!["sec_module_review_queue","sec_review_module_request","sec_read_inbox","sec_field_action"].includes(name)||!session.userId||!session.accessToken||!session.publicKey||session.publicKey.startsWith("sb_secret_")||session.publicKey===session.accessToken)throw Error("INVALID_SESSION");
+export async function reviewRpc(session:SecuritySession,name:"sec_module_review_queue"|"sec_review_module_request"|"sec_read_inbox"|"sec_field_action"|"sec_site_members"|"sec_integration_list"|"sec_service_action"|"sec_evidence_download",body:Record<string,unknown>){
+ if(!["sec_module_review_queue","sec_review_module_request","sec_read_inbox","sec_field_action","sec_site_members","sec_integration_list","sec_service_action","sec_evidence_download"].includes(name)||!session.userId||!session.accessToken||!session.publicKey||session.publicKey.startsWith("sb_secret_")||session.publicKey===session.accessToken)throw Error("INVALID_SESSION");
  const r=await fetch(new URL("/rest/v1/rpc/"+name,SECURITY_URL),{method:"POST",headers:{apikey:session.publicKey,Authorization:"Bearer "+session.accessToken,"Content-Type":"application/json"},body:JSON.stringify(body),cache:"no-store",credentials:"omit",redirect:"error"});if(!r.ok)throw Error("SECURITY_HTTP_"+r.status);return await r.json();
 }
