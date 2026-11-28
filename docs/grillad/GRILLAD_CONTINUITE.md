@@ -654,3 +654,6 @@ Adaptation du cycle NAXA SupportAudioCall et du contrat de signalisation à la b
 
 ## 67. Durcissement support et QR — 28/11/2026
 Purge programmée de la signalisation des appels expirés/clos et arrêt lors de la révocation GRILLAD, capture d'écran Web déclenchée avant l'attente micro pour conserver le geste utilisateur. QR de parrainage local : qrcode 1.5.4 (version du NAXA historique) et ZXing 3.5.3 Android, code opaque uniquement, aucun fournisseur d'image externe. Nouvelles dépendances exactes ; lockfile workspace à régénérer/qualifier par CI. Pas de règle financière inventée. Aucun changement NAXA ni déploiement.
+
+## 68. Couverture de sauvegarde v2 — 28/11/2026
+Archive portable de 21 tables (14 métier + politique/pointage et régularisations, préférences/lecture notifications). Données photographiques explicitement supprimées avant export, même lors d'une sauvegarde automatique. Compatibilité de lecture v1/v2 Android/Web, worker Drive compatible. Restauration CI v2 étendue aux dépendances RH, garde cible vide, ordre des pointages, test de non-réintroduction des photos. Ne comprend pas encore la totalité de l'organisation, comptes, preuves financières, tickets privés, événements bruts, accords partenaires et secrets ; restauration live interdite. Aucune qualification nouvelle présumée.

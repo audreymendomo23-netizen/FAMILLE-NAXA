@@ -251,14 +251,19 @@ create function grillad_private.backup_data(p_org uuid,p_site uuid) returns json
 language plpgsql stable security definer set search_path=pg_catalog as $fn$
 declare v jsonb:='{}'::jsonb; t text; a jsonb; n bigint;
 begin
- foreach t in array array['items','cash','cash_recounts','preparations','stock_adjustments','sales','cash_receipts','expenses','purchases','targets','dimension_targets','service_policy','service_revisions','daily_summary'] loop
+ foreach t in array array['items','cash','cash_recounts','preparations','stock_adjustments','sales','cash_receipts','expenses','purchases','targets','dimension_targets','service_policy','service_revisions','daily_summary','attendance_policy','attendance','attendance_corrections','missing_departures','missing_arrivals','notice_preference','notice_read'] loop
   execute format('select count(*) from grillad_private.%I where org=$1 and site=$2',t) into n using p_org,p_site;
   if n>10000 then raise exception 'GRILLAD_BACKUP_TOO_LARGE' using errcode='22023';end if;
-  execute format('select coalesce(jsonb_agg(to_jsonb(x) order by to_jsonb(x)::text),''[]''::jsonb) from grillad_private.%I x where org=$1 and site=$2',t) into a using p_org,p_site;
+  if t='attendance' then
+   -- Preserve attendance metadata, not biometric photographs. No revival of expired photo evidence.
+   select coalesce(jsonb_agg((to_jsonb(x)-'photo')||jsonb_build_object('photo',null) order by ((to_jsonb(x)-'photo')||jsonb_build_object('photo',null))::text),'[]'::jsonb) into a from grillad_private.attendance x where org=p_org and site=p_site;
+  else
+   execute format('select coalesce(jsonb_agg(to_jsonb(x) order by to_jsonb(x)::text),''[]''::jsonb) from grillad_private.%I x where org=$1 and site=$2',t) into a using p_org,p_site;
+  end if;
   v:=v||jsonb_build_object(t,a);
   if octet_length(v::text)>3000000 then raise exception 'GRILLAD_BACKUP_TOO_LARGE' using errcode='22023';end if;
  end loop;
- return jsonb_build_object('format','grillad-business-export-v1','org',p_org,'site',p_site,'generated_at',now(),'coverage','selected_business_tables_only','tables',v);
+ return jsonb_build_object('format','grillad-business-export-v2','org',p_org,'site',p_site,'generated_at',now(),'coverage','business_and_attendance_without_photos','excluded',jsonb_build_array('authentication','credentials','photos','partner_credentials','support_private_messages','payment_proofs','cross_app_data','raw_events','unsynced_local_data'),'tables',v);
 end $fn$;
 
 create function public.grillad_backup_export(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $fn$
