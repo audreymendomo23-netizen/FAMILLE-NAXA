@@ -13,6 +13,8 @@ import org.json.JSONObject
  Button(enabled=!busy,onClick={load(false)}){Text("Charger les vacations")}
  shifts.forEach{r->FilterChip(selected=selected==r.optString("id"),enabled=!busy,onClick={selected=r.optString("id");report=null},label={Text(r.optString("label")+" · "+r.optString("starts_at"))})}
  Button(enabled=!busy&&selected.isNotBlank(),onClick={load(true)}){Text("Calculer le bilan")}
- report?.let{r->fun mins(k:String)=if(r.isNull(k))"Non calculé" else (r.optLong(k)/60).toString()+" min";Text(if(r.optBoolean("complete"))"Séquence examinée complète" else "Séquence incomplète ou à revoir");Text("Travail : "+mins("worked_seconds")+" · Pause : "+mins("pause_seconds"));Text("Retard : "+mins("late_seconds")+" · Départ anticipé : "+mins("early_departure_seconds"));Text("En attente : "+r.optString("pending")+" · Rejetés : "+r.optString("rejected")+" · Anomalies : "+r.optString("anomalies"))}
+ report?.let{r->
+  fun mins(k:String):String { return if(r.isNull(k)) "Non calculé" else (r.optLong(k)/60).toString()+" min" }
+  Text(if(r.optBoolean("complete"))"Séquence examinée complète" else "Séquence incomplète ou à revoir");Text("Travail : "+mins("worked_seconds")+" · Pause : "+mins("pause_seconds"));Text("Retard : "+mins("late_seconds")+" · Départ anticipé : "+mins("early_departure_seconds"));Text("En attente : "+r.optString("pending")+" · Rejetés : "+r.optString("rejected")+" · Anomalies : "+r.optString("anomalies"))}
  Text(status)
 }
