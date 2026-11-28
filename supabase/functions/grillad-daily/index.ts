@@ -8,8 +8,8 @@ Deno.serve(async req=>{
   const r=await fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(params),redirect:'error',signal:AbortSignal.timeout(30000)});
   if(!r.ok)throw Error('JOB_REFUSED');return await r.json();
  };
- const results=await Promise.allSettled([rpc('grillad_daily_tick',{p_limit:100}),rpc('grillad_purge_attendance_photos',{}),rpc('grillad_central_reconcile',{p_limit:100}),rpc('grillad_security_tick',{p_limit:100})]);
+ const results=await Promise.allSettled([rpc('grillad_daily_tick',{p_limit:100}),rpc('grillad_purge_attendance_photos',{}),rpc('grillad_central_reconcile',{p_limit:100}),rpc('grillad_security_tick',{p_limit:100}),rpc('grillad_support_call_purge',{})]);
  const securityOk=results[3].status==='fulfilled'&&Number(results[3].value?.failed??0)===0;
  const status=results.every(x=>x.status==='fulfilled')&&securityOk?200:503;
- return new Response(JSON.stringify({daily:results[0].status==='fulfilled',purge:results[1].status==='fulfilled',central:results[2].status==='fulfilled',security:securityOk}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+ return new Response(JSON.stringify({daily:results[0].status==='fulfilled',purge:results[1].status==='fulfilled',central:results[2].status==='fulfilled',security:securityOk,support_purge:results[4].status==='fulfilled'}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 });

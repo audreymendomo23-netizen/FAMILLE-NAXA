@@ -211,7 +211,10 @@ begin
  end if;
  insert into grillad_private.support_agent_access(agent,enabled) values(p_agent,p_enabled) on conflict(agent) do update set enabled=excluded.enabled;
  -- Release only GRILLAD assignments if access is revoked; conversation remains intact.
- if not p_enabled then delete from grillad_private.support_assignments where agent=p_agent;end if;
+ if not p_enabled then
+  update grillad_private.support_calls set status='ended',offer=null,answer=null,screen_stopped=true where agent=p_agent and status<>'ended';
+  delete from grillad_private.support_assignments where agent=p_agent;
+ end if;
  select id into a from famille_core.applications where code='grillad';
  insert into famille_core.audit_events(app_id,actor_id,action_code,entity_type,entity_id,metadata) values(a,auth.uid(),'grillad.agent_access','support_agent',p_agent::text,jsonb_build_object('enabled',p_enabled,'reason',why));
  return jsonb_build_object('agent',p_agent,'enabled',p_enabled);
@@ -427,5 +430,16 @@ create function public.grillad_agent_call(p_ticket uuid,p_action text,p_sdp text
 $call$;
 revoke all on function grillad_private.support_call(uuid,text,text,boolean,uuid,uuid,boolean),public.grillad_customer_call(uuid,uuid,uuid,text,text,boolean),public.grillad_agent_call(uuid,text,text) from public,anon,authenticated;
 grant execute on function public.grillad_customer_call(uuid,uuid,uuid,text,text,boolean),public.grillad_agent_call(uuid,text,text) to authenticated;
+
+
+create function public.grillad_support_call_purge() returns integer language plpgsql security definer set search_path=pg_catalog as $purge$
+declare n integer;
+begin
+ update grillad_private.support_calls set status='ended',offer=null,answer=null,screen_stopped=true where status<>'ended' and (expires_at<=now() or not exists(select 1 from famille_core.support_tickets t where t.id=grillad_private.support_calls.ticket and t.status not in ('resolved','closed') and t.deleted_at is null));
+ get diagnostics n=row_count;
+ return n;
+end $purge$;
+revoke all on function public.grillad_support_call_purge() from public,anon,authenticated;
+grant execute on function public.grillad_support_call_purge() to service_role;
 
 commit;

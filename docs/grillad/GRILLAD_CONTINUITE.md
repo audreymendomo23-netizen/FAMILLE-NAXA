@@ -651,3 +651,6 @@ Révision c047376b : Android natif connecté, Firebase et émulateur SUCCESS (46
 
 ## 66. Appel et partage écran — 28/11/2026
 Adaptation du cycle NAXA SupportAudioCall et du contrat de signalisation à la base Famille : demande par client propriétaire du ticket, acceptation par agent habilité et assigné, SDP cloisonné, expiration, arrêt et purge SDP à clôture ; API Web client et console agent, micro explicite, partage écran volontaire via navigateur, arrêt, aucun enregistrement/contrôle distant. Recette SQL synthétique positive et refus agent non assigné. Connexion WebRTC directe sans TURN configuré : pas de preuve média distante ni Android natif ; qualification réelle et relais ICE/TURN restent requis. Aucun service NAXA modifié. Aucun déploiement.
+
+## 67. Durcissement support et QR — 28/11/2026
+Purge programmée de la signalisation des appels expirés/clos et arrêt lors de la révocation GRILLAD, capture d'écran Web déclenchée avant l'attente micro pour conserver le geste utilisateur. QR de parrainage local : qrcode 1.5.4 (version du NAXA historique) et ZXing 3.5.3 Android, code opaque uniquement, aucun fournisseur d'image externe. Nouvelles dépendances exactes ; lockfile workspace à régénérer/qualifier par CI. Pas de règle financière inventée. Aucun changement NAXA ni déploiement.
