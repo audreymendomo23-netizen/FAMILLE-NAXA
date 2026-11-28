@@ -13,6 +13,10 @@ from pathlib import Path
 import re
 p=Path('supabase/config.toml')
 s=p.read_text()
+# Test-only provider configuration enables GoTrue phone password login.
+# No real provider account, no SMS is sent; local test numbers only.
+s=re.sub(r'(?ms)^\[auth\.sms\.twilio\]\s*\n.*?(?=^\[|\Z)', '',s)
+s += '\n[auth.sms.twilio]\nenabled = true\naccount_sid = "placeholder"\nmessage_service_sid = "placeholder"\nauth_token = "placeholder"\n'
 s=re.sub(r'(?ms)(^\[auth.sms\]\s*\n)(.*?)(?=^\[|\Z)', lambda m:m[1]+re.sub(r'(?m)^enable_signup\s*=.*$', 'enable_signup = true',m[2]),s)
 p.write_text(s)
 PY

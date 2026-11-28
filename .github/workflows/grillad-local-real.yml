@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: grillad-local-real
+  group: grillad-local-real-${{ github.sha }}
   cancel-in-progress: false
 jobs:
   local-real:

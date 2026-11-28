@@ -12,6 +12,13 @@ async function provision(){
   if(!r.ok)throw Error('Local Auth provisioning '+role+' HTTP '+r.status);const u=await r.json();
   if(!u.id||!u.phone_confirmed_at)throw Error('Local Auth user not confirmed');
   accounts[role]={phone,password,id:u.id};
+  // Verify actual password grant before browser setup; never print credentials or JWTs.
+  const login=await fetch(url+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({phone,password}),redirect:'error'});
+  if(!login.ok){const e=await login.json().catch(()=>({}));throw Error('Local phone password grant '+role+' HTTP '+login.status+' code='+String(e.error_code??e.code??'unknown').replace(/[^a-zA-Z0-9_-]/g,''));}
+  const session=await login.json();if(session.user?.id!==u.id||!session.access_token)throw Error('Local Auth identity mismatch');
+  const logout=await fetch(url+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:key,Authorization:'Bearer '+session.access_token},redirect:'error'});
+  if(!logout.ok)throw Error('Local Auth preflight logout failed');
+  console.log('PASS: actual local phone password grant '+role);
  }
  writeFileSync(file,JSON.stringify(accounts),{mode:0o600,flag:'wx'});
  console.log('PASS: two distinct local Auth users provisioned (no SMS)');
