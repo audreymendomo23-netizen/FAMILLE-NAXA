@@ -36,7 +36,7 @@ test("no fake authentication or billing",async({page})=>{
  await page.goto("/");await page.getByRole("button",{name:"Se connecter",exact:true}).click();
  await expect(page.getByRole("heading",{name:"Connexion",exact:true})).toBeVisible();
  await expect(page.getByRole("button",{name:"Se connecter",exact:true})).toBeDisabled();
- await page.getByRole("button",{name:"Options",exact:true}).click();await expect(page.getByRole("button",{name:"Abonnements ›",exact:true})).toHaveCount(0);
+ await expect(page.getByRole("button",{name:"Options",exact:true})).toHaveCount(0);await expect(page.locator("nav")).toHaveCount(0);await page.getByRole("button",{name:"Retour",exact:true}).click();await page.getByRole("button",{name:"Options",exact:true}).click();await expect(page.getByRole("button",{name:"Abonnements ›",exact:true})).toHaveCount(0);
 });
 
 test("public bilingual help and safe links to implemented features",async({page})=>{
