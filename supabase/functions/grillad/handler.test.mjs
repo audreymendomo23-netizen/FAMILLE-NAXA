@@ -34,3 +34,42 @@ test('voluntary debit with missing timestamp remains manual review and raw text 
 test('combined QR validates both hashes using service role without forwarding raw tokens',async()=>{const qr='a'.repeat(40),table='b'.repeat(64);const r=await handle(req({action:'connect_pair',qr,table}),env,async(u,i)=>{assert.match(u,/grillad_connect_pair_check$/);assert.equal(i.headers.Authorization,'Bearer server-only-fixture');const p=JSON.parse(i.body);assert.match(p.p_hash,/^[a-f0-9]{64}$/);assert.match(p.p_zipple_hash,/^[a-f0-9]{64}$/);assert.notEqual(p.p_hash,p.p_zipple_hash);assert.ok(!i.body.includes(qr));return json({approved:true,separate_orders:true,separate_tenders:true})});assert.equal(r.status,200)});
 
 test('NAXA admin payload without request refuses mismatched channel and requires current receipt time',async()=>{const token='x.'+btoa(JSON.stringify({session_id:id})).replace(/=/g,'')+'.x';const body={action:'subscription_credit_capture',deviceId:id,deviceToken:'a'.repeat(40),source:'sms_receiver',senderOriginAddress:'MobileMoney',smsText:'fixture credit message',canal:'orange_money',smsReceivedAt:new Date().toISOString()};let calls=0;const fetcher=async u=>{calls++;assert.match(u,/auth\/v1\/user$/);return json({id})};let r=await handle(req(body,token),env,fetcher);assert.equal(r.status,400);r=await handle(req({...body,canal:'mtn_momo',smsReceivedAt:'bad'},token),env,fetcher);assert.equal(r.status,400);assert.equal(calls,2)});
+
+function mtnCaptureFixture(){
+ const now=new Date();const local=new Date(now.getTime()+3600000).toISOString().slice(0,19).replace('T',' ');
+ const sms='Vous avez reçu 6000 XAF de CLIENT TEST (699000011) sur votre compte Mobile Money à '+local+'. Identifiant de transaction financière: TEST-REF-123456';
+ const token='x.'+btoa(JSON.stringify({session_id:id})).replace(/=/g,'')+'.x';
+ return {token,sms,body:{action:'subscription_credit_capture',deviceId:id,deviceToken:'a'.repeat(40),source:'sms_receiver',senderOriginAddress:'MobileMoney',smsText:sms,canal:'mtn_momo',smsReceivedAt:now.toISOString()}};
+}
+test('B5 Admin complete MTN capture matches unique pending request then revalidates and submits only digests',async()=>{
+ const {token,sms,body}=mtnCaptureFixture();const calls=[];
+ const r=await handle(req(body,token),env,async(u,i)=>{
+  calls.push(u);
+  if(u.endsWith('/auth/v1/user'))return json({id});
+  assert.equal(i.headers.Authorization,'Bearer server-only-fixture');
+  assert.ok(!i.body.includes(sms));assert.ok(!i.body.includes(body.deviceToken));
+  const p=JSON.parse(i.body);assert.match(p.p_hash,/^[a-f0-9]{64}$/);assert.equal(p.p_actor,id);assert.equal(p.p_session,id);
+  if(u.endsWith('grillad_capture_match')){assert.equal(p.p_reference,'test-ref-123456');assert.equal(p.p_amount,6000);assert.equal(p.p_payer,'699000011');return json(id);}
+  assert.equal(p.p_request,id);
+  if(u.endsWith('grillad_capture_context'))return json({channel:'mtn_momo',destination:'699000012',beneficiary:'GRILLAD TEST',amount:6000});
+  assert.match(u,/grillad_capture_submit$/);assert.match(p.p_evidence,/^[a-f0-9]{64}$/);assert.equal(p.p_reference,'test-ref-123456');assert.equal(p.p_destination,'699000012');return json({status:'processed'});
+ });
+ assert.equal(r.status,200);assert.equal((await r.json()).result.status,'processed');assert.equal(calls.length,4);
+});
+test('B5 Admin complete MTN capture without unique match remains manual and never submits',async()=>{
+ const {token,body}=mtnCaptureFixture();let n=0;
+ const r=await handle(req(body,token),env,async(u)=>{n++;if(u.endsWith('/auth/v1/user'))return json({id});assert.match(u,/grillad_capture_match$/);return json(null)});
+ assert.equal(r.status,202);assert.equal((await r.json()).result.status,'manual_review');assert.equal(n,2);
+});
+test('B6 camera outside caller inventory cannot reach video broker',async()=>{
+ const cfg={...env,videoBrokerUrl:'https://broker.example.test/grillad',videoMediaOrigin:'https://media.example.test',videoBrokerSecret:'x'.repeat(32)};let n=0;
+ const r=await handle(req({action:'security_live_session',org:id,site:id,camera:id},'caller'),cfg,async(u,i)=>{n++;if(u.endsWith('/auth/v1/user'))return json({id});assert.match(u,/grillad_security_list$/);assert.equal(i.headers.Authorization,'Bearer caller');return json({available:true,cameras:[]})});
+ assert.equal(r.status,403);assert.equal(n,2);
+});
+test('B6 video revocation requires broker acknowledgement and forwards exact user and scope',async()=>{
+ const cfg={...env,videoBrokerUrl:'https://broker.example.test/grillad',videoMediaOrigin:'https://media.example.test',videoBrokerSecret:'x'.repeat(32)};
+ for(const revoked of [false,true]){let n=0;const r=await handle(req({action:'security_live_revoke',org:id,site:id,session:id},'caller'),cfg,async(u,i)=>{n++;if(u.endsWith('/auth/v1/user'))return json({id});assert.equal(u,cfg.videoBrokerUrl);assert.deepEqual(JSON.parse(i.body),{action:'revoke',app:'grillad',user:id,org:id,site:id,session:id});return json({revoked})});assert.equal(r.status,revoked?200:503);assert.equal(n,2);}
+});
+test('B6 combined QR revoked pair fails closed and never issues catalog or order',async()=>{
+ let n=0;const r=await handle(req({action:'connect_pair',qr:'a'.repeat(40),table:'b'.repeat(64)}),env,async(u)=>{n++;assert.match(u,/grillad_connect_pair_check$/);return json({code:'42501'},400)});assert.equal(r.status,403);assert.equal(n,1);
+});
