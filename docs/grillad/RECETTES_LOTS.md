@@ -79,3 +79,6 @@ Campagne locale 46091449597 : 15/15 SUCCESS. Un scénario supplémentaire enregi
 
 ## Section 35 — Réemploi du runner NAXA
 Trois tests d'adaptateur ajoutés (ciblage Replay/opt-in, deux identités et clôture des sessions, refus du téléphone de profil non confirmé). Registre : 220 unités locales et 1 scénario Replay bloqué = 221 enregistrées. Campagne 46092177818 : 4/15 SUCCESS ; 0 échec(s) ; 11 en attente/en cours. Pas de preuve Auth réelle ; voir §35.
+
+## Section 36 — Vérification effective des prérequis Replay
+Campagne locale 46092177818 : 15/15 SUCCESS. Audit NAXA 46092597233 : comptes Promoteur/Caisse existants, téléphones Auth non confirmés, Edge GRILLAD 404, RPC non visibles ; scénario réel BLOCKED avant navigateur. Aucun changement de données et arbre NAXA temporaire restauré à l'identique. 220 unités locales + 1 scénario Replay bloqué, décompte 221 inchangé.
