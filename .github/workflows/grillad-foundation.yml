@@ -84,6 +84,11 @@ jobs:
       - uses: android-actions/setup-android@v4
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Android build and tests (retry transient plugin resolution only)
+        env:
+          GRILLAD_FIREBASE_PROJECT: ${{ vars.GRILLAD_FIREBASE_PROJECT || secrets.GRILLAD_FIREBASE_PROJECT }}
+          GRILLAD_FIREBASE_SENDER: ${{ vars.GRILLAD_FIREBASE_SENDER || secrets.GRILLAD_FIREBASE_SENDER }}
+          GRILLAD_FIREBASE_APP_ID: ${{ vars.GRILLAD_FIREBASE_APP_ID || secrets.GRILLAD_FIREBASE_APP_ID }}
+          GRILLAD_FIREBASE_API_KEY: ${{ vars.GRILLAD_FIREBASE_API_KEY || secrets.GRILLAD_FIREBASE_API_KEY }}
         shell: bash
         run: |
           set -o pipefail

@@ -1,0 +1,59 @@
+name: GRILLAD — Firebase Android configured build
+on:
+  push:
+    branches: [work/grillad-foundation-20261127]
+    paths:
+      - '.github/workflows/grillad-firebase.yml'
+      - 'apps/android/grillad/**'
+      - 'scripts/grillad/firebase-android-config.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  configured-android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate the four Firebase client variables (no values in logs)
+        env:
+          GRILLAD_FIREBASE_PROJECT: ${{ vars.GRILLAD_FIREBASE_PROJECT || secrets.GRILLAD_FIREBASE_PROJECT }}
+          GRILLAD_FIREBASE_SENDER: ${{ vars.GRILLAD_FIREBASE_SENDER || secrets.GRILLAD_FIREBASE_SENDER }}
+          GRILLAD_FIREBASE_APP_ID: ${{ vars.GRILLAD_FIREBASE_APP_ID || secrets.GRILLAD_FIREBASE_APP_ID }}
+          GRILLAD_FIREBASE_API_KEY: ${{ vars.GRILLAD_FIREBASE_API_KEY || secrets.GRILLAD_FIREBASE_API_KEY }}
+        run: |
+          node --input-type=module <<'JS'
+          import {extractFirebaseAndroidConfig} from './scripts/grillad/firebase-android-config.mjs';
+          const names=['PROJECT','SENDER','APP_ID','API_KEY'].map(s=>'GRILLAD_FIREBASE_'+s);
+          const missing=names.filter(n=>!process.env[n]);
+          if(missing.length){console.error('Missing GitHub Actions variables: '+missing.join(', '));process.exit(1);}
+          const [project,sender,app,key]=names.map(n=>process.env[n]);
+          const x=extractFirebaseAndroidConfig({project_info:{project_id:project,project_number:sender},client:[{client_info:{mobilesdk_app_id:app,android_client_info:{package_name:'cm.naxa.grillad'}},api_key:[{current_key:key}]}]});
+          if(x.projectId!=='grillad'||x.senderId!=='135636086659'||x.appId!=='1:135636086659:android:62c3e0bdcfdc51148f90b6')throw Error('GRILLAD_FIREBASE_PROJECT_MISMATCH');
+          console.log('PASS: dedicated GRILLAD Android Firebase client configuration validated');
+          JS
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - uses: android-actions/setup-android@v4
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compile configured Android client and run unit tests
+        env:
+          GRILLAD_FIREBASE_PROJECT: ${{ vars.GRILLAD_FIREBASE_PROJECT || secrets.GRILLAD_FIREBASE_PROJECT }}
+          GRILLAD_FIREBASE_SENDER: ${{ vars.GRILLAD_FIREBASE_SENDER || secrets.GRILLAD_FIREBASE_SENDER }}
+          GRILLAD_FIREBASE_APP_ID: ${{ vars.GRILLAD_FIREBASE_APP_ID || secrets.GRILLAD_FIREBASE_APP_ID }}
+          GRILLAD_FIREBASE_API_KEY: ${{ vars.GRILLAD_FIREBASE_API_KEY || secrets.GRILLAD_FIREBASE_API_KEY }}
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :grillad:testDebugUnitTest :grillad:assembleDebug
+          test -s apps/android/grillad/build/outputs/apk/debug/grillad-debug.apk
+          echo 'PASS: configured debug APK built; device token and delivery not tested'
