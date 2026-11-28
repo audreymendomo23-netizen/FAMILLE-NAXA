@@ -43,30 +43,44 @@ begin
  v:=jsonb_build_object('org',o,'site',s,'subscription',sub,'request',p_event,'status','billing_only');
  insert into grillad_private.central_operations values(p_event,'owner',p_operator,data,v,now());return v;
 end $fn$;
--- Central operator must have independently verified the collaborator's existing Auth phone and acceptance.
+-- An invitation is issued by the central operator; only the invitee can accept it.
 create function grillad_private.central_employee(p_request uuid,p_operator uuid,p_user uuid,p_acceptance_hash text) returns jsonb
 language plpgsql security definer set search_path=pg_catalog as $fn$
-declare q grillad_private.central_requests%rowtype;a uuid;m uuid;i uuid;role_name text;data jsonb;old grillad_private.central_operations%rowtype;v jsonb;
+declare q grillad_private.central_requests%rowtype;i famille_private.account_invites%rowtype;
 begin
  if p_request is null or not exists(select 1 from auth.users where id=p_operator) or p_acceptance_hash is null or p_acceptance_hash!~'^[0-9a-f]{64}$' then raise exception 'GRILLAD_EMPLOYEE_PROOF' using errcode='22023';end if;
- data:=jsonb_build_object('user',p_user,'acceptance_hash',p_acceptance_hash);
  select * into q from grillad_private.central_requests where id=p_request and kind='employee' for update;
- if not found then raise exception 'GRILLAD_REQUEST' using errcode='22023';end if;
- select * into old from grillad_private.central_operations where id=p_request;
- if found then if old.kind<>'employee' or old.operator_id<>p_operator or old.payload<>data then raise exception 'GRILLAD_CENTRAL_REPLAY' using errcode='22023';end if;return old.result;end if;
- role_name:=q.details->>'role';
- if q.status<>'pending' or role_name not in ('seller','manager') or p_user=q.actor or not exists(select 1 from auth.users u where id=p_user and ltrim(to_jsonb(u)->>'phone','+')=ltrim(q.details->>'phone','+') and to_jsonb(u)->>'phone_confirmed_at' is not null) then raise exception 'GRILLAD_IDENTITY_UNVERIFIED' using errcode='42501';end if;
+ if not found or p_user=q.actor or not exists(select 1 from auth.users u where id=p_user and ltrim(to_jsonb(u)->>'phone','+')=ltrim(q.details->>'phone','+') and to_jsonb(u)->>'phone_confirmed_at' is not null) then raise exception 'GRILLAD_IDENTITY_UNVERIFIED' using errcode='42501';end if;
+ select * into i from famille_private.account_invites where request_id=q.id;
+ if found then if i.user_id<>p_user or i.created_by<>p_operator or i.token_hash<>decode(p_acceptance_hash,'hex') then raise exception 'GRILLAD_INVITE_CONFLICT' using errcode='22023';end if;return jsonb_build_object('request',q.id,'invite',i.id,'status',i.status);end if;
+ if q.status<>'pending' or q.details->>'role' not in ('seller','manager') or not exists(select 1 from grillad_private.enabled_sites where org=q.org and site=q.site and enabled) then raise exception 'GRILLAD_SCOPE' using errcode='42501';end if;
+ insert into famille_private.account_invites(request_id,user_id,token_hash,app_code,account_kind,organization_id,location_id,role_code,created_by,expires_at)
+ values(q.id,p_user,decode(p_acceptance_hash,'hex'),'grillad','employee',q.org,q.site,q.details->>'role',p_operator,now()+interval '1 day') returning * into i;
+ return jsonb_build_object('request',q.id,'invite',i.id,'status','pending');
+end $fn$;
+create function grillad_private.employee_accept(p_request uuid,p_token text) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare q grillad_private.central_requests%rowtype;i famille_private.account_invites%rowtype;a uuid;m uuid;u uuid:=auth.uid();sid uuid;v jsonb;
+begin
+ if u is null or coalesce(auth.jwt()->>'is_anonymous','false')='true' or p_token is null or p_token!~'^[A-Za-z0-9_-]{32,128}$' then raise exception 'GRILLAD_INVITE_DENIED' using errcode='42501';end if;
+ begin sid:=(auth.jwt()->>'session_id')::uuid;exception when invalid_text_representation then raise exception 'GRILLAD_INVITE_DENIED' using errcode='42501';end;
+ if not exists(select 1 from auth.sessions where id=sid and user_id=u and (tag is null or tag='famille:grillad')) then raise exception 'GRILLAD_INVITE_DENIED' using errcode='42501';end if;
+ select * into q from grillad_private.central_requests where id=p_request and kind='employee' for update;
+ select * into i from famille_private.account_invites where request_id=p_request and app_code='grillad' and user_id=u and token_hash=sha256(convert_to(p_token,'UTF8')) for update;
+ if not found or q.id is null or i.expires_at<=now() or i.organization_id<>q.org or i.location_id<>q.site or i.role_code<>q.details->>'role' or not exists(select 1 from auth.users x where x.id=u and ltrim(to_jsonb(x)->>'phone','+')=ltrim(q.details->>'phone','+') and to_jsonb(x)->>'phone_confirmed_at' is not null) then raise exception 'GRILLAD_INVITE_DENIED' using errcode='42501';end if;
+ v:=jsonb_build_object('request',q.id,'status','processed');
+ if i.status='accepted' and q.status='processed' and q.resolution=i.id::text then return v;end if;
+ if i.status<>'pending' or q.status<>'pending' then raise exception 'GRILLAD_INVITE_DENIED' using errcode='42501';end if;
  select id into a from famille_core.applications where code='grillad' and status='active';
  if a is null or not exists(select 1 from grillad_private.enabled_sites where org=q.org and site=q.site and enabled) or not exists(select 1 from famille_core.organization_apps where organization_id=q.org and app_id=a and status='active') then raise exception 'GRILLAD_SCOPE' using errcode='42501';end if;
- if exists(select 1 from famille_core.memberships where user_id=p_user and organization_id=q.org and app_id=a) or exists(select 1 from famille_core.client_app_access where user_id=p_user and app_id=a and status<>'granted') then raise exception 'GRILLAD_EXISTING_ACCOUNT' using errcode='22023';end if;
- insert into famille_core.memberships(user_id,organization_id,app_id,status,invited_by,joined_at) values(p_user,q.org,a,'active',p_operator,now()) returning id into m;
- insert into famille_core.role_assignments(membership_id,app_id,organization_id,role_code,location_id,granted_by) values(m,a,q.org,role_name,q.site,p_operator);
- insert into famille_core.client_app_access(user_id,app_id,status,granted_by) values(p_user,a,'granted',p_operator) on conflict(user_id,app_id) do nothing;
- insert into famille_private.account_app_access(user_id,app_code,account_kind,organization_id,location_id,role_code,granted_by) values(p_user,'grillad','employee',q.org,q.site,role_name,p_operator);
- insert into famille_private.account_invites(request_id,user_id,token_hash,app_code,account_kind,organization_id,location_id,role_code,status,created_by,expires_at,accepted_at,accepted_by) values(q.id,p_user,decode(p_acceptance_hash,'hex'),'grillad','employee',q.org,q.site,role_name,'accepted',p_operator,now()+interval '1 day',now(),p_user) returning id into i;
- if not grillad_private.central_resolve(q.id,'processed',i::text) then raise exception 'GRILLAD_RESOLVE';end if;
- v:=jsonb_build_object('request',q.id,'user',p_user,'status','processed');
- insert into grillad_private.central_operations values(q.id,'employee',p_operator,data,v,now());return v;
+ if exists(select 1 from famille_core.memberships where user_id=u and organization_id=q.org and app_id=a) or exists(select 1 from famille_core.client_app_access where user_id=u and app_id=a and status<>'granted') then raise exception 'GRILLAD_EXISTING_ACCOUNT' using errcode='22023';end if;
+ insert into famille_core.memberships(user_id,organization_id,app_id,status,invited_by,joined_at) values(u,q.org,a,'active',i.created_by,now()) returning id into m;
+ insert into famille_core.role_assignments(membership_id,app_id,organization_id,role_code,location_id,granted_by) values(m,a,q.org,i.role_code,q.site,i.created_by);
+ insert into famille_core.client_app_access(user_id,app_id,status,granted_by) values(u,a,'granted',i.created_by) on conflict(user_id,app_id) do nothing;
+ insert into famille_private.account_app_access(user_id,app_code,account_kind,organization_id,location_id,role_code,granted_by) values(u,'grillad','employee',q.org,q.site,i.role_code,i.created_by);
+ update famille_private.account_invites set status='accepted',accepted_at=now(),accepted_by=u where id=i.id;
+ if not grillad_private.central_resolve(q.id,'processed',i.id::text) then raise exception 'GRILLAD_RESOLVE';end if;
+ return v;
 end $fn$;
 -- A payment intent does not debit any wallet. A verified external receipt is mandatory for activation.
 create function grillad_private.payment_prepare(p_request uuid,p_channel text) returns jsonb
@@ -188,4 +202,7 @@ grant execute on function grillad_private.partner_zipple(uuid,uuid,uuid,uuid,uui
 create function public.grillad_security_project(p_org uuid,p_site uuid,p_source_org uuid,p_source_site uuid) returns jsonb language sql security invoker set search_path=pg_catalog as $fn$select grillad_private.security_project(p_org,p_site,p_source_org,p_source_site)$fn$;
 revoke all on function grillad_private.security_project(uuid,uuid,uuid,uuid),public.grillad_security_project(uuid,uuid,uuid,uuid) from public,anon,authenticated;
 grant execute on function grillad_private.security_project(uuid,uuid,uuid,uuid),public.grillad_security_project(uuid,uuid,uuid,uuid) to service_role;
+create function public.grillad_employee_accept(p_request uuid,p_token text) returns jsonb language sql security invoker set search_path=pg_catalog as $fn$select grillad_private.employee_accept(p_request,p_token)$fn$;
+revoke all on function grillad_private.employee_accept(uuid,text),public.grillad_employee_accept(uuid,text) from public,anon,authenticated;
+grant execute on function grillad_private.employee_accept(uuid,text),public.grillad_employee_accept(uuid,text) to authenticated;
 commit;

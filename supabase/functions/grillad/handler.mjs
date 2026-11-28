@@ -68,6 +68,7 @@ export async function handle(request,env,fetcher=fetch){
   const token=bearer.slice(7);
   if(body.action==='logout'){const r=await fetcher(base+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:env.key,Authorization:bearer},redirect:'error',signal:AbortSignal.timeout(15000)});return r.ok?reply(200,{result:true}):reply(401,{error:'SESSION'});}
   // RPCs run under the caller token, never under service_role.
+  if(body.action==='employee_accept'&&uuid.test(body.request)&&typeof body.invite==='string'&&/^[A-Za-z0-9_-]{32,128}$/.test(body.invite))return upstream(await post('/rest/v1/rpc/grillad_employee_accept',{p_request:body.request,p_token:body.invite},token));
   if(body.action==='workspace')return upstream(await post('/rest/v1/rpc/grillad_workspace',{},token));
   if(!uuid.test(body.org)||!uuid.test(body.site))return reply(400,{error:'SCOPE'});
   const scope={p_org:body.org,p_site:body.site};

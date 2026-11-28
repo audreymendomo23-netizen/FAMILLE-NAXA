@@ -7,7 +7,7 @@ insert into auth.users(id,email,phone,phone_confirmed_at) values
  ('c1000000-0000-0000-0000-000000000001','grillad-owner@x.invalid','237699000011',now()),
  ('c1000000-0000-0000-0000-000000000002','grillad-operator@x.invalid','237699000012',now()),
  ('c1000000-0000-0000-0000-000000000003','grillad-seller@x.invalid','237699000013',now());
-insert into auth.sessions(id,user_id) values('c1000000-0000-0000-0000-000000000011','c1000000-0000-0000-0000-000000000001');
+insert into auth.sessions(id,user_id) values('c1000000-0000-0000-0000-000000000011','c1000000-0000-0000-0000-000000000001'),('c1000000-0000-0000-0000-000000000013','c1000000-0000-0000-0000-000000000003');
 set role service_role;
 do $test$ declare e uuid:='c2000000-0000-0000-0000-000000000001';u uuid:='c1000000-0000-0000-0000-000000000001';op uuid:='c1000000-0000-0000-0000-000000000002';v jsonb;begin
  v:=public.grillad_central_provision(e,op,u,'+237699000011','Test grillad','Point test','grillad_premium_month');
@@ -37,7 +37,19 @@ end $test$;
 reset role;
 set role service_role;
 do $test$ declare e uuid:='c2000000-0000-0000-0000-000000000002';op uuid:='c1000000-0000-0000-0000-000000000002';u uuid:='c1000000-0000-0000-0000-000000000003';v jsonb;begin
- v:=public.grillad_central_employee(e,op,u,repeat('b',64));if v->>'status'<>'processed' or public.grillad_central_employee(e,op,u,repeat('b',64))<>v then raise exception 'employee replay';end if;
+ v:=public.grillad_central_employee(e,op,u,encode(sha256(convert_to(repeat('b',40),'UTF8')),'hex'));if v->>'status'<>'pending' then raise exception 'employee invite';end if;
+end $test$;
+reset role;
+set role authenticated;
+do $test$ begin
+ begin perform public.grillad_employee_accept('c2000000-0000-0000-0000-000000000002',repeat('b',40));raise exception 'owner accepted employee invitation';exception when insufficient_privilege then null;end;
+end $test$;
+select set_config('request.jwt.claim.sub','c1000000-0000-0000-0000-000000000003',true);
+select set_config('request.jwt.claims','{"session_id":"c1000000-0000-0000-0000-000000000013"}',true);
+do $test$ declare e uuid:='c2000000-0000-0000-0000-000000000002';v jsonb;begin
+ begin perform public.grillad_employee_accept(e,repeat('z',40));raise exception 'wrong invitation accepted';exception when insufficient_privilege then null;end;
+ v:=public.grillad_employee_accept(e,repeat('b',40));
+ if v->>'status'<>'processed' or public.grillad_employee_accept(e,repeat('b',40))<>v then raise exception 'employee accept replay';end if;
 end $test$;
 reset role;
 rollback;
