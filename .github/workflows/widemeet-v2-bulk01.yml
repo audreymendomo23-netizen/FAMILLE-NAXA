@@ -1,0 +1,66 @@
+name: WideMeet V2 — Bulk 1 global qualification
+on:
+  push:
+    branches: [work/widemeet-v2-bulk01]
+    paths:
+      - 'apps/web/widemeet/**'
+      - 'apps/android/widemeet/**'
+      - 'packages/media-core/widemeet*'
+      - 'packages/widemeet-domain/**'
+      - 'scripts/widemeet/**'
+      - 'supabase/drafts/widemeet_*.sql'
+      - 'supabase/tests/drafts/widemeet_*.sql'
+      - 'supabase/functions/widemeet-*/**'
+      - '.github/workflows/widemeet-*.yml'
+      - '.github/workflows/family-audio-replay.yml'
+      - '.github/workflows/family-media-replay.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: widemeet-v2-bulk01-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  registry:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/widemeet/integration-registry.mjs "$RUNNER_TEMP/wm-integration-registry.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: widemeet-integrated-registry-${{ github.sha }}
+          path: ${{ runner.temp }}/wm-integration-registry.json
+          if-no-files-found: error
+  gate:
+    uses: ./.github/workflows/widemeet-gate.yml
+  replay:
+    uses: ./.github/workflows/widemeet-replay-isolated.yml
+  sfu:
+    uses: ./.github/workflows/family-media-replay.yml
+  audio:
+    uses: ./.github/workflows/family-audio-replay.yml
+  b4:
+    uses: ./.github/workflows/widemeet-b4-qualification.yml
+  b5-recovery:
+    uses: ./.github/workflows/widemeet-b5-recovery.yml
+  b5-media:
+    uses: ./.github/workflows/widemeet-b5-support-media.yml
+  b6:
+    uses: ./.github/workflows/widemeet-b6-security.yml
+  central:
+    uses: ./.github/workflows/widemeet-central-naxa.yml
+    with:
+      run_full_regression: false
+  summary:
+    if: always()
+    needs: [registry, gate, replay, sfu, audio, b4, b5-recovery, b5-media, b6, central]
+    runs-on: ubuntu-24.04
+    env:
+      RESULTS: ${{ toJSON(needs) }}
+    steps:
+      - name: Report isolated qualification outcomes on the same SHA
+        run: |
+          node -e 'const r=JSON.parse(process.env.RESULTS);const rows=Object.entries(r);console.log("SHA",process.env.GITHUB_SHA);for(const [k,v] of rows)console.log(k,v.result);console.log("Suite status does not prove all 269 scenarios.");process.exit(rows.every(([,v])=>v.result==="success")?0:1)'
