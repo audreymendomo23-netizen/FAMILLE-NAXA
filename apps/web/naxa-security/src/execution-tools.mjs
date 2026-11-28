@@ -3,7 +3,7 @@ export function trustedMediaGrant(row,scope,origin,now){
  if(!row||!scope||!origin||!Number.isFinite(now)||row.organization_id!==scope.organization||row.site_id!==scope.site||row.user_id!==scope.user||row.device_id!==scope.device||row.media!==scope.media||row.revoked_at!=null)throw Error("MEDIA_DENIED");
  const exp=Date.parse(row.expires_at);if(!Number.isFinite(exp)||exp<=now||exp-now>300000)throw Error("MEDIA_EXPIRED");
  const base=new URL(origin),url=new URL(row.playback_url);
- if(base.protocol!=="https:"||base.username||base.password||base.pathname!=="/"||base.search||base.hash||url.origin!==base.origin||url.username||url.password||url.hash||!url.pathname.startsWith("/security/media/"))throw Error("MEDIA_ORIGIN_DENIED");
+ if(base.protocol!=="https:"||base.username||base.password||base.pathname!=="/"||base.search||base.hash||url.origin!==base.origin||url.username||url.password||url.hash||url.search||!/^\/security\/media\/[A-Za-z0-9_-]{16,160}$/.test(url.pathname))throw Error("MEDIA_ORIGIN_DENIED");
  return {url:url.href,expiresAt:exp,media:row.media};
 }
 export function paymentMatch(request,receipts){

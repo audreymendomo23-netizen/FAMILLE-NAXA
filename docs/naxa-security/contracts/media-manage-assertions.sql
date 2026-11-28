@@ -1,0 +1,31 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000301'),('00000000-0000-0000-0000-000000000302');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000301','QA media administration');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000301','00000000-0000-0000-0000-000000000301','operator',true),('10000000-0000-0000-0000-000000000301','00000000-0000-0000-0000-000000000302','manager',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000301','10000000-0000-0000-0000-000000000301','QA');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000301','20000000-0000-0000-0000-000000000301','00000000-0000-0000-0000-000000000301',true),('10000000-0000-0000-0000-000000000301','20000000-0000-0000-0000-000000000301','00000000-0000-0000-0000-000000000302',true);
+insert into public.sec_devices(id,organization_id,site_id,label,kind) values ('40000000-0000-0000-0000-000000000301','10000000-0000-0000-0000-000000000301','20000000-0000-0000-0000-000000000301','QA camera','camera');
+insert into sec_private.media_origins values ('10000000-0000-0000-0000-000000000301','20000000-0000-0000-0000-000000000301','https://media.example.invalid');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000301',true);
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000301','20000000-0000-0000-0000-000000000301','00000000-0000-0000-0000-000000000301','30000000-0000-0000-0000-000000000301','media','{"reference":"40000000-0000-0000-0000-000000000301","purpose":"qa","consent":"yes","media":"video"}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000302',true);
+select public.sec_review_module_request('30000000-0000-0000-0000-000000000301','10000000-0000-0000-0000-000000000301','20000000-0000-0000-0000-000000000301','reviewed','QA');
+reset role;set local role sec_media_issuer;
+select sec_private.issue_media('10000000-0000-0000-0000-000000000301','20000000-0000-0000-0000-000000000301','30000000-0000-0000-0000-000000000301','50000000-0000-0000-0000-000000000301','/security/media/fixture_video_301',120);
+reset role;set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000301',true);
+do $q$declare o uuid:='10000000-0000-0000-0000-000000000301';s uuid:='20000000-0000-0000-0000-000000000301';g uuid:='50000000-0000-0000-0000-000000000301';v jsonb;begin
+ v:=public.sec_media_manage(o,s);if jsonb_array_length(v->'grants')<>1 or v::text like '%https://%' then raise exception 'metadata leak';end if;
+ if has_column_privilege(current_user,'public.sec_media_grants','playback_url','SELECT') then raise exception 'direct media path exposed';end if;
+ v:=public.sec_media_open(o,s,g);if v->>'playback_url'<>'https://media.example.invalid/security/media/fixture_video_301' then raise exception 'open denied';end if;
+ if not exists(select 1 from public.sec_access_audit where operation='media_open_authorized' and object_id=g) then raise exception 'no open trace';end if;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000302',true);
+do $q$declare o uuid:='10000000-0000-0000-0000-000000000301';s uuid:='20000000-0000-0000-0000-000000000301';g uuid:='50000000-0000-0000-0000-000000000301';v jsonb;begin
+ begin perform public.sec_media_open(o,s,g);raise exception 'manager opened other grant';exception when insufficient_privilege then null;end;
+ v:=public.sec_media_manage(o,s,g,true);if v->'grants'->0->>'revoked_at' is null then raise exception 'revoke failed';end if;
+end $q$;
+reset role;set local role sec_media_issuer;
+do $q$begin if sec_private.media_active('50000000-0000-0000-0000-000000000301','/security/media/fixture_video_301') then raise exception 'revocation ignored';end if;end $q$;
+reset role;rollback;
