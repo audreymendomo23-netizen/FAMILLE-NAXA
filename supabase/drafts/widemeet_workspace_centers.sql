@@ -420,6 +420,17 @@ create index wm_chat_media_post on public.wm_chat_media(post_id,published_at des
 alter table public.wm_chat_media enable row level security;
 revoke all on public.wm_chat_media from public,anon,authenticated;
 grant select,insert,update on public.wm_chat_media to service_role;
+-- Current enterprise audience, checked at every projection and binary read.
+create function public.wm_company_audience_allowed(w uuid,author uuid,team uuid,viewer uuid) returns boolean
+language sql stable security invoker set search_path=pg_catalog,public as $aud$
+ select exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled
+  where m.workspace_id=w and m.account_id=viewer and m.enabled and
+  (team is null or viewer=author or m.role='promoteur' or
+   (exists(select 1 from public.wm_memberships tm join public.wm_accounts ta on ta.id=tm.account_id and ta.enabled where tm.workspace_id=w and tm.account_id=team and tm.enabled and tm.role='manager')
+   and ((viewer=team and m.role='manager') or (m.role='staff' and exists(select 1 from public.wm_manager_assignments ma where ma.workspace_id=w and ma.staff_id=viewer and ma.manager_id=team))))))
+$aud$;
+revoke all on function public.wm_company_audience_allowed(uuid,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.wm_company_audience_allowed(uuid,uuid,uuid,uuid) to service_role;
 create function public.wm_chat_media_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare a record; gid uuid; peer uuid; rid uuid; pid uuid; post_author uuid; channel_name text; room_row public.wm_rooms%rowtype; participant jsonb; room_status text; mid uuid; m public.wm_chat_media%rowtype; joined timestamptz; v jsonb; k text; mime_type text; filename text; size_bytes integer; sha text;
@@ -431,7 +442,7 @@ begin
  if not found then return null;end if;
  if not exists(select 1 from public.wm_workspaces w where w.id=a.workspace_id and w.enabled and w.kind='enterprise') or peer=a.account_id then return null;end if;
  if pid is not null then
-  select p.author_id into post_author from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=p.author_id and ac.enabled where p.id=pid and p.workspace_id=a.workspace_id and p.removed_at is null;
+  select p.author_id into post_author from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=p.author_id and ac.enabled where p.id=pid and p.workspace_id=a.workspace_id and p.removed_at is null and public.wm_company_audience_allowed(p.workspace_id,p.author_id,p.team_id,a.account_id);
   if not found or (p_action in ('reserve','publish') and post_author<>a.account_id) then return null;end if;
  elsif rid is not null then
   -- Internal enterprise, standard confidentiality, current attendance rights only.
@@ -531,7 +542,7 @@ create table public.wm_company_posts(
  id uuid primary key, workspace_id uuid not null, author_id uuid not null,
  kind text not null check(kind in ('news','announcement')),
  body text not null check(length(btrim(body)) between 1 and 4000),
- created_at timestamptz not null default clock_timestamp(), removed_at timestamptz,
+ created_at timestamptz not null default clock_timestamp(), removed_at timestamptz, team_id uuid,
  foreign key(author_id,workspace_id) references public.wm_memberships(account_id,workspace_id)
 );
 alter table public.wm_chat_media add constraint wm_chat_media_company_post_fk foreign key(post_id) references public.wm_company_posts(id);
@@ -577,7 +588,7 @@ revoke all on public.wm_company_polls,public.wm_company_votes from public,anon,a
 grant select,insert,update,delete on public.wm_company_polls,public.wm_company_votes to service_role;
 create function public.wm_company_action(p_hash text,p_action text,p_data jsonb) returns jsonb
 language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; item public.wm_company_posts%rowtype; pid uuid; cid uuid; k text; content text; result jsonb; comment_row public.wm_company_comments%rowtype; only_favorites boolean; poll_options jsonb; choice_idx integer; existing_choice integer; poll_row public.wm_company_polls%rowtype;
+declare a record; item public.wm_company_posts%rowtype; pid uuid; cid uuid; k text; content text; result jsonb; comment_row public.wm_company_comments%rowtype; only_favorites boolean; poll_options jsonb; choice_idx integer; existing_choice integer; poll_row public.wm_company_polls%rowtype; target_team uuid; teams jsonb;
 begin
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
  select * into a from public.wm_lock_room_actor_for(p_hash,null);
@@ -587,32 +598,42 @@ begin
   k:=p_data->>'kind';if k not in ('news','announcement') then return null;end if;
   only_favorites:=coalesce((p_data->>'favorites')::boolean,false);
   select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc,x.id desc),'[]'::jsonb) into result from (
-   select p.id,p.kind,p.author_id,ac.display_name,mb.job_title,p.body,p.created_at,
+   select p.id,p.kind,p.author_id,ac.display_name,mb.job_title,p.body,p.created_at,p.team_id,
     (select jsonb_build_object('options',cp.options,'closed',cp.closed_at is not null,'my_vote',(select v.choice from public.wm_company_votes v where v.post_id=p.id and v.account_id=a.account_id),
      'counts',case when cp.closed_at is not null or exists(select 1 from public.wm_company_votes v where v.post_id=p.id and v.account_id=a.account_id) then
-       (select jsonb_agg((select count(*) from public.wm_company_votes v join public.wm_memberships mm on mm.account_id=v.account_id and mm.workspace_id=p.workspace_id and mm.enabled join public.wm_accounts aa on aa.id=mm.account_id and aa.enabled where v.post_id=p.id and v.choice=i) order by i) from generate_series(0,jsonb_array_length(cp.options)-1) i) else null end)
+       (select jsonb_agg((select count(*) from public.wm_company_votes v join public.wm_memberships mm on mm.account_id=v.account_id and mm.workspace_id=p.workspace_id and mm.enabled join public.wm_accounts aa on aa.id=mm.account_id and aa.enabled where v.post_id=p.id and v.choice=i and public.wm_company_audience_allowed(p.workspace_id,p.author_id,p.team_id,v.account_id)) order by i) from generate_series(0,jsonb_array_length(cp.options)-1) i) else null end)
      from public.wm_company_polls cp where cp.post_id=p.id) as poll,
     exists(select 1 from public.wm_company_favorites f where f.post_id=p.id and f.account_id=a.account_id) as favorite,
     (select r.reaction from public.wm_company_reactions r where r.post_id=p.id and r.account_id=a.account_id) as my_reaction,
-    (select count(*) from public.wm_company_reactions r join public.wm_memberships m on m.account_id=r.account_id and m.workspace_id=p.workspace_id and m.enabled join public.wm_accounts ca on ca.id=m.account_id and ca.enabled where r.post_id=p.id) as reaction_count,
-    (select count(*) from public.wm_company_comments c join public.wm_memberships m on m.account_id=c.author_id and m.workspace_id=p.workspace_id and m.enabled join public.wm_accounts ca on ca.id=m.account_id and ca.enabled where c.post_id=p.id and c.removed_at is null) as comment_count,
+    (select count(*) from public.wm_company_reactions r join public.wm_memberships m on m.account_id=r.account_id and m.workspace_id=p.workspace_id and m.enabled join public.wm_accounts ca on ca.id=m.account_id and ca.enabled where r.post_id=p.id and public.wm_company_audience_allowed(p.workspace_id,p.author_id,p.team_id,r.account_id)) as reaction_count,
+    (select count(*) from public.wm_company_comments c join public.wm_memberships m on m.account_id=c.author_id and m.workspace_id=p.workspace_id and m.enabled join public.wm_accounts ca on ca.id=m.account_id and ca.enabled where c.post_id=p.id and c.removed_at is null and public.wm_company_audience_allowed(p.workspace_id,p.author_id,p.team_id,c.author_id)) as comment_count,
     p.author_id=a.account_id or a.role='promoteur' as can_remove,
     (p.kind='announcement' and p.author_id<>a.account_id) as can_confirm,
     exists(select 1 from public.wm_company_reads cr where cr.post_id=p.id and cr.account_id=a.account_id) as confirmed,
     case when p.kind='announcement' and (p.author_id=a.account_id or a.role='promoteur') then
-      (select count(*) from public.wm_company_reads cr join public.wm_memberships cm on cm.account_id=cr.account_id and cm.workspace_id=p.workspace_id and cm.enabled join public.wm_accounts ca on ca.id=cm.account_id and ca.enabled where cr.post_id=p.id) else null end as confirmation_count
+      (select count(*) from public.wm_company_reads cr join public.wm_memberships cm on cm.account_id=cr.account_id and cm.workspace_id=p.workspace_id and cm.enabled join public.wm_accounts ca on ca.id=cm.account_id and ca.enabled where cr.post_id=p.id and public.wm_company_audience_allowed(p.workspace_id,p.author_id,p.team_id,cr.account_id)) else null end as confirmation_count
    from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled
    join public.wm_accounts ac on ac.id=p.author_id and ac.enabled
-   where p.workspace_id=a.workspace_id and p.kind=k and p.removed_at is null and (not only_favorites or exists(select 1 from public.wm_company_favorites f where f.post_id=p.id and f.account_id=a.account_id)) order by p.created_at desc,p.id desc limit 100
+   where p.workspace_id=a.workspace_id and p.kind=k and p.removed_at is null and public.wm_company_audience_allowed(p.workspace_id,p.author_id,p.team_id,a.account_id) and (not only_favorites or exists(select 1 from public.wm_company_favorites f where f.post_id=p.id and f.account_id=a.account_id)) order by p.created_at desc,p.id desc limit 100
   ) x;
-  return jsonb_build_object('items',result,'can_publish',k='news' or a.role in ('promoteur','manager'));
+  select coalesce(jsonb_agg(jsonb_build_object('id',m.account_id,'name',ac.display_name) order by ac.display_name,m.account_id),'[]'::jsonb) into teams
+  from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled
+  where m.workspace_id=a.workspace_id and m.enabled and m.role='manager'
+   and (a.role='promoteur' or m.account_id=a.account_id or (a.role='staff' and exists(select 1 from public.wm_manager_assignments ma where ma.workspace_id=a.workspace_id and ma.staff_id=a.account_id and ma.manager_id=m.account_id)));
+  return jsonb_build_object('items',result,'teams',teams,'can_publish',k='news' or a.role in ('promoteur','manager'));
  end if;
  if jsonb_typeof(p_data->'id') is distinct from 'string' or coalesce(p_data->>'id','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then return null;end if;
  pid:=(p_data->>'id')::uuid;
  if p_action='center-company-publish' then
-  if (p_data-'id'-'kind'-'body'-'poll_options')<>'{}'::jsonb or jsonb_typeof(p_data->'kind') is distinct from 'string' or jsonb_typeof(p_data->'body') is distinct from 'string' then return null;end if;
+  if (p_data-'id'-'kind'-'body'-'poll_options'-'team_id')<>'{}'::jsonb or jsonb_typeof(p_data->'kind') is distinct from 'string' or jsonb_typeof(p_data->'body') is distinct from 'string' then return null;end if;
   k:=p_data->>'kind';content:=btrim(p_data->>'body');
   if k not in ('news','announcement') or length(content) not between 1 and 4000 or (k='announcement' and a.role not in ('promoteur','manager')) then return null;end if;
+  if p_data ? 'team_id' then
+   if jsonb_typeof(p_data->'team_id') is distinct from 'string' or coalesce(p_data->>'team_id','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then return null;end if;
+   target_team:=(p_data->>'team_id')::uuid;
+   if not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.account_id=target_team and m.enabled and m.role='manager'
+   and (a.role='promoteur' or target_team=a.account_id or (a.role='staff' and exists(select 1 from public.wm_manager_assignments ma where ma.workspace_id=a.workspace_id and ma.staff_id=a.account_id and ma.manager_id=target_team)))) then return null;end if;
+  end if;
   if p_data ? 'poll_options' then
    if k<>'news' or jsonb_typeof(p_data->'poll_options') is distinct from 'array' then return null;end if;
    if jsonb_array_length(p_data->'poll_options') not between 2 and 6 then return null;end if;
@@ -623,13 +644,13 @@ begin
   if exists(select 1 from public.wm_company_posts where id=pid) then
    if (select options from public.wm_company_polls where post_id=pid) is distinct from poll_options then return null;end if;
   end if;
-  insert into public.wm_company_posts(id,workspace_id,author_id,kind,body) values(pid,a.workspace_id,a.account_id,k,content) on conflict(id) do nothing;
-  select * into item from public.wm_company_posts where id=pid and workspace_id=a.workspace_id and author_id=a.account_id and kind=k and body=content and removed_at is null;
+  insert into public.wm_company_posts(id,workspace_id,author_id,kind,body,team_id) values(pid,a.workspace_id,a.account_id,k,content,target_team) on conflict(id) do nothing;
+  select * into item from public.wm_company_posts where id=pid and workspace_id=a.workspace_id and author_id=a.account_id and kind=k and body=content and team_id is not distinct from target_team and removed_at is null;
   if not found then return null;end if;
   if poll_options is not null then insert into public.wm_company_polls(post_id,options) values(pid,poll_options) on conflict do nothing;end if;
   return jsonb_build_object('id',pid,'published',true);
  end if;
- select p.* into item from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=p.author_id and ac.enabled where p.id=pid and p.workspace_id=a.workspace_id;
+ select p.* into item from public.wm_company_posts p join public.wm_memberships mb on mb.account_id=p.author_id and mb.workspace_id=p.workspace_id and mb.enabled join public.wm_accounts ac on ac.id=p.author_id and ac.enabled where p.id=pid and p.workspace_id=a.workspace_id and public.wm_company_audience_allowed(p.workspace_id,p.author_id,p.team_id,a.account_id);
  if not found then return null;end if;
  if p_action in ('center-company-vote','center-company-poll-close') then
   if item.removed_at is not null or item.kind<>'news' then return null;end if;
@@ -671,7 +692,7 @@ begin
     select c.id,c.author_id,c.body,c.created_at,ac.display_name,mb.job_title,(c.author_id=a.account_id or a.role='promoteur') as can_remove
     from public.wm_company_comments c join public.wm_memberships mb on mb.account_id=c.author_id and mb.workspace_id=a.workspace_id and mb.enabled
     join public.wm_accounts ac on ac.id=c.author_id and ac.enabled
-    where c.post_id=pid and c.removed_at is null order by c.created_at desc,c.id desc limit 100
+    where c.post_id=pid and c.removed_at is null and public.wm_company_audience_allowed(item.workspace_id,item.author_id,item.team_id,c.author_id) order by c.created_at desc,c.id desc limit 100
    ) x;
    return jsonb_build_object('items',result);
   end if;
