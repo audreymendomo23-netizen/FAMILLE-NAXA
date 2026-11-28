@@ -2,11 +2,11 @@ import React,{useEffect,useRef,useState}from"react";
 import{Room,RoomEvent,Track}from"livekit-client";
 import{identityAction}from"./session.mjs";
 // Support only; no meeting identifiers, camera, system audio or data publishing.
-export function SupportMediaPanel({base,session,ticket,locale}){
+export function SupportMediaPanel({base,session,ticket,locale,requestAction}){
  const tr=(fr,en)=>locale==="en"?en:fr;
  const [call,C]=useState(null),[busy,B]=useState(false),[error,E]=useState(false),[connected,J]=useState(false),[mic,M]=useState(false),[screen,S]=useState(false);
  const room=useRef(null),callRef=useRef(null),live=useRef(false),locked=useRef(false),epoch=useRef(0),tiles=useRef(null),requestId=useRef(null);
- const req=(action,data={})=>identityAction(base,session,"support-"+action,{ticket_id:ticket.id,...data});
+ const req=(action,data={})=>requestAction?requestAction("support-"+action,{ticket_id:ticket.id,...data}):identityAction(base,session,"support-"+action,{ticket_id:ticket.id,...data});
  const setCall=v=>{callRef.current=v;if(live.current)C(v)};
  async function disconnect(){epoch.current++;const r=room.current;room.current=null;tiles.current?.replaceChildren();if(live.current){J(false);M(false);S(false)}if(r)await r.disconnect().catch(()=>{})}
  async function work(fn){if(locked.current)return;locked.current=true;B(true);E(false);try{await fn()}catch{await disconnect();if(live.current)E(true)}finally{locked.current=false;if(live.current)B(false)}}
