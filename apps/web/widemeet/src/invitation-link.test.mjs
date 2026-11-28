@@ -1,0 +1,4 @@
+import test from "node:test";import assert from "node:assert/strict";import{invitationFromHash,invitationFromInput}from"./invitation-link.mjs";
+const t="ab".repeat(32);
+test("external invitation exact raw token or URL fragment",()=>{assert.equal(invitationFromHash("#invite="+t),t);assert.equal(invitationFromInput(t),t);assert.equal(invitationFromInput(" https://example.test/#invite="+t+" "),t)});
+test("reject malformed, duplicate, truncated or ambiguous invitation credentials",()=>{for(const x of ["#invite="+t+"0","#invite="+t+"&invite="+t,"#invite="+t.slice(1),"#invite="+t.toUpperCase(),"#invite=%61"+t.slice(1),"#other="+t,null])assert.equal(invitationFromHash(x),null);for(const x of [t+"0","javascript:#invite="+t,"garbage#invite="+t,"https://example.test/?invite="+t])assert.equal(invitationFromInput(x),null)});

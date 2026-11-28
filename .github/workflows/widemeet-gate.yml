@@ -1,22 +1,31 @@
-name: WideMeet — N0/N1 isolated gate
+name: WideMeet — N0–N4 isolated gate
 on:
   push:
-    branches: [work/widemeet-n0-20261126]
+    branches: [work/widemeet-n0-20261126, work/widemeet-b1-20261127]
     paths:
       - 'apps/android/widemeet/**'
       - 'apps/web/widemeet/**'
       - 'packages/widemeet-domain/**'
+      - 'packages/media-core/**'
       - 'packages/billing-core/**'
       - 'settings.gradle.kts'
+      - 'scripts/widemeet/**'
       - 'supabase/drafts/widemeet_*.sql'
       - 'supabase/tests/drafts/widemeet_*.sql'
       - 'supabase/functions/widemeet-auth/**'
+      - 'supabase/functions/widemeet-room/**'
+      - 'supabase/functions/widemeet-push-scheduler/**'
       - '.github/workflows/widemeet-gate.yml'
+      - '.github/workflows/family-audio-replay.yml'
+  pull_request:
+    branches: [test/widemeet-qualification-20261126]
+    types: [opened, synchronize, reopened]
+    paths-ignore: ['docs/**']
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: widemeet-gate-${{ github.ref }}
+  group: widemeet-gate-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.event_name }}
   cancel-in-progress: false
 jobs:
   contracts:
@@ -26,7 +35,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test apps/web/widemeet/src/domain.test.mjs apps/web/widemeet/src/session.test.mjs packages/widemeet-domain/*.test.mjs
+      - name: Syntax check all replay entrypoints
+        run: for script in scripts/widemeet/*.mjs; do node --check "$script" || exit 1; done
+      - run: node --test apps/web/widemeet/src/*.test.mjs packages/widemeet-domain/*.test.mjs
   web:
     runs-on: ubuntu-24.04
     steps:
@@ -36,6 +47,18 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run build --workspace @famille/widemeet-web
+      - run: node scripts/widemeet/pdf-replay.mjs
+      - name: Validate actual Excel workbook with independent reader
+        run: |
+          node scripts/widemeet/xlsx-replay.mjs "$RUNNER_TEMP/wm-report.xlsx"
+          python -m pip install --quiet openpyxl==3.1.5
+          python -c 'import os,openpyxl; w=openpyxl.load_workbook(os.environ["RUNNER_TEMP"]+"/wm-report.xlsx"); assert len(w.sheetnames)==4; assert w["Synthèse"]["B2"].value=="=1+1 & réunion"; assert w["Synthèse"]["B2"].data_type=="s"; assert w["Présences"]["D2"].value==1000; print("WIDEMEET_XLSX_PASS")'
+      - run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
+          # Hosted Ubuntu runner already supplies Chromium libraries; verify by launching.
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch(); await b.close();'
+      - run: npx playwright test --config apps/web/widemeet/playwright.config.mjs
       - run: |
           test -s apps/web/widemeet/dist/index.html
           test -s apps/web/widemeet/dist/sw.js
@@ -48,15 +71,68 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: '8.7'
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - run: gradle --no-daemon --stacktrace :widemeet:testDebugUnitTest :widemeet:assembleDebug
+      - name: Native build and unit tests (bounded Maven resolution retry)
+        run: |
+          set -euo pipefail
+          tasks=(:widemeet:testDebugUnitTest :widemeet:assembleDebug :widemeet:assembleDebugAndroidTest)
+          if gradle --offline --no-daemon --max-workers=2 "${tasks[@]}" > "$RUNNER_TEMP/wm-gradle-offline.log" 2>&1; then
+            echo "WM_GRADLE_OFFLINE=true" >> "$GITHUB_ENV"
+            echo "WM_CI_CENTRAL_ALTERNATE=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          refresh=()
+          for attempt in 1 2 3 4; do
+            if [ "$attempt" -eq 2 ] || [ "$attempt" -eq 4 ]; then export WM_CI_CENTRAL_ALTERNATE=true; else export WM_CI_CENTRAL_ALTERNATE=false; fi
+            if gradle --no-daemon --max-workers=2 --stacktrace "${refresh[@]}" "${tasks[@]}" 2>&1 | tee "$RUNNER_TEMP/wm-gradle-build.log"; then
+              echo "WM_CI_CENTRAL_ALTERNATE=$WM_CI_CENTRAL_ALTERNATE" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then exit 1; fi
+            if grep -Eq 'Received status code (429|502|503) from server' "$RUNNER_TEMP/wm-gradle-build.log"; then
+              echo "Retrying transient Maven HTTP failure on alternate official endpoint"
+            elif grep -Fq "Could not resolve all files for configuration ':widemeet:debugRuntimeClasspath'" "$RUNNER_TEMP/wm-gradle-build.log" && grep -Eq 'Could not find (org\.jetbrains\.kotlin:kotlin-stdlib-jdk8:1\.8\.21|io\.github\.webrtc-sdk:android-prefixed:125\.6422\.06\.1|org\.jetbrains\.kotlinx:kotlinx-serialization-json:1\.5\.0|com\.google\.protobuf:protobuf-javalite:3\.22\.0|com\.google\.dagger:dagger:2\.46|com\.vdurmont:semver4j:3\.1\.0|com\.squareup\.okio:okio:3\.6\.0)\.' "$RUNNER_TEMP/wm-gradle-build.log" && grep -Eq 'https://(repo\.maven\.apache\.org|repo1\.maven\.org)/maven2/' "$RUNNER_TEMP/wm-gradle-build.log"; then
+              # Known published fixed versions: refresh cached misses before trying the other official endpoint.
+              refresh=(--refresh-dependencies)
+              echo "Refreshing known Maven Central dependency metadata after resolution miss"
+            else
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
       - run: test -s apps/android/widemeet/build/outputs/apk/debug/widemeet-debug.apk
+      - name: Enable KVM for family emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Native Compose and Keystore recipes
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 2048M
+          heap-size: 512M
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-linux-hw-accel: false
+          disable-animations: true
+          script: if [ "${WM_GRADLE_OFFLINE:-false}" = true ]; then gradle --offline --no-daemon --max-workers=2 :widemeet:connectedDebugAndroidTest; else gradle --no-daemon --max-workers=2 :widemeet:connectedDebugAndroidTest; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: widemeet-debug-apk
+          path: apps/android/widemeet/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
 
   identity-sql:
     runs-on: ubuntu-24.04
@@ -86,6 +162,28 @@ jobs:
           SQL
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_identity.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_rooms.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_billing.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_billing.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_external.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n3_recording.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_recording.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n3_recording_archive.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_minutes.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_minutes.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_tasks.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_tasks.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_series.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_presence.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_expiry.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_expiry.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_notifications.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_reports.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_support.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_workspace_centers.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_b2_communication.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_transcription.sql
   edge-typecheck:
     runs-on: ubuntu-24.04
     steps:
@@ -93,4 +191,4 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno check supabase/functions/widemeet-auth/index.ts
+      - run: deno check supabase/functions/widemeet-auth/index.ts supabase/functions/widemeet-room/index.ts supabase/functions/widemeet-push-scheduler/index.ts supabase/functions/widemeet-push-ci/index.ts
