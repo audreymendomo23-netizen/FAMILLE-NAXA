@@ -516,3 +516,6 @@ Bilan strict inchangé : 50,0% (35 jaunes, 0 module complet qualifié isolément
 
 ## Passe corrective et parité terrain Android
 Les logs du runner 46090060912 (d63c276) confirment PASS des cinq scénarios Chromium/PostgreSQL : Livecare, reporting, incidents, vacations/maintenance, code visiteur à usage unique. 46090060934 Android/Web PASS. Gate historique 46087969074 : erreurs Kotlin NAXA SERVICES et ZIPPLE (BuildConfig et dépendances), aucune erreur SECURITY identifiée ; ne pas modifier les autres projets. Ajout Compose natif pour revue de pointage, rondes, passages déclarés, signalement interne, vacations, affectation et revue maintenance ; RPC et reçus vérifiés par périmètre, trois tests unitaires de choix d'action. Les rôles restent contrôlés par le serveur. Pas d'émulateur connecté, ni de matériel. Qualification à constater.
+
+### Journal transversal
+Vue PostgreSQL security_invoker réunissant opérations terrain, services, ERP, support et accusés incendie, projection sans corps de message, détail, code ou empreinte ; RLS sources préservée. Web : lecture filtrée et export CSV des 100 derniers événements autorisés ; Android : consultation. Assertions droits personnels, intersite, refus anonyme et absence de payload. Pas encore journal de toutes les consultations/connexions ni conservation certifiée. Qualification en cours.

@@ -1,0 +1,23 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000211'),('00000000-0000-0000-0000-000000000212'),('00000000-0000-0000-0000-000000000213');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000211','QA audit');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000211','00000000-0000-0000-0000-000000000211','manager',true),('10000000-0000-0000-0000-000000000211','00000000-0000-0000-0000-000000000212','operator',true),('10000000-0000-0000-0000-000000000211','00000000-0000-0000-0000-000000000213','manager',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000211','10000000-0000-0000-0000-000000000211','QA'),('20000000-0000-0000-0000-000000000212','10000000-0000-0000-0000-000000000211','Other');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000211','20000000-0000-0000-0000-000000000211','00000000-0000-0000-0000-000000000211',true),('10000000-0000-0000-0000-000000000211','20000000-0000-0000-0000-000000000211','00000000-0000-0000-0000-000000000212',true),('10000000-0000-0000-0000-000000000211','20000000-0000-0000-0000-000000000212','00000000-0000-0000-0000-000000000213',true);
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000212',true);
+select public.sec_field_action('10000000-0000-0000-0000-000000000211','20000000-0000-0000-0000-000000000211','50000000-0000-0000-0000-000000000211','safety_report',null,'{"reason":"private synthetic note"}');
+select public.sec_service_action('10000000-0000-0000-0000-000000000211','20000000-0000-0000-0000-000000000211','50000000-0000-0000-0000-000000000212','snapshot_create',null,'{}');
+do $q$begin
+ if (select count(*) from public.sec_audit_timeline)<>2 then raise exception 'own audit missing';end if;
+ if exists(select 1 from public.sec_audit_timeline a where to_jsonb(a)::text like '%private synthetic note%') then raise exception 'payload leak';end if;
+ if has_table_privilege(current_user,'public.sec_audit_timeline','INSERT') then raise exception 'write access';end if;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000211',true);
+do $q$begin if (select count(*) from public.sec_audit_timeline)<>1 or exists(select 1 from public.sec_audit_timeline where source='service') then raise exception 'personal service audit leaked';end if;end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000213',true);
+do $q$begin if (select count(*) from public.sec_audit_timeline)<>0 then raise exception 'cross site leak';end if;end $q$;
+reset role;
+set local role anon;
+do $q$begin if has_table_privilege(current_user,'public.sec_audit_timeline','SELECT') then raise exception 'anonymous audit access';end if;end $q$;
+reset role;rollback;

@@ -66,8 +66,8 @@ internal object SecurityNativeApi {
   else listOf("Incidents chargés : "+rows.size,"Clôturés : "+rows.count{it.optString("state")=="closed"},"Ouverts : "+rows.count{it.optString("state")!="closed"})
  }
  suspend fun records(s:SecurityNativeSession,site:SecurityNativeSite,resource:String):List<JSONObject> = withContext(Dispatchers.IO){
-  checkScope(s,site);require(resource in setOf("sec_incidents","sec_incident_notes","sec_support_cases","sec_support_messages","sec_attendance_drafts","sec_patrols","sec_patrol_checks","sec_work_orders","sec_passage_logs","sec_internal_safety","sec_field_events","sec_inbox","sec_service_register","sec_shifts","sec_maintenance_details","sec_visit_passes"))
-  val order=when(resource){"sec_incidents"->"&order=occurred_at.desc";"sec_incident_notes","sec_support_cases","sec_support_messages","sec_attendance_drafts","sec_patrols","sec_patrol_checks","sec_work_orders","sec_passage_logs","sec_internal_safety","sec_field_events","sec_inbox"->"&order=created_at.desc";else->""};val a=JSONArray(call(scoped(resource,site,order),s.token))
+  checkScope(s,site);require(resource in setOf("sec_incidents","sec_incident_notes","sec_support_cases","sec_support_messages","sec_attendance_drafts","sec_patrols","sec_patrol_checks","sec_work_orders","sec_passage_logs","sec_internal_safety","sec_field_events","sec_inbox","sec_service_register","sec_shifts","sec_maintenance_details","sec_visit_passes","sec_audit_timeline"))
+  val order=when(resource){"sec_incidents"->"&order=occurred_at.desc";"sec_incident_notes","sec_support_cases","sec_support_messages","sec_attendance_drafts","sec_patrols","sec_patrol_checks","sec_work_orders","sec_passage_logs","sec_internal_safety","sec_field_events","sec_inbox","sec_audit_timeline"->"&order=created_at.desc";else->""};val a=JSONArray(call(scoped(resource,site,order),s.token))
   (0 until a.length()).map{a.getJSONObject(it)}.filter{it.optString("organization_id")==site.organization&&it.optString("site_id")==site.id}
  }
  suspend fun action(s:SecurityNativeSession,site:SecurityNativeSite,rpc:String,body:JSONObject):JSONObject=withContext(Dispatchers.IO){
