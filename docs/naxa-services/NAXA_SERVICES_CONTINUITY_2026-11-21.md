@@ -1,6 +1,6 @@
 # NAXA SERVICES — document de continuité dédié
 
-**Version :** 1.4  
+**Version :** 1.5  
 **Date de mise à jour :** 28 novembre 2026  
 **Dépôt :** `audreymendomo23-netizen/FAMILLE-NAXA`  
 **Branche de travail :** `work/naxa-services-completion-20261120`  
@@ -1919,3 +1919,33 @@ Statut : principe fonctionnel validé ; raccordement métier et recette E2E enco
 - B3-07 : trois moments journaliers capturés réellement (matin, intermédiaire, soir) par moteur privé filtré sur compte actif, droits, abonnement et site, sans JWT fabriqué ; lecture privée immuable et empreinte du périmètre exact pour refuser les archives après changement des délégations. Notification in-app uniquement après production du snapshot, trois clés distinctes/jour, opt-in existant ; aucun rattrapage fictif. Choix technique de fenêtres (avant 12h, 12–18h, dès 18h, notification matin à partir de 7h Douala), non exigence supplémentaire. Sélecteurs Web/Android, recette Chromium d'idempotence, refus d'instantané absent et contrôle des rubriques par rôle. Activation hébergée non réalisée.
 
 - Résultats 46111842758/job 140876880133 et 46111948165/job 140877210580 : SQL SUCCESS avec marqueurs du partage intra-ligne et extourne partielle. 46112142131/job 140877817871 : ces mêmes marqueurs PASS, puis échec de fixture pressing sur l'obligation de session de caisse pour les espèces. Fixture corrigée par caisse et session dédiées ; scénario ordre de travail ajouté. Aucune contrainte de production retirée. Les nouveaux résultats terminaux sont requis.
+
+
+## 23 — Décision du 28 novembre 2026 : gel du périmètre commercial V1.0
+
+Décision propriétaire : conserver exclusivement les fonctionnalités déjà qualifiées NAXA SERVICES ; différer les autres à une prochaine mise à jour. Stopper les reprises inter-applications et les extensions. Le CDC, les 43 réserves, les 24 domaines du registre et tous les tests historiques restent intacts. Ne pas convertir les 26 pistes de reprise et les 7 chantiers spécifiques en nouvelles exigences ni les comptabiliser comme verts.
+
+### 23.1 Candidat V1.0 : liste positive de parcours, non de modules entiers
+
+Références historiques vérifiables : Gate 46067857308 (13/13), Replay 46067857448 (39/39), Replay #102/#103 (46023000364/46023563982 : 39 cycles activité/mode, confidentialité rémunérations), Replay #38 (45896480146 : ERP authentifié, stock/achats, export XLSX, dossier métier et droits), §22.117–119 (R01–R24). Le HEAD observé avant cette décision est ca2847257675e1903a60ce37054a9e6d41f0132f ; ses résultats terminaux ne sont pas démontrés par ces preuves historiques.
+
+- Dossiers métier : 13 profils × 3 modes, création et transitions effectivement testées, Pressing inclus.
+- Clients, rendez-vous, catalogue, caisse, stock et fournisseurs : uniquement les opérations canoniques couvertes par le Replay isolé et les tests de droits ; ne pas annoncer toutes les options du module.
+- Rapports : consultation cloisonnée, exports XLSX Web déjà testés, pas de certification comptable ni d'impression physique.
+- Planning RH : opérations prouvées B1-02, seulement sur plateforme et périmètre testés ; pointage probant physique non inclus.
+- Authentification, PIN, isolation, sécurité appareil, synchronisation et restauration : preuves historiques en laboratoire conservées ; qualification de la cible commerciale, des rôles effectivement exposés et de la restauration cible reste impérative.
+- B2-02 et B3-01 ne prouvent ni appel média ni enregistrement réel : ne pas commercialiser ces fonctions sur la seule base des contrôles d'autorisation/consentement. B3-06 reste un acquis de bilan daté cloisonné, non une preuve du bilan IA complet.
+
+### 23.2 Report V1.1 et neutralisation
+
+Exclure de l'offre initiale les médias temps réel, partage écran, enregistrement et transcription, traduction vocale, IA générative, bilan enrichi/archives/Q&A, commissions automatiques, pointage GPS/selfie non qualifié, intégrations matérielles, WhatsApp/FCM réels, promotions et autres capacités dont la preuve de bout en bout manque. Les fonctionnalités V23 de facturation/transferts/fidélité/paie groupées sous un même flag restent désactivées dans le profil conservateur jusqu'à sélection granulaire et preuve cible. Ne pas supprimer code, données, tests ou contraintes de sécurité. Les flags UI ne constituent pas une autorisation serveur : conserver RLS, scopes et refus des mutations non autorisées ; vérifier également liens, actions secondaires, textes commerciaux et clients natifs.
+
+### 23.3 Critères de livraison non reportables
+
+Authentification de la cible avec compte de recette autorisé, contrôle des droits et isolation pour tous les parcours exposés, intégrité financière, consentement/CGU applicables, sauvegarde/restauration de la cible, paiement d'abonnement effectivement qualifié si présenté comme disponible, signature et distribution Android si retenue, contrôle de l'artefact et décision propriétaire. Ne pas transformer un manque de sécurité ou de conformité en fonctionnalité facultative. Aucun compte réel, paiement, migration hébergée, signature ni déploiement autorisé dans cette passe.
+
+### 23.4 Pilotage distinct et recettes
+
+- Maturité commerciale V1.0 = parcours retenus qualifiés sur le candidat exact et sa cible / parcours retenus. Dénominateur à figer après inventaire action par action et dépendances, aucun pourcentage anticipé.
+- Réalisation CDC = registre atomique complet du CDC ; pourcentage non calculable actuellement (coverageComplete=false). Le 8/43 historique est un sous-ensemble de réserves et non un taux de construction.
+- Relancer les recettes Gate, Replay isolé, PWA, backup, APK et readiness selon les workflows existants au SHA de gel ; conserver la matrice de 43 critères en parallèle. Ne pas supprimer les assertions de fonctionnalités reportées dans les tests historiques. Le verdict de lancement est NO-GO jusqu'aux preuves terminales du profil V1.0 et aux contrôles indispensables sur cible. 
