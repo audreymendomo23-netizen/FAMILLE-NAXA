@@ -23,7 +23,13 @@ begin
  'subscriptions',(select jsonb_build_object('active_at_end',count(*) filter(where starts_at<=p_end and ends_at>p_end),'started',count(*) filter(where starts_at>=p_start and starts_at<p_end)) from public.sec_subscriptions where organization_id=p_org and site_id=p_site),
  'register',(select jsonb_build_object('visitors',count(*) filter(where kind='visitor'),'vehicles',count(*) filter(where kind='vehicle'),'partners',count(*) filter(where kind='partner'),'compatibility',count(*) filter(where kind='compatibility')) from public.sec_service_register where organization_id=p_org and site_id=p_site and recorded_at>=p_start and recorded_at<p_end),
  'visible_support_cases',(select count(*) from public.sec_support_cases where organization_id=p_org and site_id=p_site and created_at>=p_start and created_at<p_end),
- 'personal_notifications',(select count(*) from public.sec_activity_notifications where organization_id=p_org and site_id=p_site and created_at>=p_start and created_at<p_end)
+ 'personal_notifications',(select count(*) from public.sec_activity_notifications where organization_id=p_org and site_id=p_site and created_at>=p_start and created_at<p_end),
+ 'diagnostics',(select jsonb_build_object('total',count(*),'completed',count(*) filter(where state='completed'),'expired_or_overdue',count(*) filter(where state='expired' or (state in ('requested','authorized') and expires_at<=now()))) from public.sec_diagnostic_requests where organization_id=p_org and site_id=p_site and created_at>=p_start and created_at<p_end),
+ 'fire_states',(select jsonb_build_object('alarm',count(*) filter(where source_state='alarm'),'prealarm',count(*) filter(where source_state='prealarm'),'evacuation',count(*) filter(where source_state='evacuation'),'fault',count(*) filter(where source_state='fault'),'restored',count(*) filter(where source_state='restored')) from public.sec_fire_events where organization_id=p_org and site_id=p_site and observed_at>=p_start and observed_at<p_end),
+ 'telemetry',(select jsonb_build_object('total',count(*),'online',count(*) filter(where status='online'),'offline',count(*) filter(where status='offline'),'fault',count(*) filter(where status='fault')) from public.sec_device_observations where organization_id=p_org and site_id=p_site and observed_at>=p_start and observed_at<p_end),
+ 'geofences_created',(select count(*) from public.sec_geofences where organization_id=p_org and site_id=p_site and created_at>=p_start and created_at<p_end),
+ 'personal_evidence',(select count(*) from public.sec_evidence_files where organization_id=p_org and site_id=p_site and created_at>=p_start and created_at<p_end),
+ 'personal_media_grants',(select count(*) from public.sec_media_grants where organization_id=p_org and site_id=p_site and created_at>=p_start and created_at<p_end)
  ) into out;
  return out;
 end $r$;
@@ -53,7 +59,11 @@ begin
  'safety_closed',sum((x->'safety'->>'closed')::bigint),'visitor_passes_used',sum((x->'visitor_passes'->>'used')::bigint),'visitor_passes_revoked',sum((x->'visitor_passes'->>'revoked')::bigint),
  'subscriptions_started',sum((x->'subscriptions'->>'started')::bigint),
  'register_visitors',sum((x->'register'->>'visitors')::bigint),'register_vehicles',sum((x->'register'->>'vehicles')::bigint),'register_partners',sum((x->'register'->>'partners')::bigint),'register_compatibility',sum((x->'register'->>'compatibility')::bigint),
- 'visible_support_cases',sum((x->>'visible_support_cases')::bigint),'personal_notifications',sum((x->>'personal_notifications')::bigint)) into totals from jsonb_array_elements(reports) q(x);
+ 'visible_support_cases',sum((x->>'visible_support_cases')::bigint),'personal_notifications',sum((x->>'personal_notifications')::bigint),
+ 'diagnostics_total',sum((x->'diagnostics'->>'total')::bigint),'diagnostics_completed',sum((x->'diagnostics'->>'completed')::bigint),'diagnostics_expired_or_overdue',sum((x->'diagnostics'->>'expired_or_overdue')::bigint),
+ 'fire_alarm',sum((x->'fire_states'->>'alarm')::bigint),'fire_prealarm',sum((x->'fire_states'->>'prealarm')::bigint),'fire_evacuation',sum((x->'fire_states'->>'evacuation')::bigint),'fire_fault',sum((x->'fire_states'->>'fault')::bigint),'fire_restored',sum((x->'fire_states'->>'restored')::bigint),
+ 'telemetry_total',sum((x->'telemetry'->>'total')::bigint),'telemetry_online',sum((x->'telemetry'->>'online')::bigint),'telemetry_offline',sum((x->'telemetry'->>'offline')::bigint),'telemetry_fault',sum((x->'telemetry'->>'fault')::bigint),
+ 'geofences_created',sum((x->>'geofences_created')::bigint),'personal_evidence',sum((x->>'personal_evidence')::bigint),'personal_media_grants',sum((x->>'personal_media_grants')::bigint)) into totals from jsonb_array_elements(reports) q(x);
  return jsonb_build_object('organization_id',p_org,'start',p_start,'end',p_end,'generated_at',now(),'authorized_site_count',sites_count,'totals',totals,'sites',reports);
 end $r$;
 revoke all on function public.sec_org_report(uuid,timestamptz,timestamptz) from public,anon;
