@@ -1,7 +1,7 @@
 // Real local inference with isolated synthetic bilingual speech and silence; no client audio.
 import assert from "node:assert/strict";
 import {execFileSync} from "node:child_process";
-import {mkdtemp,rm} from "node:fs/promises";
+import {mkdtemp,rm,stat} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {runLocalAsr,localAsrFailure} from "../../packages/media-core/widemeet-transcription.mjs";
@@ -33,5 +33,16 @@ try{
  const translated=await runLocalAsr({python:process.env.WM_ASR_PYTHON,modelDir:process.env.WM_ASR_MODEL,path:join(dir,"fr.ogg"),home:dir,translate:true});
  assert.equal(translated.language,"fr");assert.match(translated.segments.map(x=>x.text).join(" "),/project|meeting/i);
  console.log("PASS actual local Whisper French speech to English text");
+ // Independent audible-audio fixture: actual translated text is synthesized locally,
+ // then decoded back by the same ASR. This is not device speaker qualification.
+ const translatedText=translated.segments.map(x=>x.text).join(" ").trim();
+ const voiced=join(dir,"translated-voice.wav"),spoken=join(dir,"translated-voice.ogg");
+ execFileSync("espeak-ng",["-v","en-us","-s","140","-w",voiced,translatedText]);
+ assert.ok((await stat(voiced)).size>10000);
+ execFileSync("ffmpeg",["-v","error","-y","-i",voiced,"-c:a","libopus",spoken]);
+ const audible=await infer(spoken);
+ assert.equal(audible.language,"en");assert.ok(audible.duration_ms>1000);
+ assert.match(audible.segments.map(x=>x.text).join(" "),/project|meeting/i);
+ console.log("PASS real offline French speech to English translation to synthesized audio to intelligible English ASR");
 
 }finally{await rm(dir,{recursive:true,force:true})}

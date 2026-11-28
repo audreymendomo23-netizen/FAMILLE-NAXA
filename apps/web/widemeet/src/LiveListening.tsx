@@ -8,6 +8,7 @@ export function LiveListening({base,session,roomId,locale,preferences}){
  useEffect(()=>{if(!chosen.current&&["original","en","fr","ff","es","it","zh","wes","ewo","dua","bas","bbj","bum","bax","ybb","mhk","ar","pt","de"].includes(preferences?.listening))T(preferences.listening)},[preferences]);
  useEffect(()=>{
   if(!enabled)return;
+  if(target!=="en"){S("unavailable");return;}
   const synth=window.speechSynthesis;let closed=false,timer,expiry,active=null;
   function stop(){clearTimeout(expiry);if(active){synth?.cancel();active=null}}
   async function poll(){
@@ -25,7 +26,7 @@ export function LiveListening({base,session,roomId,locale,preferences}){
       active=u;spoken.current.add(item.key);if(spoken.current.size>256)spoken.current.delete(spoken.current.values().next().value);
       u.onend=()=>{if(!closed&&active===u){active=null;S("ready")}};
       u.onerror=()=>{if(!closed&&active===u){active=null;S("voice")}};
-      synth.speak(u);S("playing");expiry=setTimeout(stop,item.ttl);
+      synth.speak(u);S("playing");expiry=setTimeout(()=>{stop();if(!closed)S("waiting")},item.ttl);
      }
     }
    }catch{if(!closed){stop();S("unavailable")}}
