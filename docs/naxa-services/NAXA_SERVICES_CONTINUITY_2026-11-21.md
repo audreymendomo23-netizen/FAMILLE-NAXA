@@ -1870,3 +1870,10 @@ Statut : principe fonctionnel validé ; raccordement métier et recette E2E enco
 - 3775ed5 → 2f849eb : +5 commits, 0 retard, 23 fichiers modifiés/ajoutés, aucune suppression entière. Gate 46067857308 13/13, replay 46067857448 39/39. Pas de garantie de non-régression exhaustive.
 - B3-07, B4-03, B4-04 reclassés partiels, nouvelles preuves ciblées, conditions résiduelles conservées. Registre distinct de 24 domaines connus reliés aux 43 réserves ; non exhaustif du CDC, aucun pourcentage global inventé.
 - Déclencheurs des huit workflows synchronisés, collecte SHA exact, tests du verdict et inventaire. Aucun changement fonctionnel, migration hébergée, paiement, signature ou workflow de release commerciale ajouté.
+
+
+### 28 novembre — Renforcement B4-03, suite au réalignement
+
+- e79dd07 : premier job tarifaire SUCCESS ; préparation release 46109128728 en échec confirmé : empreinte indépendante absente, certificat lisible. Aucun contournement ni signature. Autres recettes encore en file au relevé.
+- B4-03 : protection Web contre l'élargissement silencieux d'une activité explicite invalide ; règle de refus de chevauchement affichée, test Vitest ajouté. SQL de recette v25 étendu à la combinaison site/collaborateur/prestation/activité, règle absente, mauvais collaborateur/activité, conflit et calcul exact, sous sous-transaction annulée avant les fixtures existantes. Le marqueur exact est désormais exigé ; parité native et qualification terminale non acquises.
+- B4-04 conserve les réserves de déclenchement événementiel, allocations et extournes partielles. Aucun changement main, migration hébergée, déploiement manuel, signature ni paiement.

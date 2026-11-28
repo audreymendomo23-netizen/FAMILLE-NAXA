@@ -204,7 +204,7 @@
       "workflow": "technical-gate",
       "status": "partial",
       "acceptance": "Promoteur uniquement ; règles par collaborateur/prestation/activité/site, aucune valeur par défaut, absence de règle sans commission ; contrôle priorités explicites.",
-      "residual": "V24 et contrôles promoteur, chevauchements, défaut désactivé prouvés ; compléter toutes les dimensions des règles et la parité native."
+      "residual": "Recette étendue sur quatre dimensions, absence de règle et refus de chevauchement ajoutée au candidat ; parité native et résultat terminal restent à établir."
     },
     {
       "id": "B4-04",

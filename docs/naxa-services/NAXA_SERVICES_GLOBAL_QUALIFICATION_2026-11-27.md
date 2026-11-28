@@ -64,3 +64,5 @@ Clôture : preuve terminale par ID et périmètre, aucun succès par association
 - B4-03 : V24 et contrôles promoteur, chevauchements, défaut désactivé prouvés ; compléter toutes les dimensions des règles et la parité native.
 - B4-04 : V25–V29 rapprochement, approbation, remboursement intégral, allocation multiligne et file différée ; événement automatique, partage d'une ligne, extourne partielle et autres sources ouverts.
 Aucun PASS automatique. Voir le registre d'exécution distinct.
+
+- B4-03 : recette SQL étendue aux quatre dimensions, règle absente et refus explicite du chevauchement ; résultat terminal et parité native restent requis.
