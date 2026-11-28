@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 const endpoint='http://127.0.0.1:4182/functions/v1/grillad', key=process.env.GRILLAD_LOCAL_ANON!;
 const accounts=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/grillad-real-accounts.json','utf8'));
@@ -78,12 +79,37 @@ test('@read-models reports, profile, notices, attendance, prediction and absent 
   const y=await s({action:'snapshot',from:day,to:day});expect(y.finance).toBeNull();
   await o({action:'report',from:day,to:day,network:false});
   await s({action:'report',from:day,to:day,network:true},403);
-  for(const action of ['notice_feed','daily_list','attendance_status','prediction','pilotage_status','connect_list','security_list','profile_get','renewal_status']){
+  for(const action of ['notice_feed','daily_list','attendance_status','prediction','pilotage_status','connect_list','security_list','profile_get']){
    const result=await o({action});expect(result!==undefined,action).toBe(true);
   }
   await o({action:'notice_set',category:'stock',enabled:false});
   const z=await o({action:'security_list'});expect(z.live_request_available).toBe(false);
-  await invoke(request,{action:'connect_catalog',qr:'unconfigured_local_qr_token_0123456789'},undefined,400);
+  // Unknown partner token must fail closed; malformed and unknown QR have no public catalogue.
+  await invoke(request,{action:'connect_catalog',qr:'unconfigured_local_qr_token_0123456789'},undefined,403);
+  await invoke(request,{action:'connect_catalog',qr:'short'},undefined,403);
+  // Renewal-only endpoint is intentionally unavailable during a valid subscription.
+  await o({action:'renewal_status'},403);await s({action:'renewal_status'},403);
+  // Controlled state transition in this job's disposable local DB only.
+  function subscriptionState(expired:boolean){
+   if(process.env.GRILLAD_CI_LOCAL!=='1'||process.env.GITHUB_ACTIONS!=='true'||process.env.GITHUB_REPOSITORY!=='audreymendomo23-netizen/FAMILLE-NAXA'||process.env.GITHUB_REF!=='refs/heads/work/grillad-foundation-20261127'||!['http://127.0.0.1:54321','http://localhost:54321'].includes(process.env.GRILLAD_LOCAL_API||''))throw Error('LOCAL_ONLY');
+   const sql="update famille_core.subscriptions set status='"+(expired?"expired":"active")+"',ends_at=now()"+(expired?"-interval '1 hour'":"+interval '1 day'")+" where organization_id='"+org+"' and app_id=(select id from famille_core.applications where code='grillad')";
+   const out=execFileSync('psql',['-X','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-c',sql],{encoding:'utf8',env:{PATH:process.env.PATH,PGPASSWORD:'postgres'}});
+   expect(out.trim()).toBe('UPDATE 1');
+  }
+  subscriptionState(true);
+  try{
+   await o({action:'snapshot',from:day,to:day},403);
+   await s({action:'snapshot',from:day,to:day},403);
+   const list=await o({action:'renewal_status'});expect(list.central_requests).toEqual([]);
+   await s({action:'renewal_status'},403);await o({action:'renewal_status',site:other},403);
+   const event=randomUUID(),body={action:'renewal_action',event,operation:'renewal_request',payload:{plan:'grillad_premium_month'}};
+   const renewal=await o(body);expect(renewal.status).toBe('pending');expect(await o(body)).toEqual(renewal);
+   const history=await o({action:'renewal_status'});expect(history.central_requests.some(x=>x.id===event&&x.status==='pending'&&x.amount===6000)).toBe(true);
+   const cancel={action:'renewal_action',event:randomUUID(),operation:'central_request_cancel',payload:{request:event,reason:'Fin de recette locale'}};
+   expect((await o(cancel)).status).toBe('cancelled');
+  }finally{subscriptionState(false)}
+  expect((await o({action:'snapshot',from:day,to:day})).finance.ca).toBe(0);
+  await o({action:'renewal_status'},403);
  }finally{await close(request,seller);await close(request,owner)}
 });
 test('@resilience competing real HTTP sales and replay, no oversell',async({request})=>{
