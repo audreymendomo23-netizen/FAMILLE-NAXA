@@ -257,4 +257,26 @@ end $fn$;
 create function public.grillad_security_bind(p_org uuid,p_site uuid,p_security_org uuid,p_security_site uuid,p_source_org uuid,p_source_site uuid) returns boolean language sql security invoker set search_path=pg_catalog as $fn$select grillad_private.security_bind(p_org,p_site,p_security_org,p_security_site,p_source_org,p_source_site)$fn$;
 revoke all on function grillad_private.security_bind(uuid,uuid,uuid,uuid,uuid,uuid),public.grillad_security_bind(uuid,uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
 grant execute on function grillad_private.security_bind(uuid,uuid,uuid,uuid,uuid,uuid),public.grillad_security_bind(uuid,uuid,uuid,uuid,uuid,uuid) to service_role;
+-- Resolve an uncertain batch without permitting a delayed HTTP retry to post it later.
+create function grillad_private.offline_cancel(p_org uuid,p_site uuid,p_event uuid,p_day date,p_cash uuid,p_lines jsonb) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+declare u uuid:=auth.uid();old grillad_private.events%rowtype;payload jsonb;v jsonb;
+begin
+ perform grillad_private.scope(p_org,p_site);
+ if p_event is null or p_day is null or jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) not between 1 and 30 or octet_length(p_lines::text)>40000 then raise exception 'GRILLAD_BATCH' using errcode='22023';end if;
+ payload:=jsonb_build_object('day',p_day,'cash',p_cash,'lines',p_lines);
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
+ select * into old from grillad_private.events where org=p_org and site=p_site and id=p_event;
+ if found then
+  if old.actor<>u or old.payload<>payload or old.action not in ('offline_batch','offline_batch_cancelled') then raise exception 'GRILLAD_REPLAY_CONFLICT' using errcode='22023';end if;
+  if old.action='offline_batch' then return jsonb_build_object('status','committed','result',old.result);end if;
+  return old.result;
+ end if;
+ v:=jsonb_build_object('status','cancelled','id',p_event);
+ insert into grillad_private.events(org,site,id,actor,action,payload,result) values(p_org,p_site,p_event,u,'offline_batch_cancelled',payload,v);
+ return v;
+end $fn$;
+create function public.grillad_offline_cancel(p_org uuid,p_site uuid,p_event uuid,p_day date,p_cash uuid,p_lines jsonb) returns jsonb language sql security invoker set search_path=pg_catalog as $fn$select grillad_private.offline_cancel(p_org,p_site,p_event,p_day,p_cash,p_lines)$fn$;
+revoke all on function grillad_private.offline_cancel(uuid,uuid,uuid,date,uuid,jsonb),public.grillad_offline_cancel(uuid,uuid,uuid,date,uuid,jsonb) from public,anon,authenticated;
+grant execute on function grillad_private.offline_cancel(uuid,uuid,uuid,date,uuid,jsonb),public.grillad_offline_cancel(uuid,uuid,uuid,date,uuid,jsonb) to authenticated;
 commit;

@@ -48,3 +48,5 @@ Complément opérations : 1 test API nommé + 1 suite SQL intégrée lifecycle (
 Complément invitation : 1 test API supplémentaire, assertions partenaires ZIPPLE/SECURITY ajoutées à la suite SQL opérations. Total 187 unités (182 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/40.
 
 Complément : 1 test API paiement et 2 parcours Chromium (référence sans débit et lot de préparations). Total 190 unités (185 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/43.
+
+Complément conflits hors ligne : 1 test API d’annulation vérifiée et assertions SQL tombstone/rejeu ; total 191 unités (186 tests nommés, 4 suites SQL, 1 drill), lots 50/50/47/44.

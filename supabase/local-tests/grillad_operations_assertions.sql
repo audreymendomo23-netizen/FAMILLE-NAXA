@@ -34,6 +34,9 @@ begin
  if (v->>'count')::int<>2 or public.grillad_offline_batch(o,s,e,d,null,l)<>v then raise exception 'offline replay';end if;
  begin perform public.grillad_offline_batch(o,s,gen_random_uuid(),d-1,null,l);raise exception 'old batch accepted';exception when invalid_parameter_value then null;end;
  begin perform public.grillad_offline_batch(o,s,gen_random_uuid(),d,null,l);raise exception 'same line IDs accepted in different batch';exception when invalid_parameter_value then null;end;
+ if public.grillad_offline_cancel(o,s,e,d,null,l)->>'status'<>'committed' then raise exception 'cancel erased committed batch';end if;
+ e:=gen_random_uuid();if public.grillad_offline_cancel(o,s,e,d-1,null,l)->>'status'<>'cancelled' then raise exception 'cancel uncertain batch';end if;
+ begin perform public.grillad_offline_batch(o,s,e,d-1,null,l);raise exception 'cancelled batch replayed';exception when invalid_parameter_value then null;end;
  perform public.grillad_action(o,s,'c2000000-0000-0000-0000-000000000002','employee_request','{"phone":"+237699000013","name":"Test vendeur","role":"seller"}');
 end $test$;
 reset role;
