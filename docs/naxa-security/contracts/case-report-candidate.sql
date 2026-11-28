@@ -96,4 +96,18 @@ begin
 end $r$;
 revoke all on function public.sec_site_report(uuid,uuid,timestamptz,timestamptz) from public,anon;
 grant execute on function public.sec_site_report(uuid,uuid,timestamptz,timestamptz) to authenticated;
+-- Multi-site reporting over authorized sites only. No access granted by the aggregate.
+create function public.sec_org_report(p_org uuid,p_start timestamptz,p_end timestamptz) returns jsonb language plpgsql security invoker set search_path=pg_catalog as $r$
+declare reports jsonb; totals jsonb; sites_count integer;
+begin
+ if p_start is null or p_end is null or p_end<=p_start or p_end-p_start>interval '366 days' or p_end>now()+interval '1 minute' then raise exception 'invalid period' using errcode='22023';end if;
+ select coalesce(jsonb_agg(public.sec_site_report(p_org,s.id,p_start,p_end)||jsonb_build_object('site_name',s.name) order by s.id),'[]'::jsonb) into reports
+ from public.sec_sites s where s.organization_id=p_org and sec_private.field_role(p_org,s.id) in ('owner','manager');
+ sites_count:=jsonb_array_length(reports);
+ if sites_count=0 then raise exception 'report denied' using errcode='42501';end if;
+ select jsonb_build_object('incidents_total',sum((x->'incidents'->>'total')::bigint),'incidents_open',sum((x->'incidents'->>'open')::bigint),'incidents_closed',sum((x->'incidents'->>'closed')::bigint),'attendance_total',sum((x->'attendance'->>'total')::bigint),'patrols_total',sum((x->'patrols'->>'total')::bigint),'work_open',sum((x->'work'->>'open')::bigint),'devices_total',sum((x->'devices'->>'total')::bigint),'warnings',sum((x->>'warnings')::bigint),'fire_source_events',sum((x->>'fire_source_events')::bigint)) into totals from jsonb_array_elements(reports) q(x);
+ return jsonb_build_object('organization_id',p_org,'start',p_start,'end',p_end,'generated_at',now(),'authorized_site_count',sites_count,'totals',totals,'sites',reports);
+end $r$;
+revoke all on function public.sec_org_report(uuid,timestamptz,timestamptz) from public,anon;
+grant execute on function public.sec_org_report(uuid,timestamptz,timestamptz) to authenticated;
 commit;

@@ -81,10 +81,10 @@ internal object SecurityNativeApi {
    else check(v.optString("operation")==p.optString("p_op")&&v.optString("case_id")==p.optString("p_case"))}
   v
  }
- suspend fun report(s:SecurityNativeSession,site:SecurityNativeSite,days:Int):JSONObject=withContext(Dispatchers.IO){
+ suspend fun report(s:SecurityNativeSession,site:SecurityNativeSite,days:Int,multi:Boolean=false):JSONObject=withContext(Dispatchers.IO){
   checkScope(s,site);require(days in setOf(1,7,30,90,365));val now=java.time.Instant.now()
-  val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_start",now.minusSeconds(days*86400L).toString()).put("p_end",now.toString())
-  val v=JSONObject(call("/rest/v1/rpc/sec_site_report",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&!v.isNull("generated_at"));v
+  val p=JSONObject().put("p_org",site.organization).put("p_start",now.minusSeconds(days*86400L).toString()).put("p_end",now.toString());if(!multi)p.put("p_site",site.id)
+  val v=JSONObject(call("/rest/v1/rpc/"+(if(multi)"sec_org_report" else "sec_site_report"),s.token,p));check(v.optString("organization_id")==site.organization&&!v.isNull("generated_at"));if(multi){val a=v.getJSONArray("sites");check((0 until a.length()).all{j->val row=a.getJSONObject(j);row.optString("organization_id")==site.organization&&s.sites.any{it.id==row.optString("site_id")}})}else check(v.optString("site_id")==site.id);v
  }
  suspend fun submitAttendance(s:SecurityNativeSession,site:SecurityNativeSite,action:String,lat:Double,lon:Double,accuracy:Float,observed:Long,id:String):Boolean=withContext(Dispatchers.IO){
   checkScope(s,site);require(action in setOf("arrival","departure")&&lat in -90.0..90.0&&lon in -180.0..180.0&&accuracy>0&&accuracy<=100&&System.currentTimeMillis()-observed in 0L..120000L)

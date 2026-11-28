@@ -3,7 +3,7 @@ import{chromium}from"playwright";import{execFileSync}from"node:child_process";im
 assert.equal(process.env.PGHOST,"localhost");assert.equal(process.env.PGDATABASE,"security_test");assert.equal(process.env.SECURITY_DB_E2E,"1");
 const origin="http://127.0.0.1:4173",api="https://idupfjbkwjcavyisxteo.supabase.co";
 const O="10000000-0000-0000-0000-000000000141",S="20000000-0000-0000-0000-000000000141",T="20000000-0000-0000-0000-000000000142";
-const users={customer:"00000000-0000-0000-0000-000000000141",agent:"00000000-0000-0000-0000-000000000142",other:"00000000-0000-0000-0000-000000000143"};
+const users={customer:"00000000-0000-0000-0000-000000000141",agent:"00000000-0000-0000-0000-000000000142",other:"00000000-0000-0000-0000-000000000143",manager:"00000000-0000-0000-0000-000000000144"};
 const literal=v=>v===null?"null":"convert_from(decode('"+Buffer.from(String(v),"utf8").toString("hex")+"','hex'),'UTF8')";
 const uuid=v=>literal(v)+"::uuid",json=v=>literal(JSON.stringify(v))+"::jsonb";
 function query(user,sql){assert.ok(Object.values(users).includes(user));const command="begin;set local role authenticated;select set_config('request.jwt.claim.sub',"+literal(user)+",true);"+sql+";commit;";
@@ -24,6 +24,7 @@ await ctx.route("**/*",async route=>{const req=route.request(),u=new URL(req.url
   const sql="select coalesce(jsonb_agg(to_jsonb(x)),'[]') from (select * from public."+table+(filters.length?" where "+filters.join(" and "):"")+" limit 100)x";return respond(query(user,sql))
  }
  if(req.method()==="POST"&&table==="sec_module_requests"){const cols=["organization_id","site_id","reporter_id","request_id","kind","payload"];assert.ok(cols.every(k=>Object.hasOwn(body,k)));const vals=cols.map(k=>k==="kind"?literal(body[k]):k==="payload"?json(body[k]):uuid(body[k]));const rows=query(user,"with x as(insert into public.sec_module_requests("+cols.join(",")+") values("+vals.join(",")+") returning *) select jsonb_agg(to_jsonb(x)) from x");lastCase=body.request_id;dbWrites++;return respond(rows)}
+ if(req.method()==="POST"&&["/rest/v1/rpc/sec_site_report","/rest/v1/rpc/sec_org_report"].includes(u.pathname)){const args=[uuid(body.p_org),...(table==="sec_site_report"?[uuid(body.p_site)]:[]),literal(body.p_start)+"::timestamptz",literal(body.p_end)+"::timestamptz"];return respond(query(user,"select public."+table+"("+args.join(",")+")"))}
  if(req.method()==="POST"&&u.pathname==="/rest/v1/rpc/sec_support_action"){const row=query(user,"select public.sec_support_action("+[uuid(body.p_org),uuid(body.p_site),uuid(body.p_case),uuid(body.p_event),literal(body.p_op),json(body.p_detail)].join(",")+")");dbWrites++;return respond(row)}
  if(req.method()==="POST"&&table==="sec_support_messages"){const cols=["id","organization_id","site_id","request_id","author_id","body"];const vals=cols.map(k=>k==="body"?literal(body[k]):uuid(body[k]));const rows=query(user,"with x as(insert into public.sec_support_messages("+cols.join(",")+") values("+vals.join(",")+") returning *) select jsonb_agg(to_jsonb(x)) from x");dbWrites++;return respond(rows)}
  return respond({},404)
@@ -47,4 +48,5 @@ try{
  assert.equal(query(users.other,"select to_jsonb(count(*)) from public.sec_support_cases"),0);
  assert.throws(()=>query(users.other,"select public.sec_support_action("+[uuid(O),uuid(S),uuid(lastCase),uuid("50000000-0000-0000-0000-000000000141"),literal("claim"),json({})].join(",")+")"));
  assert.equal(dbWrites,8);console.log("PASS Chromium + real PostgreSQL: 8 persistent support actions, private messages, cross-site denial");
+ await logout();await login("manager");await page.goto(origin+"/#/B5.28");await page.getByRole("button",{name:"Calculer le rapport"}).click();await page.getByText("Données calculées et autorisées.").waitFor();assert.equal(await page.locator("dt").filter({hasText:/^incidents.total$/}).count(),1);await page.getByText("110",{exact:true}).first().waitFor();await page.goto(origin+"/#/B5.31");await page.getByRole("button",{name:"Calculer le rapport"}).click();await page.getByText("Données calculées et autorisées.").waitFor();await page.locator("dt").filter({hasText:/^totals.incidents_total$/}).waitFor();assert.equal(await page.getByText("Other site confidential",{exact:true}).count(),0);console.log("PASS Chromium + PostgreSQL: 110 incident rows, authorized multisite aggregate");
 }finally{await ctx.close();await browser.close()}

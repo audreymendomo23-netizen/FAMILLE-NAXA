@@ -28,6 +28,8 @@ do $q$declare j jsonb;begin
  if (select closure_reason from public.sec_incidents where id='40000000-0000-0000-0000-000000000151')<>'manager verified closure' or (select count(*) from public.sec_incident_notes)<>9 then raise exception 'history incomplete';end if;
  j:=public.sec_site_report('10000000-0000-0000-0000-000000000151','20000000-0000-0000-0000-000000000151',now()-interval '1 day',now());
  if (j->'incidents'->>'total')::int<>111 or (j->'incidents'->>'closed')::int<>1 then raise exception 'truncated report';end if;
+ j:=public.sec_org_report('10000000-0000-0000-0000-000000000151',now()-interval '1 day',now());
+ if (j->>'authorized_site_count')::int<>1 or (j->'totals'->>'incidents_total')::int<>111 then raise exception 'organization aggregation';end if;
 end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000153',true);
 do $q$begin if (select count(*) from public.sec_incident_notes)<>0 then raise exception 'cross site notes';end if;

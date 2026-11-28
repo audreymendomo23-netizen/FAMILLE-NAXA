@@ -17,7 +17,7 @@ import java.util.UUID
 internal fun securityReportCsv(v:JSONObject):String {
  fun quote(raw:String):String {val s=if(raw.trimStart().firstOrNull() in listOf('=','+','-','@'))"'"+raw else raw;return "\""+s.replace("\"","\"\"")+"\""}
  val rows=mutableListOf("indicateur,valeur")
- v.keys().asSequence().sorted().forEach{k->val x=v.get(k);if(x is JSONObject)x.keys().asSequence().sorted().forEach{n->rows.add(quote(k+"."+n)+","+quote(x.get(n).toString()))}else rows.add(quote(k)+","+quote(x.toString()))}
+ fun add(prefix:String,value:Any?){when(value){is JSONObject->value.keys().asSequence().sorted().forEach{k->add(if(prefix.isBlank())k else prefix+"."+k,value.get(k))};is org.json.JSONArray->(0 until value.length()).forEach{i->add(prefix+"."+i,value.get(i))};else->rows.add(quote(prefix)+","+quote(value.toString()))}};add("",v)
  return rows.joinToString("\r\n")
 }
 @Composable internal fun SecurityNativeCaseReport(screen:String){
@@ -34,7 +34,7 @@ internal fun securityReportCsv(v:JSONObject):String {
  Text(if(cases)"Dossiers incidents" else if(support)"Dossiers Livecare" else "Rapports serveur",style=MaterialTheme.typography.titleMedium)
  if(reports)listOf(1,7,30,90,365).forEach{d->FilterChip(selected=period==d,enabled=!busy,onClick={period=d;report=null},label={Text("$d jours")})}
  Button(enabled=!busy,onClick={busy=true;scope.launch{try{
-  if(reports){val v=SecurityNativeApi.report(s,site,period);if(state.generation==generation)report=v}
+  if(reports){val v=SecurityNativeApi.report(s,site,period,screen in setOf("B3.02","B5.31"));if(state.generation==generation)report=v}
   else{val a=SecurityNativeApi.records(s,site,if(cases)"sec_incidents" else "sec_support_cases");val b=SecurityNativeApi.records(s,site,if(cases)"sec_incident_notes" else "sec_support_messages");if(state.generation==generation){rows=a;notes=b}}
   if(state.generation==generation)status="Données autorisées chargées."
  }catch(e:CancellationException){throw e}catch(_:Exception){if(state.generation==generation){rows=emptyList();notes=emptyList();report=null;status="Lecture refusée ou indisponible."}}finally{if(state.generation==generation)busy=false}}}){Text("Actualiser les données")}

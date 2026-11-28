@@ -486,3 +486,6 @@ Dossier détaillé avec responsable de site, transitions attente information/tie
 
 ### Raccordement Android natif
 API native autorisée pour lecture des dossiers/notes Livecare et incidents, RPC à reçus contrôlés, rapports calculés côté serveur et export CSV via sélecteur Android. Compose connecté aux écrans des deux cycles et rapports. Pointage GPS natif raccordé à sec_attendance_drafts sur actions arrivée/départ (pauses non prises en charge par le contrat actuel), vérification fraîcheur, précision, source mock, reçu complet et périmètre. Aucune trace GPS continue. Les nouvelles fonctions Android restent à qualifier ; pas de preuve émulateur avec backend réel à ce stade.
+
+### Reporting multisite et recette réelle
+Rapport organisation par RPC invoker, agrégation des sites explicitement autorisés au manager/propriétaire, liste des sources et totaux, export CSV aplati dans Web et Android, contrôles de périmètre côté clients. Nouveau scénario Chromium/PostgreSQL vérifie la récupération des 110 incidents sans troncature, exclusion du site non autorisé, et calcul multisite. Le test navigateur n'utilise ni authentification hébergée ni PostgREST réel. Qualification à constater.
