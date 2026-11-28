@@ -93,7 +93,7 @@ class FoundationInstrumentedTest {
 
  @Test fun originalPhotoAssetsDecodeAndAppear(){
   val context=ApplicationProvider.getApplicationContext<Context>()
-  for(name in wideMeetPhotoNames){val b=context.assets.open("wm-photos/"+name+".jpg").use{android.graphics.BitmapFactory.decodeStream(it)};assertNotNull(b);assertTrue(b.width>0&&b.height>0);b.recycle()}
+  for(name in wideMeetPhotoNames){val b=requireNotNull(context.assets.open("wm-photos/"+name+".jpg").use{android.graphics.BitmapFactory.decodeStream(it)});assertTrue(b.width>0&&b.height>0);b.recycle()}
   rule.onNodeWithTag("wm-tab-0").performClick()
   rule.onNodeWithTag("wm-photo-home").performScrollTo().assertIsDisplayed()
  }
