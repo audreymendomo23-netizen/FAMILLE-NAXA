@@ -4,7 +4,7 @@ create or replace function public.sec_audit_page(p_org uuid,p_site uuid,p_source
 declare result jsonb;cursor_at timestamptz;cursor_source text;cursor_id uuid;cursor_actor uuid;n int;
 begin
  if coalesce(sec_private.field_role(p_org,p_site),'') not in ('owner','manager','operator') then raise exception 'audit denied' using errcode='42501';end if;
- if p_source is null or p_source not in ('all','field','service','erp','support','fire_ack','admin') then raise exception 'invalid source' using errcode='22023';end if;
+ if p_source is null or p_source not in ('all','field','service','erp','support','fire_ack','admin','access') then raise exception 'invalid source' using errcode='22023';end if;
  if p_before is not null and p_before<>'null'::jsonb then
   if jsonb_typeof(p_before)<>'object' or p_before-'created_at'-'source'-'id'-'actor_id'<>'{}'::jsonb then raise exception 'invalid cursor' using errcode='22023';end if;
   cursor_at:=(p_before->>'created_at')::timestamptz;cursor_source:=p_before->>'source';cursor_id:=(p_before->>'id')::uuid;cursor_actor:=(p_before->>'actor_id')::uuid;

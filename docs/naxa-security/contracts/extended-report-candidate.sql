@@ -42,7 +42,18 @@ begin
  'shifts_total',sum((x->'shifts'->>'total')::bigint),'maintenance_reviewed',sum((x->'maintenance'->>'reviewed')::bigint),'maintenance_cost_fcfa',sum((x->'maintenance'->>'reviewed_cost_fcfa')::bigint),
  'safety_total',sum((x->'safety'->>'total')::bigint),'visitor_passes_issued',sum((x->'visitor_passes'->>'issued')::bigint),
  'confirmed_payments_count',sum((x->'confirmed_payments'->>'count')::bigint),'confirmed_payments_fcfa',sum((x->'confirmed_payments'->>'amount_fcfa')::bigint),
- 'active_subscriptions',sum((x->'subscriptions'->>'active_at_end')::bigint),'audit_events_visible',sum((x->>'audit_events')::bigint)) into totals from jsonb_array_elements(reports) q(x);
+ 'active_subscriptions',sum((x->'subscriptions'->>'active_at_end')::bigint),'audit_events_visible',sum((x->>'audit_events')::bigint),
+ 'incidents_critical',sum((x->'incidents'->>'critical')::bigint),
+ 'attendance_reviewed',sum((x->'attendance'->>'reviewed')::bigint),'attendance_rejected',sum((x->'attendance'->>'rejected')::bigint),'attendance_pending',sum((x->'attendance'->>'pending')::bigint),
+ 'patrols_reviewed',sum((x->'patrols'->>'reviewed')::bigint),'patrols_running',sum((x->'patrols'->>'running')::bigint),
+ 'work_total',sum((x->'work'->>'total')::bigint),'work_completed',sum((x->'work'->>'completed')::bigint),
+ 'passages_entries',sum((x->'passages'->>'entries')::bigint),'passages_exits',sum((x->'passages'->>'exits')::bigint),
+ 'devices_recent_contact',sum((x->'devices'->>'recent_contact')::bigint),'devices_unknown_contact',sum((x->'devices'->>'unknown_contact')::bigint),
+ 'shifts_accepted',sum((x->'shifts'->>'accepted')::bigint),'shifts_completed',sum((x->'shifts'->>'completed')::bigint),'shifts_cancelled',sum((x->'shifts'->>'cancelled')::bigint),
+ 'safety_closed',sum((x->'safety'->>'closed')::bigint),'visitor_passes_used',sum((x->'visitor_passes'->>'used')::bigint),'visitor_passes_revoked',sum((x->'visitor_passes'->>'revoked')::bigint),
+ 'subscriptions_started',sum((x->'subscriptions'->>'started')::bigint),
+ 'register_visitors',sum((x->'register'->>'visitors')::bigint),'register_vehicles',sum((x->'register'->>'vehicles')::bigint),'register_partners',sum((x->'register'->>'partners')::bigint),'register_compatibility',sum((x->'register'->>'compatibility')::bigint),
+ 'visible_support_cases',sum((x->>'visible_support_cases')::bigint),'personal_notifications',sum((x->>'personal_notifications')::bigint)) into totals from jsonb_array_elements(reports) q(x);
  return jsonb_build_object('organization_id',p_org,'start',p_start,'end',p_end,'generated_at',now(),'authorized_site_count',sites_count,'totals',totals,'sites',reports);
 end $r$;
 revoke all on function public.sec_org_report(uuid,timestamptz,timestamptz) from public,anon;

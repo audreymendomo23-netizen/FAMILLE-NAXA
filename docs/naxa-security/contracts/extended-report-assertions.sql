@@ -11,7 +11,7 @@ do $q$declare j jsonb;begin
  j:=public.sec_site_report('10000000-0000-0000-0000-000000000241','20000000-0000-0000-0000-000000000241',now()-interval '1 day',now());
  if (j->'confirmed_payments'->>'count')::int<>1 or (j->'confirmed_payments'->>'amount_fcfa')::int<>5000 or (j->'maintenance'->>'reviewed_cost_fcfa')::int<>0 then raise exception 'report totals or period incorrect';end if;
  j:=public.sec_org_report('10000000-0000-0000-0000-000000000241',now()-interval '1 day',now());
- if (j->>'authorized_site_count')::int<>1 or (j->'totals'->>'confirmed_payments_fcfa')::int<>5000 then raise exception 'report cross site';end if;
+ if (j->>'authorized_site_count')::int<>1 or (j->'totals'->>'confirmed_payments_fcfa')::int<>5000 or (j->'totals'->>'attendance_reviewed')::int is distinct from 0 or (j->'totals'->>'register_partners')::int is distinct from 0 or (j->'totals'->>'personal_notifications')::int is distinct from 0 then raise exception 'report cross site';end if;
  begin perform public.sec_site_report('10000000-0000-0000-0000-000000000241','20000000-0000-0000-0000-000000000242',now()-interval '1 day',now());raise exception 'unauthorized report';exception when insufficient_privilege then null;end;
 end $q$;
 reset role;rollback;

@@ -84,7 +84,7 @@ internal object SecurityNativeApi {
   v
  }
  suspend fun auditPage(s:SecurityNativeSession,site:SecurityNativeSite,source:String,before:JSONObject?):JSONObject=withContext(Dispatchers.IO){
-  checkScope(s,site);require(source in setOf("all","field","service","erp","support","fire_ack","admin"))
+  checkScope(s,site);require(source in setOf("all","field","service","erp","support","fire_ack","admin","access"))
   val p=JSONObject().put("p_org",site.organization).put("p_site",site.id).put("p_source",source).put("p_before",before?:JSONObject.NULL)
   val v=JSONObject(call("/rest/v1/rpc/sec_audit_page",s.token,p));check(v.optString("organization_id")==site.organization&&v.optString("site_id")==site.id&&v.optString("source")==source)
   val a=v.getJSONArray("rows");check(a.length()<=100&&(0 until a.length()).all{j->val x=a.getJSONObject(j);x.optString("organization_id")==site.organization&&x.optString("site_id")==site.id&&(source=="all"||x.optString("source")==source)});v
