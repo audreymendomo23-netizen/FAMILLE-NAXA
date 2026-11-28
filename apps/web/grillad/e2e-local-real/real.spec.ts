@@ -56,7 +56,7 @@ test('@journey real local Auth + Chromium + handler + PostgREST: sale, replay, p
   await seller.page.getByRole('button',{name:'Enregistrer la vente'}).click();
   const soldResponse=await sold;expect(soldResponse.status()).toBe(200);
   const first=(await soldResponse.json()).result,event=first.id,payload={item,qty:2,price:1000,received:2000};
-  await expect(seller.page.getByText('Opération confirmée par le serveur')).toBeVisible();
+  await expect(seller.page.getByText('Opération confirmée')).toBeVisible();
   expect(first.total).toBe(2000);expect(await mutate(seller,'sell',payload,event)).toEqual(first);
   await mutate(seller,'sell',{item,qty:4,price:1000,received:4000},randomUUID(),400);
   const snap=await rpc(owner,{action:'snapshot',org,site,from:day,to:day});

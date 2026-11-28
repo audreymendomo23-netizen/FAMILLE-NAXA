@@ -668,9 +668,9 @@ export const labels={
     "Service start time",
     "Sahaa fuɗɗugol golle"
   ],
-  "Configuration GRILLAD invalide. Aucun accès.": [
-    "Invalid GRILLAD configuration. Access denied.",
-    "Teelte GRILLAD feewaani. Naatugol yamiraaka."
+  "Service momentanément indisponible.": [
+    "Service temporarily unavailable.",
+    "Carwe woodaani jooni."
   ],
   "Catalogue expiré. Reconnectez-vous.": [
     "Catalogue expired. Sign in again.",
@@ -684,9 +684,9 @@ export const labels={
     "Cancel the unconfirmed batch?",
     "Haaytu golle ɗe tabbitinaaka?"
   ],
-  "Services clôturés — données serveur uniquement": [
-    "Completed services — server data only",
-    "Golle timmuɗe — humpito sarworde tan"
+  "Services clôturés": [
+    "Closed services",
+    "Golleeji udditaaɗi"
   ],
   "Motif de changement du prix": [
     "Reason for price change",
@@ -780,9 +780,9 @@ export const labels={
     "No additional need confirmed by available forecasts.",
     "Alaa ɓeydital tabbitinaangal e ƴeewtagol yeeso."
   ],
-  "Conseils calculés à partir des prévisions serveur, à confirmer. Aucune action automatique.": [
-    "Advice based on server forecasts, to be confirmed. No automatic action.",
-    "Wasiya tugnaango e ƴeewtagol yeeso sarworde, foti tabbitineede. Alaa golle waɗeteeɗe e hoore mum."
+  "Conseils indicatifs pour votre activité. Vous gardez la décision.": [
+    "Indicative business advice. You remain in control.",
+    "Waajuuji golle maa. Aan suɓata."
   ],
   "Centre de surveillance": [
     "Security center",
@@ -804,17 +804,17 @@ export const labels={
     "Confirmation not received. Retry the same request. No agent or remote delivery confirmed.",
     "Tabbitinol heɓaaka. Eto ɗaɓɓitannde ndee kadi. Alaa gollotooɗo walla neldugol tabbitinaangol."
   ],
-  "Dossier enregistré dans le registre Famille NAXA": [
-    "Ticket saved in the Famille NAXA register",
-    "Kayit danndaama e doggol Famille NAXA"
+  "Votre demande d’assistance est enregistrée": [
+    "Your support request is recorded",
+    "Ɗaɓɓitannde wallitorde maa danndaama"
   ],
-  "Assistance Famille NAXA — dossier enregistré côté serveur. Messagerie disponible ; accès agent soumis à habilitation. Appel Web et partage volontaire en qualification ; disponibilité selon l’agent et le réseau.": [
-    "Famille NAXA support — ticket saved on the server. Messaging is available; agent access requires authorization. Web calling and voluntary screen sharing are being tested; availability depends on the agent and network.",
-    "Ballal Famille NAXA — kayit danndaama e sarworde. Ɓatakuuje ena mbaawi neldeede; gollotooɓe yamiraaɓe tan mbaawi naatde. Noddirgol Web e lollingol yaynirde e jaɓugol maa ena ƴeewtee; ena tugnii e gollotooɗo e Internet."
+  "Contactez notre assistance. La disponibilité des appels et du partage d’écran dépend de la connexion et du conseiller.": [
+    "Contact support. Calls and screen sharing depend on connectivity and agent availability.",
+    "Jokkondir e wallitorde amen. Noddaango e lollingol jaytino fawii e seŋagol e woodde wallitoowo."
   ],
-  "Registre Famille NAXA. Conversation disponible ; accès agent soumis à habilitation. Appels audio natifs en qualification ; accès agent et réseau requis.": [
-    "Famille NAXA register. Messaging is available; agent access requires authorization. Native audio calls are being tested; agent and network access are required.",
-    "Doggol Famille NAXA. Yeewtere ena woodi; gollotooɓe yamiraaɓe tan mbaawi naatde. Noddirgol daande ena ƴeewtee; gollotooɗo e Internet ena coklaa."
+  "Discutez avec notre assistance. Les appels dépendent de la connexion et de la disponibilité d’un conseiller.": [
+    "Chat with support. Calls depend on connectivity and agent availability.",
+    "Haaldu e wallitorde. Noddaango fawii e seŋagol e woodde wallitoowo."
   ],
   "Abonnement expiré : les opérations métier restent bloquées. Actualisez après confirmation centrale du paiement.": [
     "Subscription expired: business operations remain blocked. Refresh after central payment confirmation.",
@@ -832,13 +832,13 @@ export const labels={
     "If this number is eligible, the request will be reviewed. No delivery confirmed.",
     "So limgal ngal jaɓaama, ɗaɓɓitannde ndee maa ƴeewtee. Neldugol tabbitinaaka."
   ],
-  "Historique des services clôturés par la tâche serveur. Données serveur confirmées uniquement.": [
-    "History of services closed by the server task. Confirmed server data only.",
-    "Jaŋtol golle timminaande e sarworde. Humpito sarworde tabbitinaango tan."
+  "Historique des services clôturés.": [
+    "Closed service history.",
+    "Aslol golleeji udditaaɗi."
   ],
-  "Push distant à qualifier.": [
-    "Remote push delivery requires qualification.",
-    "Neldugol tintine iwɗe woɗɗi ena fadi ƴeewtagol."
+  "Notifications à activer sur cet appareil.": [
+    "Enable notifications on this device.",
+    "Hurmin tintine e kaɓirgol ngol."
   ],
   "Collaborateurs GRILLAD déjà activés dans cette organisation. Aucun nouveau compte créé ici.": [
     "Existing activated GRILLAD team members in this organization. No new account is created here.",
@@ -852,9 +852,9 @@ export const labels={
     "An earlier operation remains saved.",
     "Golle adannde ena danndaa."
   ],
-  "Le serveur vérifie d’abord si le lot a déjà été confirmé. Conservez vos justificatifs de ventes.": [
-    "The server first checks whether the batch was already confirmed. Keep your sales evidence.",
-    "Sarworde ƴeewtata tawo so golle ɗee tabbitinaama. Danndu seedamfaaji jaaygol maa."
+  "Nous vérifions si vos opérations sont déjà enregistrées. Conservez vos justificatifs de ventes.": [
+    "We check whether your operations are already recorded. Keep your sales receipts.",
+    "Min ƴeewtoto so golleeji maa danndaama. Danndu seedeeji jeeygol."
   ],
   "Quantité signée : négative pour une perte, positive pour une entrée.": [
     "Signed quantity: negative for a loss, positive for incoming stock.",
@@ -940,9 +940,9 @@ export const labels={
     "Unlock GRILLAD",
     "Uddit GRILLAD"
   ],
-  "Code individuel à quatre chiffres. La connexion serveur reste obligatoire.": [
-    "Personal four-digit PIN. Server sign-in is still required.",
-    "Kod keeriiɗo limoore nay. Naatugol sarworde ena foti."
+  "Code personnel à quatre chiffres. Une connexion à votre compte reste nécessaire.": [
+    "Personal four-digit PIN. Signing in to your account is still required.",
+    "Kod keeriiɗo limoore nay. Naatugol e konte maa ena foti."
   ],
   "Code local": [
     "Local PIN",
@@ -975,6 +975,10 @@ export const labels={
   "Options de sécurité": [
     "Security options",
     "Cuɓe kisal"
+  ],
+  "Opération confirmée": [
+    "Operation confirmed",
+    "Gollal tabbitinaama"
   ]
 };
 export function localeOf(x){return x==='en'||x==='ff-CM'?x:'fr'}

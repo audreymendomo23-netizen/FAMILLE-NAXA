@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
  GrilladBrandMark()
  Spacer(Modifier.height(20.dp))
  Text(tr(if(setup)"Créer votre code local" else "Déverrouiller GRILLAD"),style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
- Text(tr("Code personnel à quatre chiffres. Il protège l’accès à votre espace."),color=MaterialTheme.colorScheme.onSurfaceVariant)
+ Text(tr("Code personnel à quatre chiffres. Une connexion à votre compte reste nécessaire."),color=MaterialTheme.colorScheme.onSurfaceVariant)
  GrilladPinField(pin,{pin=it},tr("Code local"))
  if(setup)GrilladPinField(repeat,{repeat=it},tr("Confirmer le code"))
  Button({val r=if(setup)manager.enroll(user,pin)else manager.verify(user,pin);pin="";repeat="";if(r.code==LocalAccessPinCode.SUCCESS)onUnlocked() else message=when(r.code){LocalAccessPinCode.LOCKED->"Code verrouillé temporairement. Réessayez après le délai.";LocalAccessPinCode.INVALID->"Code incorrect. Tentatives restantes : "+r.attemptsRemaining;else->"Code indisponible ou invalide. Reconnectez-vous si nécessaire."}},enabled=LocalAccessPinPolicy.isValid(pin)&&(!setup||pin==repeat),modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text(tr(if(setup)"Enregistrer et ouvrir" else "Déverrouiller"))}
