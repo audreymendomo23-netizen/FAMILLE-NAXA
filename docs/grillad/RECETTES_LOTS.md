@@ -70,3 +70,6 @@ Dernier relevé : sept campagnes 14/14 ; dernière campagne 46089210628, quatre 
 
 ## Reprise challenge — section 32
 4 tests nommés B1/B4 (UUID/autorevue, baux média et GPS) et 1 test API B5 (capture Admin sans dossier explicite) ajoutés ; assertions SQL de rapprochement par référence enrichies. Total 211 unités : 206 tests nommés + 4 suites SQL + 1 drill ; lots 50/50/47/50/14. Runs 46089210628 (relance), 46090190513, 46090290325 : chacun 14/14 SUCCESS. Migration 20261128005431 grillad_capture_match_a239147 réellement appliquée. Les 39 REC produit restent à certifier en environnement réel autorisé ; voir §32 de continuité.
+
+## Section 33 — Recettes transactionnelles et contrats de raccordement
+Ajout d'une suite PostgreSQL multivendeur (job server product-race, indépendante) et de cinq tests API nommés ; assertion minuit dans la suite de pointage existante. Total 217 unités (211 tests nommés + 5 suites SQL + 1 drill), lots 50/50/47/50/20. Les 15 jobs d'une campagne ne sont pas 217 jobs. Preuves : product-race SUCCESS sur 46091363065 ; les cinq nouveaux tests API SUCCESS dans infrastructure 46091421116 ; correctif syntaxe minuit f1b4db0, run 46091449597 à vérifier selon le relevé de continuité. Qualification produit complète et matérielle non présumée.
