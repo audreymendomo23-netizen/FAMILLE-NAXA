@@ -77,6 +77,10 @@ android {
     buildTypes {
         getByName("release") {
             signingConfig = signingConfigs.getByName("naxaRelease")
+            // V1.0: keep unqualified optional features off in signed releases.
+            listOf("COMMISSION_RECONCILIATION_ENABLED", "BRIEFING_ENABLED", "MEETINGS_ENABLED", "ATTENDANCE_ENABLED", "BILLING_SETTLEMENT_ENABLED").forEach { feature ->
+                buildConfigField("boolean", feature, "false")
+            }
         }
     }
     buildFeatures {
