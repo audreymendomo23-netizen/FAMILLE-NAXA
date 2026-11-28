@@ -8,6 +8,7 @@ on:
       - 'scripts/grillad/**'
       - 'supabase/functions/grillad/**'
       - 'supabase/functions/grillad-daily/**'
+      - 'supabase/functions/grillad-push/**'
       - 'supabase/drafts/grillad*.sql'
       - 'supabase/local-tests/grillad*.sql'
       - '.github/workflows/grillad-foundation.yml'
@@ -24,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test scripts/grillad/infrastructure.test.mjs scripts/grillad/central-identity.test.mjs scripts/grillad/naxa-runner-reuse.test.mjs supabase/functions/grillad/handler.test.mjs
+      - run: node --test scripts/grillad/infrastructure.test.mjs scripts/grillad/central-identity.test.mjs scripts/grillad/naxa-runner-reuse.test.mjs supabase/functions/grillad/handler.test.mjs supabase/functions/grillad-push/worker.test.mjs
   web:
     strategy:
       fail-fast: false
@@ -175,6 +176,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_capture_devices_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_connect_pairs_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_capture_match_v1.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_push_transport_v1.sql
           if [ '${{ matrix.suite }}' = backup ]; then
             bash scripts/grillad/backup-restore-drill.sh
           else
