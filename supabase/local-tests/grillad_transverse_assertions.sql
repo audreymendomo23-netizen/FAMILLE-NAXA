@@ -35,8 +35,8 @@ select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-0
 -- The positive paths are deliberately synthetic and transactional. No hosted credentials.
 do $test$ declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';v jsonb;
 begin
- v:=public.grillad_backup_export(o,s);if v->>'format' is distinct from 'grillad-business-export-v2' or v->>'org' is distinct from o::text or v->>'site' is distinct from s::text then raise exception 'backup envelope';end if;
- if jsonb_typeof(v->'tables'->'sales') is distinct from 'array' or (v->'tables')?'drive_connections' then raise exception 'backup scope';end if;
+ v:=public.grillad_backup_export(o,s);if v->>'format' is distinct from 'grillad-business-export-v3' or v->>'org' is distinct from o::text or v->>'site' is distinct from s::text then raise exception 'backup envelope';end if;
+ if jsonb_typeof(v->'tables'->'sales') is distinct from 'array' or jsonb_typeof(v->'tables'->'backup_preferences') is distinct from 'array' or (v->'tables')?'drive_connections' or (v->'tables')?'drive_states' then raise exception 'backup scope';end if;
  if not public.grillad_drive_begin(o,s,repeat('a',64),'sealed-fixture') then raise exception 'drive state';end if;
  perform public.grillad_backup_preferences(o,s,'off',360,1,1);
  begin perform public.grillad_drive_claim();raise exception 'claim exposed';exception when insufficient_privilege then null;end;
@@ -107,12 +107,15 @@ reset role;
 do $test$ declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';archive jsonb;after_restore jsonb;counts jsonb;begin
  insert into grillad_private.attendance_policy(org,site,enabled,latitude,longitude,radius_m,max_accuracy_m,max_age_seconds,photo_retention_days) values(o,s,true,4.05,9.7,100,50,120,30);
  insert into grillad_private.attendance(id,org,site,actor,kind,captured_at,latitude,longitude,accuracy,photo,photo_hash,photo_until) values('b8000000-0000-0000-0000-000000000001',o,s,'b1000000-0000-0000-0000-000000000001','arrival',now(),4.05,9.7,5,decode('0102','hex'),repeat('a',64),now()+interval '1 day');
+ insert into grillad_private.backup_preferences(org,site,actor,frequency,local_minute,weekday,monthday) values(o,s,'b1000000-0000-0000-0000-000000000001','weekly',360,1,1) on conflict(org,site,actor) do update set frequency='weekly';
  archive:=grillad_private.backup_data(o,s);
+ if jsonb_array_length(archive->'tables'->'backup_preferences')<1 then raise exception 'missing backup preferences';end if;
  if archive->'tables'->'attendance'->0->'photo' is distinct from 'null'::jsonb then raise exception 'photo included';end if;
  if jsonb_array_length(archive->'tables'->'sales')<>1 then raise exception 'restore fixture missing sale';end if;
  begin perform pg_temp.grillad_replay_business(archive,o,s);raise exception 'nonempty target accepted';exception when invalid_parameter_value then null;end;
  begin perform pg_temp.grillad_replay_business(archive,o,gen_random_uuid());raise exception 'foreign archive accepted';exception when invalid_parameter_value then null;end;
  -- Synthetic rollback-only loss simulation. Never execute against a live database.
+ delete from grillad_private.backup_preferences where org=o and site=s;
  delete from grillad_private.attendance where org=o and site=s;
  delete from grillad_private.attendance_policy where org=o and site=s;
  delete from grillad_private.cash_receipts where org=o and site=s;

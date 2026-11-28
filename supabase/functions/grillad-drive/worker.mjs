@@ -23,11 +23,12 @@ async function readStored(f,id,headers){
 }
 const archiveBase=['items','cash','cash_recounts','preparations','stock_adjustments','sales','cash_receipts','expenses','purchases','targets','dimension_targets','service_policy','service_revisions','daily_summary'];
 const archiveV2=[...archiveBase,'attendance_policy','attendance','attendance_corrections','missing_departures','missing_arrivals','notice_preference','notice_read'];
+const archiveV3=[...archiveV2,'backup_preferences'];
 export function validateArchiveScope(d,job){
- if(!d||!['grillad-business-export-v1','grillad-business-export-v2'].includes(d.format)||d.org!==job.org||d.site!==job.site||!d.tables||Array.isArray(d.tables))throw Error('DRIVE_SCOPE');
- const names=d.format==='grillad-business-export-v2'?archiveV2:archiveBase;
+ if(!d||!['grillad-business-export-v1','grillad-business-export-v2','grillad-business-export-v3'].includes(d.format)||d.org!==job.org||d.site!==job.site||!d.tables||Array.isArray(d.tables))throw Error('DRIVE_SCOPE');
+ const names=d.format==='grillad-business-export-v3'?archiveV3:d.format==='grillad-business-export-v2'?archiveV2:archiveBase;
  if(Object.keys(d.tables).length!==names.length||names.some(n=>!Array.isArray(d.tables[n])||d.tables[n].length>10000||d.tables[n].some(r=>!r||r.org!==job.org||r.site!==job.site)))throw Error('DRIVE_SCOPE');
- if(d.format==='grillad-business-export-v2'&&d.tables.attendance.some(r=>r.photo!==null))throw Error('DRIVE_PHOTO');
+ if(d.format!=='grillad-business-export-v1'&&d.tables.attendance.some(r=>r.photo!==null))throw Error('DRIVE_PHOTO');
  return true;
 }
 async function verifyPrevious(raw,password,job){

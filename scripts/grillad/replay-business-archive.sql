@@ -7,8 +7,9 @@ language plpgsql security invoker set search_path=pg_catalog as $restore$
 declare t text; cols text; n integer; got jsonb;counts jsonb:='{}'; expected text[]:=array['items','cash','cash_recounts','preparations','stock_adjustments','sales','cash_receipts','expenses','purchases','targets','dimension_targets','service_policy','service_revisions','daily_summary'];
 begin
  if current_database() not in ('grillad_test','grillad_restore_test') or current_user<>'postgres' then raise exception 'ISOLATED_RESTORE_ONLY' using errcode='42501';end if;
- if p->>'format'='grillad-business-export-v2' then expected:=expected||array['attendance_policy','attendance','attendance_corrections','missing_departures','missing_arrivals','notice_preference','notice_read'];end if;
- if coalesce(p->>'format','') not in ('grillad-business-export-v1','grillad-business-export-v2') or p->>'org' is distinct from p_org::text or p->>'site' is distinct from p_site::text or jsonb_typeof(p->'tables') is distinct from 'object' or octet_length(p::text)>3100000 then raise exception 'RESTORE_SCOPE' using errcode='22023';end if;
+ if p->>'format' in ('grillad-business-export-v2','grillad-business-export-v3') then expected:=expected||array['attendance_policy','attendance','attendance_corrections','missing_departures','missing_arrivals','notice_preference','notice_read'];end if;
+ if p->>'format'='grillad-business-export-v3' then expected:=expected||array['backup_preferences'];end if;
+ if coalesce(p->>'format','') not in ('grillad-business-export-v1','grillad-business-export-v2','grillad-business-export-v3') or p->>'org' is distinct from p_org::text or p->>'site' is distinct from p_site::text or jsonb_typeof(p->'tables') is distinct from 'object' or octet_length(p::text)>3100000 then raise exception 'RESTORE_SCOPE' using errcode='22023';end if;
  if (select count(*) from jsonb_object_keys(p->'tables'))<>cardinality(expected) then raise exception 'RESTORE_TABLE_SET' using errcode='22023';end if;
  foreach t in array expected loop
   if jsonb_typeof(p->'tables'->t) is distinct from 'array' then raise exception 'RESTORE_TABLE' using errcode='22023';end if;
