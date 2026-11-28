@@ -89,4 +89,32 @@ do $test$ declare o uuid:='b2000000-0000-0000-0000-000000000001';begin
  if public.grillad_central_client_state(o,'suspended','active','Synthetic central test')->>'status' is distinct from 'active' then raise exception 'central resume';end if;
 end $test$;
 reset role;
+-- Recover an actual sale and stock history from the portable snapshot, in this isolated transaction.
+set role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+do $test$ declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';i uuid:=gen_random_uuid();begin
+ perform public.grillad_action(o,s,i,'add_item','{"name":"Poulet restauration","family":"Poulet","price":1000,"cost":400}');
+ perform public.grillad_action(o,s,gen_random_uuid(),'prepare',jsonb_build_object('item',i,'qty',5));
+ perform public.grillad_action(o,s,gen_random_uuid(),'open_cash','{"opening":100}');
+ perform public.grillad_action(o,s,gen_random_uuid(),'sell',jsonb_build_object('item',i,'qty',2,'price',1000,'received',2000));
+end $test$;
+reset role;
+\ir ../../scripts/grillad/replay-business-archive.sql
+do $test$ declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';archive jsonb;after_restore jsonb;counts jsonb;begin
+ archive:=grillad_private.backup_data(o,s);
+ if jsonb_array_length(archive->'tables'->'sales')<>1 then raise exception 'restore fixture missing sale';end if;
+ begin perform pg_temp.grillad_replay_business(archive,o,s);raise exception 'nonempty target accepted';exception when invalid_parameter_value then null;end;
+ begin perform pg_temp.grillad_replay_business(archive,o,gen_random_uuid());raise exception 'foreign archive accepted';exception when invalid_parameter_value then null;end;
+ -- Synthetic rollback-only loss simulation. Never execute against a live database.
+ delete from grillad_private.cash_receipts where org=o and site=s;
+ delete from grillad_private.sales where org=o and site=s;
+ delete from grillad_private.preparations where org=o and site=s;
+ delete from grillad_private.cash where org=o and site=s;
+ delete from grillad_private.items where org=o and site=s;
+ counts:=pg_temp.grillad_replay_business(archive,o,s);
+ after_restore:=grillad_private.backup_data(o,s);
+ if counts->>'sales' is distinct from '1' or after_restore->'tables' is distinct from archive->'tables' then raise exception 'restore data differs';end if;
+end $test$;
+
 rollback;
