@@ -150,3 +150,79 @@ test('@manager third real identity, site isolation and manager operations',async
   await m({action:'report',from:day,to:day,network:false});
  }finally{for(const token of [manager,seller,owner])await close(request,token)}
 });
+
+function localSql(sql:string){
+ if(process.env.GRILLAD_CI_LOCAL!=='1'||process.env.GITHUB_ACTIONS!=='true'||process.env.GITHUB_REPOSITORY!=='audreymendomo23-netizen/FAMILLE-NAXA'||process.env.GITHUB_REF!=='refs/heads/work/grillad-foundation-20261127'||!['http://127.0.0.1:54321','http://localhost:54321'].includes(process.env.GRILLAD_LOCAL_API||''))throw Error('LOCAL_ONLY');
+ return execFileSync('psql',['-XAt','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-c',sql],{encoding:'utf8',env:{PATH:process.env.PATH,PGPASSWORD:'postgres'}}).trim();
+}
+const partnerOrg='d7000000-0000-4000-8000-000000000001',partnerSite='d7000000-0000-4000-8000-000000000002',link='d7000000-0000-4000-8000-000000000003',camera='d7000000-0000-4000-8000-000000000004';
+function partnerFixture(kind:'zipple'|'naxa_security'){
+ localSql("insert into famille_core.organizations(id,legal_name,organization_type,status) values('"+partnerOrg+"','LOCAL CI partner','retail','active'); update famille_core.applications set status='active' where code='"+kind+"'; insert into famille_core.organization_apps(organization_id,app_id,status) select '"+partnerOrg+"',id,'active' from famille_core.applications where code='"+kind+"'; insert into famille_core.locations(id,organization_id,name) values('"+partnerSite+"','"+partnerOrg+"','LOCAL CI partner'); insert into famille_core.plans(app_id,code,name,amount_fcfa,billing_period) select id,'grillad-local-partner-fixture','Fixture',1,'monthly' from famille_core.applications where code='"+kind+"'; insert into famille_core.subscriptions(organization_id,app_id,plan_id,status,starts_at,ends_at) select '"+partnerOrg+"',app_id,id,'active',now()-interval '1 day',now()+interval '1 day' from famille_core.plans where code='grillad-local-partner-fixture';");
+}
+test('@zipple bilateral consent, paired QR, independent sale and revocation via actual gateway',async({request})=>{
+ const owner=await login(request,'owner'),seller=await login(request,'seller'),o=scoped(request,owner),m=mutation(o),qr='grillad_local_partner_qr_0123456789',table='9'.repeat(64),item=randomUUID();
+ try{
+  partnerFixture('zipple');
+  const h="encode(sha256(convert_to('"+qr+"','UTF8')),'hex')",th="encode(sha256(convert_to('"+table+"','UTF8')),'hex')";
+  await invoke(request,{action:'connect_catalog',qr},undefined,403);
+  localSql("select public.grillad_partner_approval('zipple','"+org+"','"+site+"','"+partnerOrg+"','"+partnerSite+"','"+accounts.owner.id+"',repeat('a',64),repeat('b',64)); select public.grillad_partner_zipple('"+link+"','"+org+"','"+site+"','"+partnerOrg+"','"+partnerSite+"',"+h+",now()+interval '1 day');");
+  await invoke(request,{action:'connect_pair',qr,table},undefined,403);
+  localSql("select public.grillad_connect_pair_set('"+link+"',"+th+",'"+accounts.owner.id+"',repeat('c',64),true)");
+  expect(await invoke(request,{action:'connect_pair',qr,table})).toMatchObject({approved:true,separate_orders:true,separate_tenders:true});
+  await m('add_item',{name:'Poulet Connect CI',family:'Poulet',price:1000,cost:400},item);await m('prepare',{item,qty:3});await m('open_cash',{opening:0});
+  await m('connect_item_set',{link,item,enabled:true,reason:'Recette locale'});
+  const cat=await invoke(request,{action:'connect_catalog',qr});expect(cat.items).toHaveLength(1);expect(cat.items[0]).not.toHaveProperty('cost');expect(cat.items[0]).not.toHaveProperty('remaining');
+  const order=randomUUID(),body={action:'connect_submit',qr,order,lines:[{item,qty:2}]};
+  expect((await invoke(request,body)).total).toBe(2000);expect((await invoke(request,body)).id).toBe(order);
+  for(const next of ['accepted','preparing','ready','handed'])await o({action:'connect_transition',order,event:randomUUID(),next,...(next==='handed'?{received:2000}:{})});
+  expect((await invoke(request,{action:'connect_status',qr,order})).status).toBe('handed');
+  const x=await o({action:'snapshot',from:day,to:day});expect(x.finance.ca).toBe(2000);expect(x.finance.connect_ca).toBe(2000);expect(x.items.find(x=>x.id===item).remaining).toBe(1);
+  await scoped(request,seller)({action:'connect_list'},403);
+  localSql("select public.grillad_connect_pair_set('"+link+"',"+th+",'"+accounts.owner.id+"',repeat('c',64),false)");
+  await invoke(request,{action:'connect_pair',qr,table},undefined,403);
+  await m('connect_link_set',{link,enabled:false,reason:'Fin recette'});
+  await invoke(request,{action:'connect_catalog',qr},undefined,403);
+ }finally{await close(request,seller);await close(request,owner)}
+});
+test('@security actual database projection, scoped access and source revocation',async({request})=>{
+ const owner=await login(request,'owner'),seller=await login(request,'seller'),o=scoped(request,owner);
+ try{
+  partnerFixture('naxa_security');
+  localSql("create table public.sec_organizations(id uuid primary key,active boolean not null); create table public.sec_sites(id uuid primary key,organization_id uuid not null,active boolean not null); create table public.sec_devices(id uuid primary key,organization_id uuid not null,site_id uuid not null,label text,kind text,observed_at timestamptz); create table public.sec_incidents(id uuid primary key,organization_id uuid not null,site_id uuid not null,device_id uuid,occurred_at timestamptz); insert into public.sec_organizations values('"+partnerOrg+"',true); insert into public.sec_sites values('"+partnerSite+"','"+partnerOrg+"',true); insert into public.sec_devices values('"+camera+"','"+partnerOrg+"','"+partnerSite+"','Camera CI','camera',now());");
+  localSql("select public.grillad_partner_approval('security','"+org+"','"+site+"','"+partnerOrg+"','"+partnerSite+"','"+accounts.owner.id+"',repeat('d',64),repeat('e',64)); select public.grillad_security_bind('"+org+"','"+site+"','"+partnerOrg+"','"+partnerSite+"','"+partnerOrg+"','"+partnerSite+"'); select public.grillad_security_project('"+org+"','"+site+"','"+partnerOrg+"','"+partnerSite+"');");
+  let x=await o({action:'security_list'});expect(x.available).toBe(true);expect(x.cameras.some(c=>c.id===camera)).toBe(true);expect(x.live_request_available).toBe(false);
+  await scoped(request,seller)({action:'security_list'},403);
+  await o({action:'security_live_session',camera},503);
+  localSql("update public.sec_sites set active=false where id='"+partnerSite+"'");
+  x=await o({action:'security_list'});expect(x.available).toBe(false);expect(x.cameras).toEqual([]);
+ }finally{await close(request,seller);await close(request,owner)}
+});
+test('@billing-recovery hosted contracts in real local Auth, independent proof and recovery request',async({request})=>{
+ const owner=await login(request,'owner'),seller=await login(request,'seller'),o=scoped(request,owner);
+ try{
+  const recovery=await invoke(request,{action:'recovery',phone:accounts.owner.phone});expect(recovery.received).toBe(true);
+  expect(Number(localSql("select count(*) from famille_private.recovery_requests where app_code='grillad' and login_hash=encode(sha256(convert_to('grillad:"+accounts.owner.phone+"','UTF8')),'hex')"))).toBeGreaterThan(0);
+  localSql("select public.grillad_subscription_destination_set('orange_money','LOCAL CI beneficiary','FIXTURE-DEST',true); update famille_core.subscriptions set status='expired',ends_at=now()-interval '1 hour' where organization_id='"+org+"'");
+  const event=randomUUID();await o({action:'renewal_action',event,operation:'renewal_request',payload:{plan:'grillad_premium_month'}});
+  const q=await o({action:'payment_quote',request:event,channel:'orange_money'});expect(q.amount).toBe(6000);expect(q.provider_connected).toBe(false);
+  await scoped(request,seller)({action:'payment_quote',request:event,channel:'orange_money'},403);
+  const proof=await o({action:'subscription_declare',request:event,reference:'LOCAL-CI-PROOF',amount:6000,payer:'699000011',occurred:new Date().toISOString()});
+  expect(proof).toBeTruthy();await o({action:'snapshot',from:day,to:day},403);
+  expect(localSql("select status from famille_core.subscriptions where organization_id='"+org+"'")).toBe('expired');
+ }finally{await close(request,seller);await close(request,owner)}
+});
+test('@push true Android-tagged Auth registration, preference and opt-out without external FCM',async({request})=>{
+ const a=accounts.seller,s=await invoke(request,{action:'login',phone:a.phone,password:a.password,installation:randomUUID(),platform:'android'}),seller=s.access;
+ const owner=await login(request,'owner'),o=scoped(request,owner),v=scoped(request,seller);
+ try{
+  const item=randomUUID();await mutation(o)('add_item',{name:'Push CI',family:'Poulet',price:1000,cost:400},item);
+  await v({action:'push_register',enabled:true,token:'local-fixture-token-not-fcm-'+'x'.repeat(40),project:'wrong'},400);
+  expect((await v({action:'push_register',enabled:true,token:'local-fixture-token-not-fcm-'+'x'.repeat(40),project:'grillad'})).registered).toBe(true);
+  const event=randomUUID();await mutation(v)('prepare',{item,qty:1},event);
+  const feed=await v({action:'notice_feed'});expect(feed.items.some(x=>x.id==='event:'+event)).toBe(true);
+  const claims=JSON.parse(localSql("select public.grillad_push_claim(50)"));expect(claims.length).toBeGreaterThan(0);expect(claims.every(x=>!('token' in x))).toBe(true);
+  expect((await v({action:'push_register',enabled:false})).registered).toBe(false);
+  for(const c of claims)expect(localSql("select public.grillad_push_start('"+c.id+"') is null")).toBe('t');
+  expect(Number(localSql("select count(*) from grillad_private.push_attempts where status='skipped'"))).toBe(claims.length);
+ }finally{await close(request,seller);await close(request,owner)}
+});

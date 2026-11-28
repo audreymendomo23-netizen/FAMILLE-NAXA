@@ -24,7 +24,7 @@ async function provision(){
  console.log('PASS: three distinct local Auth users provisioned (no SMS)');
 }
 function serve(){
- const env={url,key,service,origins:['http://127.0.0.1:4181']};
+ const env={url,key,service,firebaseProject:'grillad',origins:['http://127.0.0.1:4181']};
  createServer(async(req,res)=>{try{
   if(req.url!=='/functions/v1/grillad'){res.writeHead(404);res.end();return}
   const chunks=[];for await(const c of req)chunks.push(c);
