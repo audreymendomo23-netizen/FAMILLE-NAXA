@@ -297,7 +297,48 @@ do $$begin
  begin perform public.grillad_daily_list('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001');raise exception 'seller daily leak';exception when insufficient_privilege then null;end;
  begin perform public.grillad_auth_begin(repeat('b',64),false);raise exception 'service-only auth bridge leaked';exception when insufficient_privilege then null;end;
 end $$;
+-- Transport qualification: only the enrolled seller, scoped to their own notices.
+do $declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';begin
+ perform public.grillad_push_register(o,s,repeat('g',64),'grillad',true);
+ perform public.grillad_action(o,s,'b9000000-0000-0000-0000-000000000001','prepare',jsonb_build_object('item','b6000000-0000-0000-0000-000000000001','qty',1));
+ begin perform public.grillad_push_claim(50);raise exception 'push claim leaked';exception when insufficient_privilege then null;end;
+ begin perform count(*) from grillad_private.push_attempts;raise exception 'attempt table leaked';exception when insufficient_privilege then null;end;
+end $;
 reset role;
+set role service_role;
+do $declare v jsonb;n jsonb;a uuid;begin
+ v:=public.grillad_push_claim(50);
+ if jsonb_array_length(v)<1 then raise exception 'no eligible notice';end if;
+ if exists(select 1 from jsonb_array_elements(v) x where x?'token') then raise exception 'claim exposed token prematurely';end if;
+ if jsonb_array_length(public.grillad_push_claim(50))<>0 then raise exception 'duplicate claim';end if;
+ for n in select x from jsonb_array_elements(v) x loop
+  a:=(n->>'id')::uuid;
+  if public.grillad_push_start(a)->>'token' is distinct from repeat('g',64) then raise exception 'invalid scoped token';end if;
+  if public.grillad_push_start(a) is not null then raise exception 'double start';end if;
+  if not public.grillad_push_finish(a,'accepted') or public.grillad_push_finish(a,'accepted') then raise exception 'finish replay';end if;
+ end loop;
+end $;
+reset role;
+do $begin
+ if not exists(select 1 from grillad_private.push_attempts a join famille_private.account_devices d on d.id=a.device_id where a.notice_id='event:b9000000-0000-0000-0000-000000000001' and d.user_id='b1000000-0000-0000-0000-000000000002' and a.status='accepted') then raise exception 'own notice not delivered to FCM candidate';end if;
+ if exists(select 1 from grillad_private.push_attempts where notice_id like 'connect:%' or notice_id like 'security:%') then raise exception 'seller notice isolation';end if;
+end $;
+set role authenticated;
+do $declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';begin
+ perform public.grillad_action(o,s,'b9000000-0000-0000-0000-000000000002','prepare',jsonb_build_object('item','b6000000-0000-0000-0000-000000000001','qty',1));
+end $;
+reset role;
+set role service_role;
+do $begin if jsonb_array_length(public.grillad_push_claim(50))<1 then raise exception 'second notice missing';end if;end $;
+reset role;
+set role authenticated;
+do $begin perform public.grillad_push_register('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',null,null,false);end $;
+reset role;
+do $declare a uuid;begin
+ select id into a from grillad_private.push_attempts where notice_id='event:b9000000-0000-0000-0000-000000000002';
+ if a is null or public.grillad_push_start(a) is not null then raise exception 'disabled token sent';end if;
+ if (select status from grillad_private.push_attempts where id=a)<>'skipped' then raise exception 'disabled claim not skipped';end if;
+end $;
 update famille_private.account_devices set status='revoked',revoked_at=now() where user_id='b1000000-0000-0000-0000-000000000002';
 set role authenticated;
 do $$begin
