@@ -841,3 +841,6 @@ Décision : les nouveaux clients GRILLAD disposent de 72 heures d'utilisation gr
 6. Qualification précédente : 78fa9062, runs 46135620311 (15/15) et 46135620351 (livraison réussie, artefact 15260085444), autres campagnes applicables 1e1dc7fa (20/20), 36/36 composite ; cela ne qualifie pas l'inscription autonome ni l'essai, qui constituent un blocage commercial rouge. Ne pas assimiler le nouveau contrat à un développement effectué.
 
 Statut : décision et audit consignés ; implémentation, migrations, déploiement, tests E2E du parcours et livraison du nouvel APK non effectués dans cette passe. Aucun changement sur NAXA ni en production.
+
+### 91.1. Socle serveur candidat
+Inscription e-mail Supabase, preuve de vérification obligatoire avant provisionnement, essai 72 heures via plan Premium existant et registre isolé sans paiement. Login e-mail ou téléphone, récupération e-mail. SQL ajouté à la pile locale réelle ; tests gateway ajoutés. Pas d'application de migration ni de déploiement hébergé, configuration confirmation/SMTP à qualifier. Interfaces et E2E complets à raccorder, pas de statut vert anticipé.

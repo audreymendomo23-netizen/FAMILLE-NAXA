@@ -60,6 +60,7 @@ psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_connect_pairs_v1.sql
 psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_capture_match_v1.sql
 psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_push_transport_v1.sql
 psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_transverse_v1.sql
+psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_self_signup_v1.sql
 node scripts/grillad/local-real-auth.mjs provision
 psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_real_auth_seed.sql
 printf '%s\n' 'NOTIFY pgrst, '\''reload schema'\'';' | psql -X -v ON_ERROR_STOP=1
