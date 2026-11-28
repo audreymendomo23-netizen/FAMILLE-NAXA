@@ -66,7 +66,7 @@ internal fun messaging(context:Context):FirebaseMessaging{
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp)){
   Text(tr("Notifications push","Push notifications"),style=MaterialTheme.typography.titleMedium)
   Text(if(enabled)tr("Activées pour cette session","Enabled for this session")else tr("Désactivées","Disabled"))
-  if(!configured())Text(tr("Configuration WideMeet indisponible.","WideMeet configuration unavailable."))
+  if(!configured())Text(tr("Les notifications sont momentanément indisponibles.","Notifications are temporarily unavailable."))
   if(error)Text(tr("Activation ou révocation non confirmée.","Activation or revocation unconfirmed."),color=MaterialTheme.colorScheme.error)
   Button(enabled=!busy&&configured()&&!enabled,onClick={if(permission(context))enable()else ask.launch(Manifest.permission.POST_NOTIFICATIONS)}){Text(tr("Activer","Enable"))}
   TextButton(enabled=!busy,onClick={busy=true;scope.launch{try{

@@ -102,7 +102,7 @@ private class ChatAudio{
  }
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
   Text(when(channel){"agenda"->tr("Documents de l’ordre du jour","Agenda documents");"room-chat"->tr("Fichiers et vocaux de la salle","Room files and voice messages");else->tr("Fichiers et messages vocaux","Files and voice messages")},style=MaterialTheme.typography.titleMedium)
-  Text(tr("PDF, JPEG, PNG. Limite de recette : 1 Mio ; vocal 60 s.","PDF, JPEG, PNG. Test limit: 1 MiB; voice 60 s."))
+  Text(tr("PDF, JPEG, PNG. Taille maximale : 1 Mio ; message vocal : 60 s.","PDF, JPEG, PNG. Maximum size: 1 MiB; voice message: 60 s."))
   if(error)Text(tr("Accès, format ou transfert non confirmé.","Access, format or transfer unconfirmed."),color=MaterialTheme.colorScheme.error)
   if(allowUpload)TextButton(enabled=!busy&&pending==null&&!recording,onClick={picker.launch(arrayOf("application/pdf","image/jpeg","image/png"))}){Text(tr("Choisir une pièce jointe","Choose attachment"))}
   if(voiceAllowed&&allowUpload&&recording)Button(onClick={finishRecording()}){Text(tr("Terminer l’enregistrement","Stop recording"))}

@@ -32,7 +32,7 @@ import java.util.UUID
  if(recoveryKey.isNotEmpty()){
   ProtectSecretScreen();Text(recoveryKey);Button(onClick={recoveryKey=""}){Text(tr("J’ai conservé ma clé","I saved my key"))}
  }else{
-  if(BuildConfig.WIDEMEET_SUPPORT_RECOVERY_ENABLED)Row{Checkbox(checked=supervised,onCheckedChange={supervised=it},enabled=!busy);Text(tr("Code de secours supervisé (sur environnement qualifié)","Supervised backup code (qualified environment)"))}
+  if(BuildConfig.WIDEMEET_SUPPORT_RECOVERY_ENABLED)Row{Checkbox(checked=supervised,onCheckedChange={supervised=it},enabled=!busy);Text(tr("Code de secours supervisé (à conserver séparément)","Supervised backup code (store separately)"))}
   OutlinedTextField(password,{password=it.take(256)},enabled=!busy,label={Text(tr("Mot de passe actuel","Current password"))},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
   Button(enabled=!busy&&password.isNotEmpty(),onClick={busy=true;error=false;scope.launch{try{recoveryKey=gateway.enrollRecoveryKey(session,password,supervised)}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{password="";busy=false}}}){Text(tr("Générer une clé","Generate key"))}
  }
