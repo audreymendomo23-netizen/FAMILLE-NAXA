@@ -375,3 +375,15 @@ Le §20 révisé remplace le cadrage SMTP grand public précédent (361ebdfa). L
 
 ### 27/11/2026 — Séparation définitive des cahiers, décision propriétaire
 Le cahier principal 12-widemeet.md est restauré à l'identique du blob b6f2b18580cc91c4b0652039b8257ab5be30aad1 de la branche de construction. L'ancien §20 est transféré dans [12-bis-widemeet-extension-entreprise.md](../../7%20famille%20naxa/01-cahiers-des-charges/12-bis-widemeet-extension-entreprise.md), document autonome conservant les 15 modules réservés à l'entreprise, fil et vidéos professionnelles, UX mobile et règles d'inclusion. B7–B12 différés, hors périmètre de livraison B1–B6. La conception de l'application initiale reste prioritaire. Aucun changement de code, workflow, droit, tarif, déploiement ou branche de construction dans cette passe documentaire.
+
+## 28/11/2026 — Nouvelle direction V2 et organisation en quatre bulks
+Décision propriétaire : master vert/doré exact validé avec textes de vision, couleurs secondaires, arrière-plans et photographie ; aucune carte IA omniprésente. Référence [MASTER_UI_UX_20261128.md](MASTER_UI_UX_20261128.md) et original sauvegardé dans Bibliothèque, SHA256 85778f89b057b8a4abd32476e28f7734515c726315ed59f4c2a4e58685e62a48. Pas de recréation approximative ni de nouvelles cartes hors master. Meet demeure le cœur de l'application ; poste affiché auprès de chaque nom professionnel et fiche cliquable.
+Six libellés ajoutés validés : Annuaire professionnel, Mon entreprise (réseau social interne), Actualités (fil du même réseau), Courrier professionnel, Annonces, Documents partagés. Chat existant enrichi : texte, voice, audio, vidéo, documents, notification de lecture, effacer pour moi/tous, filtre En ligne et masquage. Extension entreprise ; particuliers conservent droits initiaux. Pas de Drive, management, connaissances, assistant IA entreprise ou coédition ajoutés sans arbitrage.
+Plan V2 en quatre lots [PLAN_EXECUTION_V2_4_BULKS.md](PLAN_EXECUTION_V2_4_BULKS.md) :
+| Lot | Périmètre | Actions de travail | Statut |
+|---|---|---:|---|
+| V2-01 | Master, connexion/accueil/Meet, identité et annuaire | 4 | Planifié |
+| V2-02 | Chat texte/voice/appels/fichiers, lecture, suppression, présence | 4 | Planifié |
+| V2-03 | Mon entreprise, Actualités, Annonces | 4 | Planifié |
+| V2-04 | Courrier, Documents, intégration et qualification | 4 | Planifié |
+Total 16 actions planifiées, aucune clôture V2 prouvée, pas de taux de construction inféré. Ce nouveau découpage supplante B7–B12 pour les modules validés, mais ne modifie pas le registre B1–B6. HEAD intégré constaté 93f269e763dd8be53f7f85990371393dc93ea940, non requalifié durant cette passe ; reprendre depuis le dernier candidat réellement audité, pas depuis l'ancienne branche documentaire. Contrats communs puis développement parallèle, intégration et preuves individuelles. Pas de création de branche code, de lancement CI, de migration, main ou déploiement ; suivi historique B1–B6 intact. Les arbitrages logo/navigation et sources photographiques restent documentés.
