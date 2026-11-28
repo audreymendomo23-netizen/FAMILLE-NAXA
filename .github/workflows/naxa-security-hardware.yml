@@ -83,3 +83,42 @@ jobs:
           path: security-hardware-results/
           if-no-files-found: warn
           retention-days: 14
+  camera-lab:
+    if: github.ref == 'refs/heads/work/naxa-security-completion-20261128'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --workspace @famille/naxa-security-web --include-workspace-root=false --ignore-scripts
+      - run: npm run build --workspace @famille/naxa-security-web
+        env:
+          VITE_SECURITY_PUBLISHABLE_KEY: sb_publishable_qa_fixture_not_a_real_key
+          VITE_SECURITY_TRUST_ENABLED: 'true'
+          VITE_SECURITY_FIELD_ENABLED: 'true'
+      - run: npm install --no-save --ignore-scripts playwright@1.65.1
+      - run: npx playwright install --with-deps chromium
+      - name: Camera boundary with deterministic video
+        shell: bash
+        env:
+          SECURITY_VIRTUAL_LAB: '1'
+        run: |
+          set -euo pipefail
+          mkdir -p security-hardware-results
+          (cd apps/web/naxa-security && npx vite preview --host 127.0.0.1 --port 4173) >security-hardware-results/camera-server.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
+          node docs/naxa-security/contracts/hardware-lab/camera.mjs | tee security-hardware-results/camera.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-virtual-camera
+          path: security-hardware-results/
+          if-no-files-found: warn
+          retention-days: 14

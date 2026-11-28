@@ -40,7 +40,7 @@ class SecurityVirtualHardwareTest {
  private fun sample(now:Long=System.currentTimeMillis())=Location(LocationManager.GPS_PROVIDER).apply{
   latitude=4.0;longitude=9.0;accuracy=10f;time=now;elapsedRealtimeNanos=SystemClock.elapsedRealtimeNanos()
  }
- private fun shell(cmd:String):String=inst.uiAutomation.executeShellCommand(cmd).use{fd->android.os.ParcelFileDescriptor.AutoCloseInputStream(fd).bufferedReader().use{it.readText()}}
+ private fun shell(cmd:String):String=android.os.ParcelFileDescriptor.AutoCloseInputStream(inst.uiAutomation.executeShellCommand(cmd)).bufferedReader().use{it.readText()}
  private fun failure(action:()->Unit){var rejected=false;try{action()}catch(_:Exception){rejected=true};assertTrue("Operation should reject invalid input",rejected)}
  @Test fun qr01_nativeBitmapRoundTrip(){
   val bitmap=securityTemporaryQrBitmap(code)
@@ -63,9 +63,10 @@ class SecurityVirtualHardwareTest {
  @Suppress("DEPRECATION","MissingPermission")
  @Test fun gps02_androidMockProviderIsRejected(){
   // Deliberately synthetic Android framework provider. Never report a physical location.
+  assertTrue("Synthetic provider only on emulator",Build.HARDWARE in listOf("ranchu","goldfish")||Build.PRODUCT.startsWith("sdk"))
   val pkg=context.packageName
   val manager=context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-  val provider="security_lab_virtual"
+  val providerName="security_lab_virtual"
   val received=AtomicReference<Location>()
   val latch=CountDownLatch(1)
   val listener=object:LocationListener{
@@ -79,18 +80,18 @@ class SecurityVirtualHardwareTest {
   shell("appops set $pkg android:mock_location allow")
   var installed=false
   try{
-   manager.addTestProvider(provider,false,false,false,false,true,true,true,1,1)
+   manager.addTestProvider(providerName,false,false,false,false,true,true,true,1,1)
    installed=true
-   manager.setTestProviderEnabled(provider,true)
-   manager.requestLocationUpdates(provider,0L,0f,listener,Looper.getMainLooper())
-   manager.setTestProviderLocation(provider,sample().apply{this.provider=provider})
+   manager.setTestProviderEnabled(providerName,true)
+   manager.requestLocationUpdates(providerName,0L,0f,listener,Looper.getMainLooper())
+   manager.setTestProviderLocation(providerName,sample().apply{this.provider=providerName})
    assertTrue("Android framework did not deliver synthetic provider event",latch.await(10,TimeUnit.SECONDS))
    val p=requireNotNull(received.get())
    assertTrue("Android must mark injected sample as mock",p.isFromMockProvider)
    assertFalse("Production GPS acceptance must reject mock",securityUsableGps(p))
   }finally{
    manager.removeUpdates(listener)
-   if(installed)manager.removeTestProvider(provider)
+   if(installed)manager.removeTestProvider(providerName)
    shell("appops set $pkg android:mock_location default")
   }
  }
