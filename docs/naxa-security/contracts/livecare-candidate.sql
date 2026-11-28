@@ -60,20 +60,21 @@ end $f$;
 revoke all on function sec_private.guard_support_message() from public,anon,authenticated;
 create trigger sec_support_message_guard before insert on public.sec_support_messages for each row execute function sec_private.guard_support_message();
 create function sec_private.support_action(p_org uuid,p_site uuid,p_case uuid,p_event uuid,p_op text,p_detail jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $f$
-declare c public.sec_support_cases%rowtype;old public.sec_support_events%rowtype;h text;out jsonb;body text;agent boolean;customer boolean;score integer;
+declare c public.sec_support_cases%rowtype;old public.sec_support_events%rowtype;h text;out jsonb;body text;agent boolean;customer boolean;score integer;target_agent uuid;transfer_reason text;
 begin
  if coalesce(sec_private.field_role(p_org,p_site),'') not in ('owner','manager','operator') or p_event is null or p_op is null or jsonb_typeof(p_detail) is distinct from 'object' or octet_length(p_detail::text)>2048 then raise exception 'denied' using errcode='42501';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_event::text,7));
  select * into c from public.sec_support_cases where id=p_case and organization_id=p_org and site_id=p_site for update;
  if not found then raise exception 'case denied' using errcode='42501';end if;
  agent:=sec_private.is_support_agent(p_org,p_site);customer:=c.requester_id=auth.uid();
- if not coalesce(customer or (agent and (c.agent_id=auth.uid() or (c.agent_id is null and p_op='claim'))),false) then raise exception 'case denied' using errcode='42501';end if;
  h:=encode(sha256(convert_to(p_detail::text,'UTF8')),'hex');
  select * into old from public.sec_support_events where id=p_event;
  if found then
   if old.actor_id<>auth.uid() or old.organization_id<>p_org or old.site_id<>p_site or old.case_id<>p_case or old.operation<>p_op or old.detail_hash<>h then raise exception 'event conflict' using errcode='23505';end if;
+  if not coalesce(customer or (agent and (c.agent_id=auth.uid() or p_op='transfer')),false) then raise exception 'case denied' using errcode='42501';end if;
   return old.receipt;
  end if;
+ if not coalesce(customer or (agent and (c.agent_id=auth.uid() or (c.agent_id is null and p_op='claim'))),false) then raise exception 'case denied' using errcode='42501';end if;
  if p_op='claim' and agent and not customer and c.state='open' and c.agent_id is null and p_detail='{}'::jsonb then
   update public.sec_support_cases set agent_id=auth.uid(),state='assigned' where id=c.id returning * into c;
  elsif p_op='reply' and agent and not customer and c.agent_id=auth.uid() and c.state in ('assigned','waiting_customer') and p_detail-'body'='{}'::jsonb then
@@ -86,6 +87,11 @@ begin
   if length(body) not between 1 and 500 or body ~ '[[:cntrl:]]' then raise exception 'invalid reply' using errcode='22023';end if;
   insert into public.sec_support_messages(id,organization_id,site_id,request_id,author_id,body) values(p_event,p_org,p_site,c.id,auth.uid(),body);
   select * into c from public.sec_support_cases where id=p_case;
+ elsif p_op='transfer' and agent and c.agent_id=auth.uid() and c.state in ('assigned','waiting_customer') and p_detail-'agent_id'-'reason'='{}'::jsonb then
+  target_agent:=(p_detail->>'agent_id')::uuid;transfer_reason:=trim(coalesce(p_detail->>'reason',''));
+  if target_agent is null or target_agent in (c.requester_id,auth.uid()) or length(transfer_reason) not between 1 and 500 or transfer_reason ~ '[[:cntrl:]]' then raise exception 'invalid transfer' using errcode='22023';end if;
+  if not exists(select 1 from sec_private.support_agents a join public.sec_site_memberships sm using(organization_id,site_id,user_id) join public.sec_memberships m using(organization_id,user_id) where a.organization_id=p_org and a.site_id=p_site and a.user_id=target_agent and a.active and sm.active and m.active and m.role in ('owner','manager','operator')) then raise exception 'recipient denied' using errcode='42501';end if;
+  update public.sec_support_cases set agent_id=target_agent where id=c.id returning * into c;
  elsif p_op='escalate' and agent and c.agent_id=auth.uid() and c.state in ('assigned','waiting_customer') and p_detail='{}'::jsonb then
   update public.sec_support_cases set priority='high',due_at=least(due_at,now()+interval '4 hours') where id=c.id returning * into c;
  elsif p_op='resolve' and agent and c.agent_id=auth.uid() and c.state in ('assigned','waiting_customer') and p_detail='{}'::jsonb then
@@ -98,6 +104,7 @@ begin
   update public.sec_support_cases set state='closed',rating=score where id=c.id returning * into c;
  else raise exception 'invalid support action' using errcode='22023';end if;
  out:=jsonb_build_object('event_id',p_event,'organization_id',p_org,'site_id',p_site,'case_id',c.id,'actor_id',auth.uid(),'operation',p_op,'state',c.state,'priority',c.priority);
+ if p_op='transfer' then out:=out||jsonb_build_object('agent_id',c.agent_id,'reason',transfer_reason);end if;
  insert into public.sec_support_events values(p_event,p_org,p_site,c.id,auth.uid(),p_op,h,out,now());
  return out;
 end $f$;

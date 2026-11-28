@@ -35,7 +35,7 @@ begin
  join public.sec_sites s on s.id=sm.site_id and s.organization_id=sm.organization_id
  join public.sec_organizations o on o.id=s.organization_id
  where m.organization_id=org and sm.site_id=site and m.active and sm.active and s.active and o.active and m.role in ('owner','manager','operator')
- and ((audience is not null and m.user_id=audience) or (audience is null and kind in ('safety','fire','warning') and m.role in ('owner','manager')))
+ and ((audience is not null and m.user_id=audience) or (kind='support' and event_name='transfer' and exists(select 1 from public.sec_support_cases c where c.id=(to_jsonb(new)->>'case_id')::uuid and c.organization_id=org and c.site_id=site and c.agent_id=m.user_id)) or (audience is null and kind in ('safety','fire','warning') and m.role in ('owner','manager')))
  on conflict do nothing;
  return new;
 end $f$;

@@ -38,4 +38,23 @@ do $q$begin
  if (select rating from public.sec_support_cases)<>5 or (select state from public.sec_support_cases)<>'closed' then raise exception 'close rating';end if;
  begin insert into public.sec_support_messages(id,organization_id,site_id,request_id,author_id,body) values(gen_random_uuid(),'10000000-0000-0000-0000-000000000131','20000000-0000-0000-0000-000000000131','30000000-0000-0000-0000-000000000131','00000000-0000-0000-0000-000000000131','late');raise exception 'closed message';exception when insufficient_privilege then null;end;
 end $q$;
+reset role;
+insert into sec_private.support_agents values ('10000000-0000-0000-0000-000000000131','20000000-0000-0000-0000-000000000131','00000000-0000-0000-0000-000000000133',true);
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000131',true);
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000131','20000000-0000-0000-0000-000000000131','00000000-0000-0000-0000-000000000131','30000000-0000-0000-0000-000000000151','support','{"category":"technical","detail":"QA transfer"}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000132',true);
+do $q$declare o uuid:='10000000-0000-0000-0000-000000000131';s uuid:='20000000-0000-0000-0000-000000000131';c uuid:='30000000-0000-0000-0000-000000000151';e uuid:=gen_random_uuid();v jsonb;d jsonb:='{"agent_id":"00000000-0000-0000-0000-000000000133","reason":"QA specialist"}';begin
+ perform public.sec_support_action(o,s,c,gen_random_uuid(),'claim','{}');
+ begin perform public.sec_support_action(o,s,c,gen_random_uuid(),'transfer','{"agent_id":"00000000-0000-0000-0000-000000000131","reason":"QA invalid"}');raise exception 'self/customer transfer';exception when invalid_parameter_value then null;end;
+ v:=public.sec_support_action(o,s,c,e,'transfer',d);
+ if v->>'agent_id'<>'00000000-0000-0000-0000-000000000133' or v<>public.sec_support_action(o,s,c,e,'transfer',d) then raise exception 'transfer replay';end if;
+ if exists(select 1 from public.sec_support_cases where id=c) or exists(select 1 from public.sec_support_messages where request_id=c) then raise exception 'former agent access';end if;
+ begin perform public.sec_support_action(o,s,c,gen_random_uuid(),'reply','{"body":"forbidden"}');raise exception 'former agent reply';exception when insufficient_privilege then null;end;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000133',true);
+do $q$declare o uuid:='10000000-0000-0000-0000-000000000131';s uuid:='20000000-0000-0000-0000-000000000131';c uuid:='30000000-0000-0000-0000-000000000151';begin
+ if not exists(select 1 from public.sec_support_messages where request_id=c and body='QA transfer') then raise exception 'new agent thread absent';end if;
+ perform public.sec_support_action(o,s,c,gen_random_uuid(),'resolve','{}');
+end $q$;
 reset role;rollback;

@@ -29,7 +29,7 @@ internal fun securityReportCsv(v:JSONObject):String {
  val current=rows.firstOrNull{it.optString("id")==selected}
  fun runAction(op:String,detail:JSONObject){if(busy||selected.isBlank())return;val idTarget=selected;val sig=idTarget+op+detail.toString();if(pendingId.isBlank()||pendingSig!=sig){pendingId=UUID.randomUUID().toString();pendingSig=sig};val id=pendingId;busy=true;scope.launch{try{
   val body=JSONObject().put("p_case",idTarget).put("p_event",id).put("p_op",op).put("p_detail",detail);val v=SecurityNativeApi.action(s,site,if(cases)"sec_case_action" else "sec_support_action",body)
-  if(state.generation==generation){status="Action confirmée : "+v.optString("state")+" — actualisez.";rows=emptyList();notes=emptyList();pendingId="";note=""}
+  if(state.generation==generation){status="Action confirmée : "+v.optString("state")+" — actualisez.";rows=emptyList();notes=emptyList();pendingId="";note="";target="";evidence=""}
  }catch(e:CancellationException){throw e}catch(_:Exception){if(state.generation==generation)status="Action refusée ou non confirmée."}finally{if(state.generation==generation)busy=false}}}
  Text(if(cases)"Dossiers incidents" else if(support)"Dossiers Livecare" else "Rapports serveur",style=MaterialTheme.typography.titleMedium)
  if(reports)listOf(1,7,30,90,365).forEach{d->FilterChip(selected=period==d,enabled=!busy,onClick={period=d;report=null},label={Text("$d jours")})}
@@ -53,7 +53,7 @@ internal fun securityReportCsv(v:JSONObject):String {
   }else{
    val customer=current.optString("requester_id")==s.user;val agent=current.optString("agent_id")==s.user
    if(!customer&&st=="open")Button(enabled=!busy,onClick={runAction("claim",JSONObject())}){Text("Prendre en charge")}
-   if(agent&&st in setOf("assigned","waiting_customer")){Button(enabled=!busy&&note.isNotBlank(),onClick={runAction("reply",JSONObject().put("body",note.trim()))}){Text("Répondre")};listOf("escalate","resolve").forEach{op->Button(enabled=!busy,onClick={runAction(op,JSONObject())}){Text(op)}}}
+   if(agent&&st in setOf("assigned","waiting_customer")){Button(enabled=!busy&&note.isNotBlank(),onClick={runAction("reply",JSONObject().put("body",note.trim()))}){Text("Répondre")};listOf("escalate","resolve").forEach{op->Button(enabled=!busy,onClick={runAction(op,JSONObject())}){Text(op)}};OutlinedTextField(target,{target=it},enabled=!busy,label={Text("Agent destinataire")});OutlinedTextField(evidence,{evidence=it},enabled=!busy,label={Text("Motif de transfert")});Button(enabled=!busy&&target.isNotBlank()&&evidence.isNotBlank(),onClick={runAction("transfer",JSONObject().put("agent_id",target.trim()).put("reason",evidence.trim()))}){Text("Transférer le dossier")}}
    if(customer&&st in setOf("open","assigned","waiting_customer"))Button(enabled=!busy&&note.isNotBlank(),onClick={runAction("customer_reply",JSONObject().put("body",note.trim()))}){Text("Envoyer ma réponse")}
    if(customer&&st=="resolved"){Button(enabled=!busy,onClick={runAction("reopen",JSONObject())}){Text("Rouvrir")};(1..5).forEach{n->TextButton(enabled=!busy,onClick={runAction("close",JSONObject().put("rating",n))}){Text("Clôturer avec note "+n)}}}
   }
