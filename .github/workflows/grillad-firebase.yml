@@ -65,3 +65,18 @@ jobs:
           bash scripts/grillad/firebase-gradle-ci.sh
           test -s apps/android/grillad/build/outputs/apk/debug/grillad-debug.apk
           echo 'PASS: configured debug APK built; device token and delivery not tested'
+      - name: Prepare installable GRILLAD debug APK
+        run: |
+          set -euo pipefail
+          mkdir -p apk-delivery
+          cp apps/android/grillad/build/outputs/apk/debug/grillad-debug.apk apk-delivery/GRILLAD-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify apk-delivery/GRILLAD-debug.apk
+          (cd apk-delivery && sha256sum GRILLAD-debug.apk > SHA256SUMS.txt)
+          printf '%s\n' "$GITHUB_SHA" > apk-delivery/SOURCE-COMMIT.txt
+      - name: Upload installable GRILLAD APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GRILLAD-Android-debug-${{ github.sha }}
+          path: apk-delivery/
+          if-no-files-found: error
+          retention-days: 14
