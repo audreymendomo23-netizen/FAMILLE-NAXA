@@ -1,0 +1,33 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000101'),('00000000-0000-0000-0000-000000000102'),('00000000-0000-0000-0000-000000000103');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000101','QA fire');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000101','manager',true),('10000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000102','operator',true),('10000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000103','operator',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','QA'),('20000000-0000-0000-0000-000000000102','10000000-0000-0000-0000-000000000101','Other');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000101',true),('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000102',true),('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000102','00000000-0000-0000-0000-000000000103',true);
+insert into public.sec_devices(id,organization_id,site_id,label,kind) values ('40000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','QA gateway','gateway'),('40000000-0000-0000-0000-000000000102','10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','QA smoke','smoke');
+insert into sec_private.gateway_bindings(gateway_id,organization_id,site_id,device_id) values ('40000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','40000000-0000-0000-0000-000000000102');
+set local role sec_gateway_ingest;
+do $q$declare j jsonb;begin
+ j:=sec_private.ingest_fire('40000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','40000000-0000-0000-0000-000000000102','50000000-0000-0000-0000-000000000101',now(),'alarm');
+ if j->>'source_state'<>'alarm' or j->>'physical_action'<>'false' then raise exception 'source error';end if;
+ if sec_private.ingest_fire('40000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','40000000-0000-0000-0000-000000000102','50000000-0000-0000-0000-000000000101',now(),'alarm')<>j then raise exception 'retry error';end if;
+ begin perform sec_private.ingest_fire('40000000-0000-0000-0000-000000000101','10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','40000000-0000-0000-0000-000000000102','50000000-0000-0000-0000-000000000101',now(),'restored');raise exception 'source overwritten';exception when unique_violation then null;end;
+end $q$;
+reset role;set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000101',true);
+select public.sec_create_geofence('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','50000000-0000-0000-0000-000000000102','QA zone',4,9,100);
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000102',true);
+insert into public.sec_attendance_drafts(organization_id,site_id,reporter_id,request_id,action,lat,lon,accuracy_m,observed_at,source,mock_reported) values ('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000102',gen_random_uuid(),'arrival',4,9,10,now(),'browser',null),('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000102',gen_random_uuid(),'departure',4.01,9,10,now(),'browser',null),('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000102',gen_random_uuid(),'arrival',4.0009,9,20,now(),'browser',null);
+do $q$declare j jsonb;begin
+ j:=public.sec_ack_fire('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','50000000-0000-0000-0000-000000000101');
+ if j->>'source_state'<>'alarm' or j->>'physical_action'<>'false' or public.sec_ack_fire('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','50000000-0000-0000-0000-000000000101')<>j then raise exception 'ack changed source';end if;
+ if (select source_state from public.sec_fire_events where id='50000000-0000-0000-0000-000000000101')<>'alarm' then raise exception 'ack silenced';end if;
+ if (select count(*) from public.sec_geofence_assessments where assessment='declared_inside' and not position_authenticated)<>1 or (select count(*) from public.sec_geofence_assessments where assessment='declared_outside')<>1 or (select count(*) from public.sec_geofence_assessments where assessment='uncertain')<>1 then raise exception 'geofence classification';end if;
+ if has_table_privilege(current_user,'public.sec_fire_events','UPDATE') or has_function_privilege(current_user,'sec_private.ingest_fire(uuid,uuid,uuid,uuid,uuid,timestamptz,text)','EXECUTE') then raise exception 'client fire mutation';end if;
+ begin perform public.sec_create_geofence('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101',gen_random_uuid(),'denied',4,9,100);raise exception 'operator zone creation';exception when insufficient_privilege then null;end;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000103',true);
+do $q$begin if (select count(*) from public.sec_fire_events)<>0 or (select count(*) from public.sec_geofence_assessments)<>0 then raise exception 'cross site leak';end if;
+ begin perform public.sec_ack_fire('10000000-0000-0000-0000-000000000101','20000000-0000-0000-0000-000000000101','50000000-0000-0000-0000-000000000101');raise exception 'cross site ack';exception when insufficient_privilege then null;end;
+end $q$;
+reset role;rollback;
