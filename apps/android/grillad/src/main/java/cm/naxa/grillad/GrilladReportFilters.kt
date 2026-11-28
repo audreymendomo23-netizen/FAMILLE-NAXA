@@ -29,7 +29,7 @@ import org.json.JSONObject
  Button({busy=true;result=null;message="";scope.launch{try{val (from,to)=bounds(period);result=request(obj("from" to from,"to" to to,"network" to network,"family" to family.ifEmpty{null},"actor" to actor.ifEmpty{null},"item" to item.ifEmpty{null}))}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){message="Rapport indisponible ou accès refusé"}finally{busy=false}}},enabled=enabled&&!busy){Text("Calculer")}
  if(message.isNotBlank())Text(message)
  result?.let{r->fun amount(k:String)=if(r.isNull(k))"Non attribué / inconnu" else r.optString(k)+" F"
- Text("CA "+amount("ca")+" · Direct "+amount("direct_ca")+" · Connect "+amount("connect_ca"));Text("Encaissements espèces "+amount("encaissements"))
+ Text("CA "+amount("ca")+" · Direct "+amount("direct_ca")+" · Connect "+amount("connect_ca"));Text("Encaissements espèces "+amount("encaissements")+" · MTN déclaré "+amount("mtn_declared")+" · Orange déclaré "+amount("orange_declared"))
  Text("Coût "+amount("cost")+" · Dépenses "+amount("expenses"))
  Text("Achats documentaires "+amount("purchase_amount")+" — non imputés automatiquement aux charges.")
  rows(r.optJSONArray("purchases_by_supplier")).forEach{x->Text(x.optString("supplier")+" · "+x.optString("amount")+" F · "+x.optString("count")+" achat(s)") }
