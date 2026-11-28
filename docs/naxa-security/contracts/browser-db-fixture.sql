@@ -53,3 +53,7 @@ insert into sec_private.support_agents values ('10000000-0000-0000-0000-00000000
 -- Synthetic evidence for Livecare attachment journey.
 insert into public.sec_evidence_files(id,organization_id,site_id,owner_id,reference,digest,size_bytes) values ('40000000-0000-0000-0000-000000000381','10000000-0000-0000-0000-000000000141','20000000-0000-0000-0000-000000000141','00000000-0000-0000-0000-000000000141','QA-support-proof','ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',3);
 insert into sec_private.evidence_content values ('40000000-0000-0000-0000-000000000381',decode('YWJj','base64'));
+
+-- Deliberately corrupted synthetic evidence; detection must not repair or conceal it.
+insert into public.sec_evidence_files(id,organization_id,site_id,owner_id,reference,digest,size_bytes) values ('40000000-0000-0000-0000-000000000403','10000000-0000-0000-0000-000000000141','20000000-0000-0000-0000-000000000141','00000000-0000-0000-0000-000000000141','QA-corrupted-proof','ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',3);
+insert into sec_private.evidence_content values ('40000000-0000-0000-0000-000000000403',decode('eHl6','base64'));
