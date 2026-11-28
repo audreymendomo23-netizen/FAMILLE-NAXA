@@ -11,7 +11,7 @@ insert into public.sec_module_requests(organization_id,site_id,reporter_id,reque
 do $q$begin if (select count(*) from public.sec_support_cases where state='open')<>1 or (select count(*) from public.sec_support_messages)<>1 then raise exception 'case not created';end if;end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000133',true);
 do $q$begin if (select count(*) from public.sec_support_cases)<>0 or (select count(*) from public.sec_support_messages)<>0 then raise exception 'manager privacy leak';end if;
- begin perform public.sec_support_action('10000000-0000-0000-0000-000000000131','20000000-0000-0000-0000-000000000131','30000000-0000-0000-0000-000000000131','50000000-0000-0000-0000-000000000131','claim','{}');raise exception 'manager claim';exception when insufficient_privilege then null;end if;
+ begin perform public.sec_support_action('10000000-0000-0000-0000-000000000131','20000000-0000-0000-0000-000000000131','30000000-0000-0000-0000-000000000131','50000000-0000-0000-0000-000000000131','claim','{}');raise exception 'manager claim';exception when insufficient_privilege then null;end;
 end $q$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000132',true);
 do $q$declare j jsonb;begin

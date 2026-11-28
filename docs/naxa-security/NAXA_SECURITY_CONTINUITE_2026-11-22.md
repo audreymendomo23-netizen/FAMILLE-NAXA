@@ -478,3 +478,5 @@ Départ d3b6b7b : SQL, JS, replay, 543 navigation verts sur 6f6daf5 ; gate Andro
 
 ### Qualification navigateur + PostgreSQL réel (jetable)
 Ajout d'un replay Livecare UI Chromium → adaptateur REST de recette strict → PostgreSQL réel avec rôle authenticated et auth.uid fixture. Huit écritures métier, personas distinctes, conversation, affectation, escalade, résolution, réouverture, clôture/satisfaction et refus inter-site. L'adaptateur n'est pas PostgREST ni un service de production ; aucune authentification réelle, aucun trafic externe. Résultat à constater sur runner SQL étendu.
+
+Correctif recette Livecare : 46087565478 a détecté une faute END IF au lieu de END dans le bloc exception du test négatif manager ; correction sans retirer le test. Requalification SQL + navigateur réel déclenchée.
