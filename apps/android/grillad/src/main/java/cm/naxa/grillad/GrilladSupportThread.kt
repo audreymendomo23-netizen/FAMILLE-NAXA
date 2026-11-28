@@ -12,4 +12,5 @@ import java.util.UUID
  LaunchedEffect(ticket,enabled){if(enabled){while(true){read(false);kotlinx.coroutines.delay(5000)}}}
  Text("Conversation assistance",style=MaterialTheme.typography.titleMedium);Text(data?.optString("description").orEmpty());rows(data?.optJSONArray("messages")).forEach{m->Text((if(m.optString("author_kind")=="agent")"Agent NAXA" else "Vous")+" · "+m.optString("body"))}
  OutlinedButton({read(false)},enabled=enabled&&!busy){Text("Actualiser la conversation")};OutlinedTextField(message,{if(it.length<=2000)message=it},label={Text("Message assistance")},enabled=enabled&&!busy&&pending==null,modifier=Modifier.fillMaxWidth());Button({read(true)},enabled=enabled&&!busy&&message.isNotBlank()){Text(if(pending!=null)"Réessayer" else "Envoyer le message")};if(status.isNotBlank())Text(status)
+ GrilladNativeSupportCall(ticket,enabled,request)
 }
