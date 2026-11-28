@@ -1,5 +1,10 @@
 // Shared NAXA vocabulary and candidate Cameroonian Fulfulde translations; native linguistic review pending.
 export const labels={
+ "Nom d’utilisateur": ["Username","Innde kuutoro"],
+ "Identifiant ou téléphone": ["Username or phone","Innde kuutoro walla telefoŋ"],
+ "Identifiant ou téléphone de récupération": ["Recovery username or phone","Innde kuutoro walla telefoŋ"],
+ "Saisissez votre identifiant ou téléphone. Votre demande sera examinée par l’administrateur.": ["Enter your username or phone. Your request will be reviewed by the administrator.","Naatnu innde kuutoro walla telefoŋ. Hooreejo ƴeewto ɗaɓɓitaare maa."],
+ "Vérifiez votre identifiant, vos informations et votre mot de passe, puis réessayez.": ["Check your username, details and password, then try again.","Ƴeewto innde kuutoro e finnde maa, kadi eta."],
  "Créer mon compte": ["Create my account","Sos konte am"],
  "Vérifier mon adresse e-mail": ["Verify my email","Ƴeewto iimeel am"],
  "Créer un nouveau mot de passe": ["Create a new password","Sos finnde hesere"],

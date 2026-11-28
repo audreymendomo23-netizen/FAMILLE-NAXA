@@ -1,6 +1,11 @@
 package cm.naxa.grillad
 // Shared presentation keys; candidate ff-CM translations require native linguistic review.
 internal fun grilladLabel(key:String,locale:String):String=if(locale!="en"&&locale!="ff-CM")key else when(key){
+ "Nom d’utilisateur" -> if(locale=="en")"Username" else "Innde kuutoro"
+ "Identifiant ou téléphone" -> if(locale=="en")"Username or phone" else "Innde kuutoro walla telefoŋ"
+ "Identifiant ou téléphone de récupération" -> if(locale=="en")"Recovery username or phone" else "Innde kuutoro walla telefoŋ"
+ "Saisissez votre identifiant ou téléphone. Votre demande sera examinée par l’administrateur." -> if(locale=="en")"Enter your username or phone. Your request will be reviewed by the administrator." else "Naatnu innde kuutoro walla telefoŋ. Hooreejo ƴeewto ɗaɓɓitaare maa."
+ "Vérifiez votre identifiant, vos informations et votre mot de passe, puis réessayez." -> if(locale=="en")"Check your username, details and password, then try again." else "Ƴeewto innde kuutoro e finnde maa, kadi eta."
  "Créer mon compte" -> if(locale=="en")"Create my account" else "Sos konte am"
  "Vérifier mon adresse e-mail" -> if(locale=="en")"Verify my email" else "Ƴeewto iimeel am"
  "Créer un nouveau mot de passe" -> if(locale=="en")"Create a new password" else "Sos finnde hesere"
