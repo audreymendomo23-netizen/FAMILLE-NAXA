@@ -325,7 +325,8 @@ Deno.serve(async request=>{
  }
  if(typeof name==="string"&&name.startsWith("center-")){
  if(Deno.env.get("WM_WORKSPACE_CENTERS_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
- const result=await rest("rpc/wm_workspace_center",{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
+ const rpc=name==="center-periodic-list"||name==="center-periodic-save"?"rpc/wm_periodic_action":"rpc/wm_workspace_center";
+ const result=await rest(rpc,{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
  return result?send(200,result):send(403,{error:"scope"});
  }
  if(typeof name==="string"&&name.startsWith("support-")){

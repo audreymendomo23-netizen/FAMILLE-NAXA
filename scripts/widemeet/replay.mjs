@@ -163,6 +163,15 @@ try{
  assert.equal((await centerReq(gs.access_token,"statistics",{period:"monthly"})).status,403);
  assert.equal((await centerReq(hs.access_token,"statistics",{period:"invalid"})).status,403);
  assert.equal((await centerReq(hs.access_token,"statistics",{period:"weekly",days:7})).status,403);
+  // Regression: the real Edge router must reach the specialized, service-only periodic RPC.
+  const periodicInitial=await centerOk(hs.access_token,"periodic-list");assert.equal(periodicInitial.timezone,"Africa/Douala");assert.equal(periodicInitial.scope,"enterprise");
+  assert.equal((await centerReq(gs.access_token,"periodic-list")).status,403);
+  assert.equal((await centerReq(gs.access_token,"periodic-save",{cadence:"weekly",enabled:true})).status,403);
+  assert.equal((await centerReq(hs.access_token,"periodic-save",{cadence:"invalid",enabled:true})).status,403);
+  assert.equal((await centerReq(hs.access_token,"periodic-save",{cadence:"weekly",enabled:"true"})).status,403);
+  const periodicOn=await centerOk(hs.access_token,"periodic-save",{cadence:"weekly",enabled:true});assert.ok(periodicOn.preferences.some(p=>p.cadence==="weekly"&&p.enabled===true));
+  const periodicOff=await centerOk(hs.access_token,"periodic-save",{cadence:"weekly",enabled:false});assert.ok(periodicOff.preferences.some(p=>p.cadence==="weekly"&&p.enabled===false));
+  pass("B4 Edge periodic route: list, explicit consent, disable, invalid input and staff denial");
  pass("B4 actual calendar statistics and scope");
  const page=await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace",page_size:1});assert.equal(page.items[0].id,privateData.message_id);assert.equal(page.next_before,null);
  assert.deepEqual((await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace",page_size:1,before_id:privateData.message_id})).items,[]);

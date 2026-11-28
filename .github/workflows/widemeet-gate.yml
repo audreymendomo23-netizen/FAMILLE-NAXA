@@ -102,6 +102,11 @@ jobs:
               # Known published fixed versions: refresh cached misses before trying the other official endpoint.
               refresh=(--refresh-dependencies)
               echo "Refreshing known Maven Central dependency metadata after resolution miss"
+            elif grep -Fq "ModuleVersionResolveException.getMessage" "$RUNNER_TEMP/wm-gradle-build.log" && grep -Fq 'Cannot invoke "java.util.List.get(int)" because "path" is null' "$RUNNER_TEMP/wm-gradle-build.log"; then
+              # Retry the exact same tasks when Gradle masks the Maven resolver error.
+              # Persistent failure remains fatal; no tests or compilation are skipped.
+              refresh=(--refresh-dependencies)
+              echo "Retrying bounded Gradle resolver diagnostic failure with fresh metadata"
             else
               exit 1
             fi
