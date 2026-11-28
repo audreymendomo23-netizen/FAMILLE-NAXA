@@ -316,7 +316,7 @@ for (const [id, label, acronym] of apps) {
     "        targetSdk = " + previewSdk,
     "        versionCode = 1",
     '        versionName = "0.1.0"',
-    ...(id === "naxa-security" ? ['        buildConfigField("String", "SECURITY_PUBLISHABLE_KEY", "\\"\\"")'] : []),
+    ...(id === "naxa-security" ? ['        buildConfigField("String", "SECURITY_PUBLISHABLE_KEY", "\\"\\"")', '        buildConfigField("String", "SECURITY_MEDIA_ORIGIN", "\\"\\"")'] : []),
     '        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"',
     "    }",
     "    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }",
@@ -331,6 +331,7 @@ for (const [id, label, acronym] of apps) {
     "    implementation(libs.androidx.compose.ui)",
     "    implementation(libs.androidx.compose.material3)",
     "    implementation(libs.androidx.room.runtime)",
+    ...(id === "naxa-security" ? ['    implementation("com.journeyapps:zxing-android-embedded:4.3.0")'] : []),
     "    implementation(libs.androidx.room.ktx)",
     "    implementation(libs.androidx.datastore.preferences)",
     "    kapt(libs.androidx.room.compiler)",
@@ -490,11 +491,11 @@ for (const [id, label, acronym] of apps) {
   put(webDir + "/package.json", json({
     name: "@famille/" + id + "-web", version: "0.1.0", private: true, type: "module",
     scripts: { dev: "next dev", build: "next build && serwist build", start: "next start", typecheck: "tsc --noEmit" },
-    dependencies: { "@famille/design-system": "workspace:*", next: "16.4.6", react: "19.3.0", "react-dom": "19.3.0" },
+    dependencies: { "@famille/design-system": "workspace:*", next: "16.4.6", react: "19.3.0", "react-dom": "19.3.0", ...(id === "naxa-security" ? { qrcode: "1.5.4", jsqr: "1.4.0" } : {}) },
     devDependencies: {
       "@serwist/cli": "9.5.13", "@serwist/next": "9.5.13",
       "@types/node": "22.19.1", "@types/react": "19.2.7", "@types/react-dom": "19.2.3",
-      concurrently: "9.2.1", esbuild: "0.27.2", serwist: "9.5.13", typescript: "5.9.3",
+      concurrently: "9.2.1", esbuild: "0.27.2", serwist: "9.5.13", typescript: "5.9.3", ...(id === "naxa-security" ? { "@types/qrcode": "1.5.5", vite: "5.4.10" } : {}),
     },
   }));
   put(webDir + "/next.config.ts", lines([
