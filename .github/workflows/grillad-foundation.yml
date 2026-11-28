@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test scripts/grillad/infrastructure.test.mjs supabase/functions/grillad/handler.test.mjs
+      - run: node --test scripts/grillad/infrastructure.test.mjs scripts/grillad/central-identity.test.mjs supabase/functions/grillad/handler.test.mjs
   web:
     strategy:
       fail-fast: false
@@ -162,6 +162,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_subscription_proofs_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_connect_tenders_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_subscription_claims_v1.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_identity_review_v1.sql
           if [ '${{ matrix.suite }}' = backup ]; then
             bash scripts/grillad/backup-restore-drill.sh
           else

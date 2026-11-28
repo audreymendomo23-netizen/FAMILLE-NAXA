@@ -147,4 +147,10 @@ do $test$ declare q uuid:='c2000000-0000-0000-0000-000000000010';o uuid:=current
  begin perform public.grillad_subscription_declare(o,s,q,'credit.fixture',6000,'699000011',now());raise exception 'cross intent reference reused';exception when unique_violation then null;end;
 end $test$;
 reset role;
+set role service_role;
+do $test$ declare u uuid:='c1000000-0000-0000-0000-000000000001';op uuid:='c1000000-0000-0000-0000-000000000002';e uuid:=gen_random_uuid();h text:=encode(sha256(convert_to('grillad:+237699000011','UTF8')),'hex');begin
+ if not public.grillad_identity_review(e,op,u,h,repeat('3',64),'owner',null) or not public.grillad_identity_review(e,op,u,h,repeat('3',64),'owner',null) then raise exception 'identity review';end if;
+ begin perform public.grillad_identity_review(gen_random_uuid(),op,u,repeat('4',64),repeat('5',64),'owner',null);raise exception 'unverified phone';exception when insufficient_privilege then null;end;
+end $test$;
+reset role;
 rollback;
