@@ -1,5 +1,10 @@
 package cm.naxa.widemeet
 import android.Manifest
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
@@ -49,11 +54,13 @@ private class ChatAudio{
  val context=LocalContext.current;val scope=rememberCoroutineScope();val resources=remember{ChatAudio()}
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var pending by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
+ var preview by remember{mutableStateOf<Pair<String,Bitmap>?>(null)}
  var recording by remember{mutableStateOf(false)};var playing by remember{mutableStateOf<String?>(null)};var saveBytes by remember{mutableStateOf<ByteArray?>(null)}
  fun scoped(d:JSONObject)=d.apply{if(postId!=null)put("post_id",postId)else if(roomId!=null){put("room_id",roomId);put("channel",channel)}else if(peerId!=null)put("peer_id",peerId)else put("group_id",groupId)}
  suspend fun req(action:String,d:JSONObject=JSONObject())=transport?.invoke(action,scoped(d))?:gateway.chatMedia(session,action,scoped(d))
  fun stopPlayer(){resources.clearPlayer();playing=null}
- suspend fun refresh(){try{val next=mediaItems(req("list"));items=next;if(playing!=null&&next.none{it.optString("id")==playing})stopPlayer()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();stopPlayer();pending=null;saveBytes=null;resources.clearRecorder();recording=false;throw e}}
+ fun clearPreview(){preview=null}
+ suspend fun refresh(){try{val next=mediaItems(req("list"));items=next;if(playing!=null&&next.none{it.optString("id")==playing})stopPlayer();if(preview!=null&&next.none{it.optString("id")==preview?.first})clearPreview()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();stopPlayer();clearPreview();pending=null;saveBytes=null;resources.clearRecorder();recording=false;throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  fun prepare(bytes:ByteArray,name:String,mime:String,kind:String){require(bytes.size in 8..MediaLimit);pending=JSONObject().put("id",UUID.randomUUID().toString()).put("kind",kind).put("mime",mime).put("name",name.take(120)).put("content",Base64.encodeToString(bytes,Base64.NO_WRAP))}
  val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri:Uri?->if(uri!=null)work{
@@ -89,7 +96,7 @@ private class ChatAudio{
  }
  val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){allowed->if(allowed)startRecording()else error=true}
  LaunchedEffect(allowUpload){if(!allowUpload){resources.clearRecorder();recording=false;pending=null}}
- DisposableEffect(session.deviceId,peerId,groupId,roomId,channel,postId){onDispose{resources.clear();saveBytes=null}}
+ DisposableEffect(session.deviceId,peerId,groupId,roomId,channel,postId){onDispose{resources.clear();saveBytes=null;clearPreview()}}
  LaunchedEffect(session.accessToken,peerId,groupId,roomId,channel,postId,busy){
   if(busy)return@LaunchedEffect
   while(true){try{refresh()}catch(e:CancellationException){throw e}catch(e:Exception){error=true};delay(5000)}
@@ -110,6 +117,15 @@ private class ChatAudio{
   if(allowUpload)pending?.let{p->Text(p.optString("name"));Button(enabled=!busy,onClick={work{req("upload",p);pending=null;refresh()}}){Text(tr("Envoyer le fichier","Send file"))};TextButton(enabled=!busy,onClick={pending=null}){Text(tr("Abandonner la tentative locale","Discard local retry"))}}
   for(m in items){
    Text(m.optString("name")+" · "+m.optInt("bytes")+" o")
+   if(postId!=null&&m.optString("mime") in setOf("image/jpeg","image/png")){
+    TextButton(enabled=!busy,onClick={work{val b=download(m);val bitmap=withContext(Dispatchers.Default){
+     val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeByteArray(b,0,b.size,bounds)
+     require(bounds.outWidth in 1..16384&&bounds.outHeight in 1..16384)
+     var sample=1;while(bounds.outWidth/sample>2048||bounds.outHeight/sample>2048)sample*=2
+     BitmapFactory.decodeByteArray(b,0,b.size,BitmapFactory.Options().apply{inSampleSize=sample})?:throw IllegalArgumentException("image")
+    };preview=m.getString("id") to bitmap}}){Text(tr("Afficher l’image","View image"))}
+    preview?.takeIf{it.first==m.optString("id")}?.let{p->Image(p.second.asImageBitmap(),contentDescription=m.optString("name"),modifier=Modifier.fillMaxWidth().heightIn(max=360.dp),contentScale=ContentScale.Fit);TextButton(onClick={clearPreview()}){Text(tr("Fermer l’aperçu","Close preview"))}}
+   }
    TextButton(enabled=!busy&&!recording,onClick={work{
     val b=download(m)
     if(m.optString("kind")=="voice"){

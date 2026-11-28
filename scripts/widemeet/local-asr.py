@@ -30,9 +30,14 @@ def main():
         if len(text) > 2000 or len(result) >= 1000:
             raise ValueError("transcript limit")
         start, end = round(s.start * 1000), round(s.end * 1000)
+        # Clip model timestamps to the verified decoded duration; never invent speech.
+        start, end = max(0, min(start, duration)), max(0, min(end, duration))
         if end <= start:
             continue
         result.append({"start_ms":start,"end_ms":end,"text":text,"uncertain":bool(s.avg_logprob < -0.7 or s.no_speech_prob > 0.3 or info.language_probability < 0.8)})
+    # VAD may return adjacent chunks out of order. Stable chronological ordering
+    # preserves their original text and clipped timing without widening access.
+    result.sort(key=lambda x: x["start_ms"])
     STAGE = "output"
     print(json.dumps({"model":"whisper-tiny-local","language":info.language,"duration_ms":duration,"segments":result},ensure_ascii=False))
 if __name__ == "__main__":

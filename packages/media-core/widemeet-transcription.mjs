@@ -21,7 +21,7 @@ export function localAsrFailure(e){
 export function createWideMeetTranscription({supabaseUrl,serviceKey,python,modelDir,fetcher=fetch}){
  const base=new URL(supabaseUrl);if(!["http:","https:"].includes(base.protocol)||base.username||base.password||base.pathname!=="/"||base.search||base.hash||!serviceKey||!python||!modelDir)throw Error("invalid ASR configuration");
  const headers={apikey:serviceKey,Authorization:"Bearer "+serviceKey};
- async function rpc(action,recording,lease,result=null){const r=await fetcher(new URL("/rest/v1/rpc/wm_transcription_worker",base),{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:JSON.stringify({p_action:action,p_recording:recording,p_lease:lease,p_result:result}),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error("ASR queue unavailable");return r.json()}
+ async function rpc(action,recording,lease,result=null){const r=await fetcher(new URL("/rest/v1/rpc/wm_transcription_worker",base),{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:JSON.stringify({p_action:action,p_recording:recording,p_lease:lease,p_result:result}),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(15000)});if(!r.ok){const e=new Error("ASR queue unavailable");e.asrReason="rpc-http-"+r.status;throw e}return r.json()}
  async function runOne(){
   const lease=randomUUID(),source=await rpc("claim",null,lease);if(!source)return {claimed:false};
   let dir,stage="source";
@@ -41,10 +41,14 @@ export function createWideMeetTranscription({supabaseUrl,serviceKey,python,model
    // No service credentials or remote model downloads in the subprocess.
    stage="inference";
    const result=await runLocalAsr({python,modelDir,path,home:dir});
-   stage="result-persist";const saved=await rpc("finish",source.recording_id,lease,result);
-   if(saved?.status!=="complete")throw Error("ASR unconfirmed");
+   stage="result-persist";
+   const bad=(reason)=>{const e=new Error("ASR contract");e.asrReason=reason;throw e};
+   if(result?.model!=="whisper-tiny-local"||!/^[a-z]{2,3}$/.test(result?.language??"")||!Number.isSafeInteger(result?.duration_ms)||result.duration_ms<1||result.duration_ms>7200000||!Array.isArray(result.segments)||result.segments.length>1000)bad("result-shape");
+   let prev=0;for(const seg of result.segments){if(!Number.isSafeInteger(seg.start_ms)||seg.start_ms<prev)bad("segment-order");if(!Number.isSafeInteger(seg.end_ms)||seg.end_ms<=seg.start_ms||seg.end_ms>result.duration_ms+1000)bad("segment-range");if(typeof seg.text!=="string"||!seg.text.trim()||Array.from(seg.text.trim()).length>2000||typeof seg.uncertain!=="boolean")bad("segment-text");prev=seg.start_ms;}
+   const saved=await rpc("finish",source.recording_id,lease,result);
+   if(saved?.status!=="complete"){const e=new Error("ASR unconfirmed");e.asrReason=saved?.status==="failed"?"source-revoked":"finish-rejected";throw e}
    return {claimed:true,completed:true};
-  }catch(e){const reason=stage==="inference"?localAsrFailure(e):"operation-failed";await rpc("fail",source.recording_id,lease).catch(()=>{});return {claimed:true,completed:false,stage,reason}}
+  }catch(e){const reason=stage==="inference"?localAsrFailure(e):stage==="result-persist"&&/^(rpc-http-[1-5][0-9]{2}|source-revoked|finish-rejected|segment-order|segment-range|segment-text|result-shape)$/.test(e?.asrReason??"")?e.asrReason:"operation-failed";await rpc("fail",source.recording_id,lease).catch(()=>{});return {claimed:true,completed:false,stage,reason}}
   finally{if(dir)await rm(dir,{recursive:true,force:true})}
  }
  return {runOne};
