@@ -1,0 +1,10 @@
+import React,{useContext,useEffect,useRef,useState} from "react";
+import {SecurityScope} from "./SessionWorkspace";import {reviewRpc} from "./security-api";
+const enabled=(import.meta.env as ImportMetaEnv&{VITE_SECURITY_TRUST_ENABLED?:string}).VITE_SECURITY_TRUST_ENABLED==="true";
+export function SupportRoster({screen}:{screen:string}){
+ const {session,site}=useContext(SecurityScope);const [members,setMembers]=useState<any[]>([]),[busy,setBusy]=useState(false),[status,setStatus]=useState("");const gen=useRef(0),lock=useRef(false);
+ useEffect(()=>{gen.current++;lock.current=false;setMembers([]);setBusy(false);setStatus("");return()=>{gen.current++}},[session,site,screen]);
+ if(!enabled||!session||!site||!["B6.15","B6.16"].includes(screen))return null;
+ async function run(user?:string,active?:boolean){if(!session||!site||lock.current)return;lock.current=true;setBusy(true);const g=gen.current;try{const v=await reviewRpc(session,"sec_support_roster",{p_org:site.organization_id,p_site:site.id,...(user?{p_user:user,p_active:active}:{})});if(v.organization_id!==site.organization_id||v.site_id!==site.id||v.actor_id!==session.userId||!Array.isArray(v.members))throw Error();if(g===gen.current){setMembers(v.members);setStatus(user?"Habilitation confirmée. Dossiers remis en file : "+v.released:"Agents du site chargés.")}}catch{if(g===gen.current){setMembers([]);setStatus("Accès refusé ou indisponible.")}}finally{if(g===gen.current){lock.current=false;setBusy(false)}}}
+ return <section aria-label="Habilitations Livecare"><h2>Agents Livecare du site</h2><p>Réservé au propriétaire. La révocation retire l’accès et remet les dossiers ouverts dans la file ; aucun droit sur les autres sites.</p><button disabled={busy} onClick={()=>void run()}>Charger les habilitations</button>{members.map(m=><article key={m.user_id}><p>{m.user_id} · {m.role} · {m.active?"Agent actif":"Non habilité"}</p><button disabled={busy} onClick={()=>void run(m.user_id,!m.active)}>{m.active?"Révoquer":"Habiliter"}</button></article>)}<p role="status">{status}</p></section>
+}

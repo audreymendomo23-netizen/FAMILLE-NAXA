@@ -97,7 +97,7 @@ begin
  elsif p_op='resolve' and agent and c.agent_id=auth.uid() and c.state in ('assigned','waiting_customer') and p_detail='{}'::jsonb then
   update public.sec_support_cases set state='resolved',resolved_at=now() where id=c.id returning * into c;
  elsif p_op='reopen' and customer and c.state='resolved' and p_detail='{}'::jsonb then
-  update public.sec_support_cases set state='assigned',resolved_at=null where id=c.id returning * into c;
+  update public.sec_support_cases set state=case when exists(select 1 from sec_private.support_agents a join public.sec_site_memberships sm using(organization_id,site_id,user_id) join public.sec_memberships m using(organization_id,user_id) where a.organization_id=p_org and a.site_id=p_site and a.user_id=c.agent_id and a.active and sm.active and m.active and m.role in ('owner','manager','operator')) then 'assigned' else 'open' end,agent_id=case when exists(select 1 from sec_private.support_agents a join public.sec_site_memberships sm using(organization_id,site_id,user_id) join public.sec_memberships m using(organization_id,user_id) where a.organization_id=p_org and a.site_id=p_site and a.user_id=c.agent_id and a.active and sm.active and m.active and m.role in ('owner','manager','operator')) then c.agent_id else null end,resolved_at=null where id=c.id returning * into c;
  elsif p_op='close' and customer and c.state='resolved' and p_detail-'rating'='{}'::jsonb and jsonb_typeof(p_detail->'rating')='number' then
   score:=(p_detail->>'rating')::integer;
   if score not between 1 and 5 then raise exception 'invalid rating' using errcode='22023';end if;
